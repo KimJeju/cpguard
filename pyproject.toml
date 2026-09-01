@@ -1,0 +1,24 @@
+[project]
+name = "cpguard"
+version = "0.0.1"
+description = "CPG-based taint analysis SAST with LLM triage"
+requires-python = ">=3.11"
+dependencies = [
+    "tree-sitter>=0.25",
+    "tree-sitter-javascript",
+    "tree-sitter-typescript",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["cpguard*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
