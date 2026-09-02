@@ -6,15 +6,16 @@
     <h2>프로젝트 업로드</h2>
     <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 취약점을 진단합니다.
        지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code>
-       <code>.php</code> <code>.phtml</code>
+       <code>.php</code> <code>.py</code>
        (<code>node_modules</code> 등 의존성 폴더는 제외)</p>
+
     <form id="scanform" method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
-      <input type="file" name="archive" accept=".zip" required
-             style="color:var(--muted);flex:1">
+      <input type="file" name="archive" accept=".zip" required style="color:var(--muted);flex:1">
       <button class="btn" type="submit">진단 시작</button>
     </form>
+
     <div style="display:flex;gap:14px;align-items:center;margin-top:12px;flex-wrap:wrap">
       <label class="muted" style="display:flex;gap:8px;align-items:center;cursor:pointer">
         <input type="checkbox" name="triage" form="scanform" value="1">
@@ -38,13 +39,20 @@
     <h2>스캔 이력</h2>
     {% if scans %}
     <table>
-      <tr><th>이름</th><th>일시</th><th>파일</th><th>탐지</th><th></th></tr>
+      <tr><th>이름</th><th>일시</th><th>파일</th><th>탐지</th><th>위험도 분포</th><th></th></tr>
       {% for s in scans %}
       <tr>
         <td><a href="{% url 'detail' s.pk %}">{{ s.name }}</a></td>
         <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
         <td class="muted">{{ s.file_count }}</td>
         <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+        <td>
+          {% for sev, n in s.severity_counts.items %}
+            <span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>
+          {% empty %}
+            <span class="muted">—</span>
+          {% endfor %}
+        </td>
         <td style="text-align:right">
           <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">
             {% csrf_token %}<button class="btn ghost" type="submit">삭제</button>
@@ -56,5 +64,28 @@
     {% else %}
       <p class="muted">아직 스캔 기록이 없습니다.</p>
     {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>탐지 범위</h2>
+    <p class="muted" style="margin-bottom:14px">
+      두 가지 축으로 점검합니다 — 데이터 흐름 추적(입력이 위험 지점까지 흐르는가)과
+      단일 지점 패턴(하드코딩된 비밀정보·취약한 알고리즘 등).
+    </p>
+    <table>
+      <tr><th>축</th><th>대상 언어</th><th>점검 항목</th></tr>
+      <tr>
+        <td><b>데이터 흐름</b><br><span class="muted" style="font-size:12px">CPG · 프로시저간</span></td>
+        <td class="muted">JS / TS / PHP / Python</td>
+        <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) ·
+            경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)</td>
+      </tr>
+      <tr>
+        <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점</span></td>
+        <td class="muted">전 언어</td>
+        <td class="muted">하드코딩 비밀정보(798) · TLS 검증 비활성(295) · 취약 해시/암호(327) ·
+            예측 가능 난수(338) · 웹스토리지 토큰(522) · 쿠키 플래그(1004) · 디버그 코드(489)</td>
+      </tr>
+    </table>
   </div>
 {% endblock %}
