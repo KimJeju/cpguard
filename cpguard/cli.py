@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"경로 없음: {root}", file=sys.stderr)
         return 2
 
-    findings, scanned = scan_path(root)
+    findings, report = scan_path(root)
 
     if args.triage and findings:
         from .triage import TriageUnavailable, triage_findings
@@ -51,7 +51,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.quiet:
         print(console.render(findings, base=root))
-    print(f"\n스캔 파일 {scanned}개 · 탐지 {len(findings)}건")
+    print(f"\n{report.summary()} · 탐지 {len(findings)}건")
+    if report.failed:
+        print("분석하지 못한 파일:", file=sys.stderr)
+        for path, why in report.failed[:10]:
+            print(f"  - {path}: {why}", file=sys.stderr)
+        if len(report.failed) > 10:
+            print(f"  ... 외 {len(report.failed) - 10}개", file=sys.stderr)
 
     if args.sarif:
         sarif.dump(findings, args.sarif, base=root)

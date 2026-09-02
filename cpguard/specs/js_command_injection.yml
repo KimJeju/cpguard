@@ -2,6 +2,7 @@ id: js.command-injection
 message: "사용자 입력이 명령 실행 함수로 흘러 들어갑니다 (명령 주입)."
 severity: high
 cwe: CWE-78
+owasp: "A03:2021-Injection"
 languages: [javascript, typescript]
 sources:
   - {pattern: member, object: req, property: [query, body, params, headers, cookies]}

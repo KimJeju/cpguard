@@ -2,6 +2,7 @@ id: js.code-injection
 message: "사용자 입력이 코드 실행 함수로 흘러 들어갑니다 (코드 주입)."
 severity: critical
 cwe: CWE-94
+owasp: "A03:2021-Injection"
 languages: [javascript, typescript]
 sources:
   - {pattern: member, object: req, property: [query, body, params, headers, cookies]}

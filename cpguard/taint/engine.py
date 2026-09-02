@@ -234,7 +234,8 @@ def _iter_functions(node: ir.Node):
 def _emit(ctx: Ctx, steps: list[Step]) -> None:
     ctx.out.append(Finding(
         rule_id=ctx.rule.id, message=ctx.rule.message,
-        severity=ctx.rule.severity, cwe=ctx.rule.cwe, steps=steps,
+        severity=ctx.rule.severity, cwe=ctx.rule.cwe,
+        owasp=ctx.rule.owasp, steps=steps,
     ))
 
 

@@ -20,6 +20,7 @@ class Finding:
     message: str
     severity: str
     cwe: str
+    owasp: str = ""
     steps: list[Step] = field(default_factory=list)
 
     # LLM 트리아지 결과 (triage 미실행 시 None)

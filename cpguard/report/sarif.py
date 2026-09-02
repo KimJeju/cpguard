@@ -46,7 +46,8 @@ def to_sarif(findings: list[Finding], base: str | Path | None = None) -> dict:
         rules.append({
             "id": f.rule_id,
             "shortDescription": {"text": f.message},
-            "properties": {"cwe": f.cwe, "severity": f.severity},
+            "properties": {"cwe": f.cwe, "owasp": f.owasp, "severity": f.severity,
+                           "tags": [t for t in (f.cwe, f.owasp) if t]},
             "defaultConfiguration": {"level": _LEVEL.get(f.severity, "warning")},
         })
 

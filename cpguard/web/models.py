@@ -14,6 +14,7 @@ class Scan(models.Model):
     findings_json = models.TextField(default="[]")
     sarif_json = models.TextField(default="{}")
     triage_note = models.CharField(max_length=500, blank=True, default="")
+    integrity_note = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]

@@ -9,6 +9,7 @@
         <a class="btn ghost" href="{% url 'sarif' scan.pk %}">SARIF 내려받기</a>
       </span>
     </div>
+    {% if scan.integrity_note %}<div class="err" style="margin-top:12px">스캔 무결성: {{ scan.integrity_note }} — 결과가 전체를 대표하지 않을 수 있습니다.</div>{% endif %}
     {% if scan.triage_note %}<div class="err" style="margin-top:12px">{{ scan.triage_note }}</div>{% endif %}
     <div style="margin-top:12px">
       {% for v, n in scan.verdict_counts.items %}
@@ -27,7 +28,7 @@
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <span class="badge {{ f.severity }}">{{ f.severity|upper }}</span>
       <b>{{ f.rule_id }}</b>
-      <span class="muted">{{ f.cwe }}</span>
+      <span class="muted">{{ f.cwe }}{% if f.owasp %} · {{ f.owasp }}{% endif %}</span>
       {% if f.verdict %}<span class="badge v-{{ f.verdict }}">LLM: {{ f.verdict }}</span>{% endif %}
       <span class="muted" style="margin-left:auto"><code>{{ f.file }}:{{ f.line }}</code></span>
     </div>

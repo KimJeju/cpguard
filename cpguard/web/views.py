@@ -30,6 +30,7 @@ def _finding_to_dict(f: Finding, base: Path) -> dict:
         "cwe": f.cwe,
         "file": rel(f.sink.loc.file),
         "line": f.sink.loc.start_line,
+        "owasp": f.owasp,
         "verdict": f.verdict,
         "confidence": f.confidence,
         "triage_reason": f.triage_reason,
@@ -72,8 +73,9 @@ def upload(request):
                 "error": f"안전하지 않은 아카이브라 거부했습니다 — {e}",
             })
 
-        findings, file_count = scan_path(src_dir)
+        findings, scan_report = scan_path(src_dir)
 
+        integrity_note = "" if scan_report.complete else scan_report.summary()
         triage_note = ""
         if request.POST.get("triage") and findings:
             from ..triage import TriageUnavailable, triage_findings
@@ -85,11 +87,12 @@ def upload(request):
         base = src_dir.resolve()
         scan = Scan.objects.create(
             name=up.name,
-            file_count=file_count,
+            file_count=scan_report.scanned,
             finding_count=len(findings),
             findings_json=json.dumps([_finding_to_dict(f, base) for f in findings], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             triage_note=triage_note,
+            integrity_note=integrity_note,
         )
         return redirect("detail", pk=scan.pk)
     finally:

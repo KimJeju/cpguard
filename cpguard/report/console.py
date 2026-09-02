@@ -24,7 +24,7 @@ def render(findings: list[Finding], base=None) -> str:
 
     lines: list[str] = []
     for i, f in enumerate(findings, 1):
-        head = f"[{i}] {_MARK.get(f.severity,'-')} {f.severity.upper()}  {f.rule_id}  ({f.cwe})"
+        head = f"[{i}] {_MARK.get(f.severity,'-')} {f.severity.upper()}  {f.rule_id}  ({f.cwe}{', ' + f.owasp if f.owasp else ''})"
         if f.verdict:
             head += f"   [LLM: {_VERDICT.get(f.verdict, f.verdict)}]"
         lines.append(head)

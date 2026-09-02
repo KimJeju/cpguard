@@ -35,6 +35,7 @@ class Rule:
     message: str
     severity: str
     cwe: str
+    owasp: str
     languages: list[str]
     sources: list[SourcePattern]
     sinks: list[SinkPattern]
@@ -67,6 +68,7 @@ def load_rule(path: Path) -> Rule:
         message=d.get("message", d["id"]),
         severity=d.get("severity", "medium"),
         cwe=d.get("cwe", ""),
+        owasp=d.get("owasp", ""),
         languages=_as_list(d.get("languages")) or ["javascript", "typescript"],
         sources=sources, sinks=sinks, sanitizers=sanitizers,
     )
