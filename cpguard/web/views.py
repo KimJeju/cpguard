@@ -276,6 +276,39 @@ def set_audit(request, pk: int):
     return JsonResponse({"ok": True, "index": idx, "status": status})
 
 
+@require_POST
+def ai_ask(request, pk: int):
+    """AI 분석 패널 — 현재 선택된 이슈의 맥락(규칙·흐름·주변 코드)을 자동으로 붙여 묻는다.
+
+    키가 없으면 실패가 아니라 안내를 돌려준다(트리아지와 같은 원칙: 부가 기능).
+    """
+    from ..triage import PRESETS, TriageUnavailable, ask
+    scan = get_object_or_404(Scan, pk=pk)
+    try:
+        idx = int(request.POST.get("index", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "잘못된 index"}, status=400)
+    findings = scan.findings
+    if not (0 <= idx < len(findings)):
+        return JsonResponse({"ok": False, "error": "없는 이슈"}, status=404)
+    finding = findings[idx]
+    finding["audit"] = scan.audit.get(str(idx), "")
+    preset = request.POST.get("preset", "explain")
+    if preset not in PRESETS and not request.POST.get("question"):
+        return JsonResponse({"ok": False, "error": "알 수 없는 프리셋"}, status=400)
+    try:
+        answer, provider = ask(
+            finding, scan.sources, preset=preset,
+            question=request.POST.get("question") or None,
+            provider=request.POST.get("provider") or None,
+        )
+    except TriageUnavailable as e:
+        return JsonResponse({"ok": False, "unavailable": True, "error": str(e)})
+    except Exception as e:  # 프로바이더 오류는 패널에 그대로 보여준다
+        return JsonResponse({"ok": False, "error": f"{type(e).__name__}: {e}"})
+    return JsonResponse({"ok": True, "answer": answer, "provider": provider, "preset": preset})
+
+
 def sarif_download(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
     resp = HttpResponse(scan.sarif_json, content_type="application/json")

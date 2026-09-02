@@ -62,6 +62,10 @@ class Provider(ABC):
     def complete_json(self, system: str, prompt: str) -> dict:
         """시스템 지시 + 프롬프트를 보내고 스키마에 맞는 dict 를 돌려준다."""
 
+    @abstractmethod
+    def complete_text(self, system: str, prompt: str) -> str:
+        """자유 서술 답변 (AI 분석 패널용). 마크다운 텍스트를 돌려준다."""
+
 
 class ClaudeProvider(Provider):
     name = "claude"
@@ -87,6 +91,16 @@ class ClaudeProvider(Provider):
         )
         text = next((b.text for b in resp.content if b.type == "text"), "")
         return json.loads(text)
+
+    def complete_text(self, system: str, prompt: str) -> str:
+        resp = self._client.messages.create(
+            model=self.model,
+            max_tokens=16000,
+            system=system,
+            thinking={"type": "adaptive"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return "".join(b.text for b in resp.content if b.type == "text")
 
 
 class OpenAIProvider(Provider):
@@ -116,6 +130,16 @@ class OpenAIProvider(Provider):
         )
         return json.loads(resp.choices[0].message.content)
 
+    def complete_text(self, system: str, prompt: str) -> str:
+        resp = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return resp.choices[0].message.content or ""
+
 
 class GeminiProvider(Provider):
     name = "gemini"
@@ -143,6 +167,14 @@ class GeminiProvider(Provider):
             },
         )
         return json.loads(resp.text)
+
+    def complete_text(self, system: str, prompt: str) -> str:
+        resp = self._client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config={"system_instruction": system},
+        )
+        return resp.text or ""
 
 
 def _strip_unsupported(schema):

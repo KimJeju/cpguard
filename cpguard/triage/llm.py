@@ -105,6 +105,68 @@ def _triage_batch(provider: Provider, batch: list[tuple[int, Finding]],
     return {r["index"]: r for r in data.get("results", [])}
 
 
+# ---------- AI 분석 패널: 현재 조사 맥락을 아는 질문 ----------
+
+# 사용자가 매번 맥락을 입력하지 않도록, 프리셋 질문을 제공한다(1.md "AI Analysis").
+PRESETS = {
+    "explain": "이 탐지가 왜 보고되었는지, 어떤 취약점인지 초보 개발자도 이해할 수 있게 설명하라.",
+    "why": "이 코드가 왜 취약한지 데이터 흐름의 각 단계를 짚어 설명하라. 정제가 없는 지점을 명시하라.",
+    "trace": "source 에서 sink 까지의 데이터 흐름을 단계별로 추적해 표로 정리하라.",
+    "exploit": "실제로 악용 가능한지 판단하라. 공격자가 제어 가능한 입력, 필요한 조건, 예시 페이로드(비파괴적)를 제시하라.",
+    "validate": "이 흐름에 검증/정제 지점이 있는지 찾고, 있다면 충분한지 평가하라. 없다면 어디에 넣어야 하는지 제안하라.",
+    "fix": "안전한 구현으로 고친 코드를 제시하라. Before/After 로 보여주고 왜 안전한지 한 줄로 설명하라.",
+    "guidance": "이 이슈를 담당 개발자에게 전달할 조치 가이드를 작성하라: 위험, 영향, 수정 방법, 검증 방법 순서로.",
+}
+
+ASK_SYSTEM = """당신은 정적 분석 결과를 함께 조사하는 시니어 보안 엔지니어다.
+주어진 탐지 맥락(규칙, 데이터 흐름, 주변 코드)만 근거로 답한다. 코드에 없는 것을 추측하지 않는다.
+답변은 한국어, 마크다운. 코드 위치를 언급할 때는 반드시 파일명:줄번호 형식을 쓴다 — 사용자가 클릭해 이동한다.
+간결하게: 핵심 먼저, 근거 다음, 조치 마지막."""
+
+
+def _context_block(finding: dict, sources: dict[str, str], span: int = 8) -> str:
+    """탐지 dict(웹 저장 형식) + 보관된 소스로 AI 에 줄 맥락을 만든다."""
+    parts = [
+        f"규칙: {finding.get('rule_id')} ({finding.get('cwe', '')} · {finding.get('owasp', '')})",
+        f"위험도: {finding.get('severity')} / 규칙 신뢰도: {finding.get('precision', '')}",
+        f"설명: {finding.get('message')}",
+        f"위치: {finding.get('file')}:{finding.get('line')}",
+        "데이터 흐름:",
+    ]
+    for s in finding.get("steps", []):
+        parts.append(f"  [{s['kind']}] {s['file']}:{s['line']}  {s['code']}")
+    if finding.get("verdict"):
+        parts.append(f"LLM 1차 판정: {finding['verdict']} — {finding.get('triage_reason', '')}")
+    if finding.get("audit"):
+        parts.append(f"감사 상태: {finding['audit']}")
+
+    shown: set[tuple[str, int]] = set()
+    steps = finding.get("steps", [])
+    for s in (steps[:1] + steps[-1:]) if steps else []:
+        key = (s["file"], s["line"])
+        if key in shown:
+            continue
+        shown.add(key)
+        src = sources.get(s["file"])
+        if not src:
+            continue
+        lines = src.splitlines()
+        lo, hi = max(0, s["line"] - 1 - span), min(len(lines), s["line"] + span)
+        parts.append(f"--- {s['file']} ({s['kind']} 부근) ---")
+        parts.extend(f"{i + 1:5d}| {lines[i]}" for i in range(lo, hi))
+    return "\n".join(parts)
+
+
+def ask(finding: dict, sources: dict[str, str], preset: str = "explain",
+        question: str | None = None, provider: str | None = None,
+        model: str | None = None) -> tuple[str, str]:
+    """현재 이슈에 대해 프리셋/자유 질문을 던진다. 반환: (답변, 프로바이더 이름)."""
+    client = get_provider(provider, model=model)
+    q = question.strip() if question else PRESETS.get(preset, PRESETS["explain"])
+    prompt = _context_block(finding, sources) + "\n\n질문:\n" + q
+    return client.complete_text(ASK_SYSTEM, prompt), client.name
+
+
 def triage_findings(findings: list[Finding], api_key: str | None = None,
                     batch_size: int = BATCH_SIZE, provider: str | None = None,
                     model: str | None = None) -> list[Finding]:
