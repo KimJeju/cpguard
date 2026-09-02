@@ -20,6 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("path", help="스캔할 프로젝트 경로")
     sc.add_argument("--sarif", metavar="FILE", help="SARIF 2.1.0 결과 저장 경로")
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
+    sc.add_argument("--triage", action="store_true",
+                    help="LLM 트리아지로 오탐 재검증 (ANTHROPIC_API_KEY 필요)")
 
     sv = sub.add_parser("serve", help="웹 대시보드 실행 (zip 업로드 진단)")
     sv.add_argument("--host", default="127.0.0.1")
@@ -39,6 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     findings, scanned = scan_path(root)
+
+    if args.triage and findings:
+        from .triage import TriageUnavailable, triage_findings
+        try:
+            triage_findings(findings)
+        except TriageUnavailable as e:
+            print(f"[트리아지 건너뜀] {e}", file=sys.stderr)
 
     if not args.quiet:
         print(console.render(findings, base=root))

@@ -16,8 +16,8 @@ def serve(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) 
     django.setup()
     from django.core.management import call_command
 
-    # 마이그레이션 파일 없이 모델에서 바로 테이블 생성(단일 사용자 로컬 앱)
-    call_command("migrate", run_syncdb=True, verbosity=0, interactive=False)
+    # 정식 마이그레이션 — 설치본을 새 버전으로 덮어써도 스키마가 안전하게 갱신된다
+    call_command("migrate", verbosity=0, interactive=False)
 
     url = f"http://{host}:{port}/"
     if open_browser:

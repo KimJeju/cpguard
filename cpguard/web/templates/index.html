@@ -7,13 +7,17 @@
     <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 취약점을 진단합니다.
        지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code>
        (<code>node_modules</code> 는 제외)</p>
-    <form method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
+    <form id="scanform" method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
       <input type="file" name="archive" accept=".zip" required
              style="color:var(--muted);flex:1">
       <button class="btn" type="submit">진단 시작</button>
     </form>
+    <label class="muted" style="display:flex;gap:8px;align-items:center;margin-top:12px;cursor:pointer">
+      <input type="checkbox" name="triage" form="scanform" value="1">
+      LLM 트리아지로 오탐 재검증 (ANTHROPIC_API_KEY 필요, 느려짐)
+    </label>
   </div>
 
   <div class="card">

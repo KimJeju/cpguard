@@ -13,6 +13,7 @@ class Scan(models.Model):
     finding_count = models.IntegerField(default=0)
     findings_json = models.TextField(default="[]")
     sarif_json = models.TextField(default="{}")
+    triage_note = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
         ordering = ["-created_at"]
@@ -20,6 +21,15 @@ class Scan(models.Model):
     @property
     def findings(self) -> list[dict]:
         return json.loads(self.findings_json)
+
+    @property
+    def verdict_counts(self) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for f in self.findings:
+            v = f.get("verdict")
+            if v:
+                out[v] = out.get(v, 0) + 1
+        return out
 
     @property
     def severity_counts(self) -> dict[str, int]:

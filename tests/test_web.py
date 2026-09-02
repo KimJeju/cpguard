@@ -22,7 +22,7 @@ settings.ALLOWED_HOSTS = ["testserver", "127.0.0.1", "localhost"]
 
 @pytest.fixture(scope="module", autouse=True)
 def _db():
-    call_command("migrate", run_syncdb=True, verbosity=0, interactive=False)
+    call_command("migrate", verbosity=0, interactive=False)
 
 
 def _zip_bytes(files: dict[str, str]) -> io.BytesIO:

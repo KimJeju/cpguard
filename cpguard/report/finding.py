@@ -22,6 +22,11 @@ class Finding:
     cwe: str
     steps: list[Step] = field(default_factory=list)
 
+    # LLM 트리아지 결과 (triage 미실행 시 None)
+    verdict: str | None = None          # true_positive | false_positive | uncertain
+    confidence: float | None = None
+    triage_reason: str | None = None
+
     @property
     def source(self) -> Step:
         return self.steps[0]

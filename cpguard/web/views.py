@@ -30,6 +30,9 @@ def _finding_to_dict(f: Finding, base: Path) -> dict:
         "cwe": f.cwe,
         "file": rel(f.sink.loc.file),
         "line": f.sink.loc.start_line,
+        "verdict": f.verdict,
+        "confidence": f.confidence,
+        "triage_reason": f.triage_reason,
         "steps": [
             {"kind": s.kind, "file": rel(s.loc.file), "line": s.loc.start_line, "code": s.code}
             for s in f.steps
@@ -70,6 +73,15 @@ def upload(request):
             })
 
         findings, file_count = scan_path(src_dir)
+
+        triage_note = ""
+        if request.POST.get("triage") and findings:
+            from ..triage import TriageUnavailable, triage_findings
+            try:
+                triage_findings(findings)
+            except TriageUnavailable as e:
+                triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
+
         base = src_dir.resolve()
         scan = Scan.objects.create(
             name=up.name,
@@ -77,6 +89,7 @@ def upload(request):
             finding_count=len(findings),
             findings_json=json.dumps([_finding_to_dict(f, base) for f in findings], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
+            triage_note=triage_note,
         )
         return redirect("detail", pk=scan.pk)
     finally:

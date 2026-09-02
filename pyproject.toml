@@ -16,6 +16,7 @@ cpguard = "cpguard.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+triage = ["anthropic>=0.40"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -28,4 +29,4 @@ include = ["cpguard*"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-cpguard = ["specs/*.yml", "web/templates/*.html"]
+cpguard = ["specs/*.yml", "web/templates/*.html", "web/migrations/*.py"]

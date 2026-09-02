@@ -9,7 +9,11 @@
         <a class="btn ghost" href="{% url 'sarif' scan.pk %}">SARIF 내려받기</a>
       </span>
     </div>
+    {% if scan.triage_note %}<div class="err" style="margin-top:12px">{{ scan.triage_note }}</div>{% endif %}
     <div style="margin-top:12px">
+      {% for v, n in scan.verdict_counts.items %}
+        <span class="badge v-{{ v }}">LLM {{ v }} {{ n }}</span>
+      {% endfor %}
       {% for sev, n in scan.severity_counts.items %}
         <span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>
       {% empty %}
@@ -24,9 +28,13 @@
       <span class="badge {{ f.severity }}">{{ f.severity|upper }}</span>
       <b>{{ f.rule_id }}</b>
       <span class="muted">{{ f.cwe }}</span>
+      {% if f.verdict %}<span class="badge v-{{ f.verdict }}">LLM: {{ f.verdict }}</span>{% endif %}
       <span class="muted" style="margin-left:auto"><code>{{ f.file }}:{{ f.line }}</code></span>
     </div>
     <p style="margin:10px 0 14px">{{ f.message }}</p>
+    {% if f.triage_reason %}
+      <p class="muted" style="margin:-6px 0 14px">LLM 판정 근거: {{ f.triage_reason }}</p>
+    {% endif %}
 
     <div class="muted" style="font-size:12px;margin-bottom:6px">데이터 흐름 경로</div>
     <table>
