@@ -26,7 +26,34 @@ AUDIT_STATES = ("", "confirmed", "false_positive", "fixed", "deferred")
 
 def _base_context() -> dict:
     from ..triage import available
-    return {"scans": Scan.objects.all()[:30], "providers": available()}
+    scans = list(Scan.objects.all()[:60])
+    # 프로젝트별 최신 스캔만 — 홈 목록은 프로젝트 단위로 보여준다
+    latest: dict[str, Scan] = {}
+    for s in scans:
+        key = s.project or s.name
+        if key not in latest:
+            latest[key] = s
+    return {"scans": scans[:30], "projects": list(latest.values()), "providers": available()}
+
+
+def _fingerprint(f: Finding, rel_file: str) -> str:
+    """스캔 간 같은 이슈를 잇는 지문. 줄 번호는 넣지 않는다 — 위에 코드가 추가되면 밀리므로.
+
+    규칙 + 파일 + 위험 지점 코드(공백 정규화) 로 만든다. 같은 파일에 같은 sink 가 두 번
+    있으면 하나로 묶이는 한계가 있지만, 신규/해결 판정에는 이쪽이 더 안정적이다.
+    """
+    import hashlib
+    # 공백은 전부 버린다: 포맷터가 띄어쓰기를 바꿔도 같은 이슈여야 한다
+    code = "".join(f.sink.code.split())
+    return hashlib.sha1(f"{f.rule_id}|{rel_file}|{code}".encode("utf-8")).hexdigest()[:16]
+
+
+def _project_of(filename: str) -> str:
+    """업로드 파일명 → 프로젝트 이름. 'app-main.zip' / 'app-v2.zip' 은 같은 프로젝트로 본다."""
+    import re
+    stem = Path(filename).stem
+    stem = re.sub(r"[-_ ](?:main|master|dev|develop|v?\d+(?:\.\d+)*|\d{8}|\d{6})$", "", stem, flags=re.I)
+    return stem.strip() or Path(filename).stem
 
 
 def _rel(path: str, base: Path) -> str:
@@ -54,6 +81,7 @@ def _finding_to_dict(idx: int, f: Finding, base: Path) -> dict:
         "fp_hint": f.fp_hint,
         "matched_value": f.matched_value,
         "category": f.category,
+        "fp": _fingerprint(f, _rel(f.sink.loc.file, base)),
         "steps": [
             {"kind": s.kind, "file": _rel(s.loc.file, base),
              "line": s.loc.start_line, "code": s.code}
@@ -133,8 +161,10 @@ def upload(request):
         order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         findings.sort(key=lambda f: (order.get(f.severity, 9), f.rule_id))
 
+        project = request.POST.get("project", "").strip() or _project_of(up.name)
         scan = Scan.objects.create(
             name=up.name,
+            project=project,
             file_count=scan_report.scanned,
             finding_count=len(findings),
             findings_json=json.dumps(
@@ -145,6 +175,13 @@ def upload(request):
             triage_note=triage_note,
             integrity_note=integrity_note,
         )
+        # 이전 스캔 대비 신규/해결 — 지문 기준
+        prev = scan.previous()
+        if prev is not None:
+            diff = scan.compare_with(prev)
+            scan.new_count = len(diff["new"])
+            scan.resolved_count = len(diff["resolved"])
+            scan.save(update_fields=["new_count", "resolved_count"])
         return redirect("detail", pk=scan.pk)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -158,11 +195,18 @@ def detail(request, pk: int):
     for f in findings:
         f["audit"] = audit.get(str(f["id"]), "")
 
+    # 이전 스캔 대비 신규 여부를 각 이슈에 표시 (조사 우선순위의 첫 번째 신호)
+    prev = scan.previous()
+    new_fps = scan.compare_with(prev)["new_fps"] if prev else set()
+    for f in findings:
+        f["is_new"] = bool(prev) and f.get("fp") in new_fps
+
     sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     findings.sort(key=lambda f: (sev_order.get(f["severity"], 9), f["file"], f["line"]))
 
     return render(request, "workbench.html", {
         "scan": scan,
+        "prev": prev,
         # 소스 원문에는 </script> 같은 문자열이 들어있을 수 있다.
         # 템플릿에서 json_script 필터로 내보내 스크립트 태그 탈출을 막는다.
         "findings": findings,
@@ -171,6 +215,49 @@ def detail(request, pk: int):
         "rule_counts": scan.rule_counts,
         "file_counts": scan.file_counts[:40],
         "total": len(findings),
+    })
+
+
+def project_home(request, name: str):
+    """프로젝트 홈 — '지금 안전한가 / 뭐가 새로 생겼나 / 뭘 먼저 봐야 하나' 에 즉시 답한다.
+
+    대시보드가 아니라 조사 시작점이다: 우선 조사 대상을 한 번의 클릭으로 열 수 있어야 한다.
+    """
+    scans = list(Scan.objects.filter(project=name).order_by("-created_at"))
+    if not scans:
+        return redirect("index")
+    latest = scans[0]
+    prev = scans[1] if len(scans) > 1 else None
+    diff = latest.compare_with(prev) if prev else {"new": [], "resolved": [], "new_fps": set()}
+    audit = latest.audit
+    new_fps = diff["new_fps"]
+
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    # 우선 조사: 감사 안 된 것 중 신규 → 위험도 순
+    priority = [f for f in latest.findings if not audit.get(str(f["id"]))]
+    priority.sort(key=lambda f: (0 if f.get("fp") in new_fps else 1,
+                                 sev_order.get(f["severity"], 9), f["file"]))
+
+    # 추세: 오래된 것 → 최신 (최대 12회)
+    trend = [{"pk": s.pk, "when": s.created_at, "total": s.finding_count,
+              "counts": s.severity_counts, "new": s.new_count, "resolved": s.resolved_count}
+             for s in reversed(scans[:12])]
+    risk_delta = (latest.finding_count - prev.finding_count) if prev else 0
+
+    return render(request, "project_home.html", {
+        "project": name,
+        "latest": latest,
+        "prev": prev,
+        "counts": latest.severity_counts,
+        "priority": priority[:8],
+        "new_count": len(diff["new"]),
+        "resolved_count": len(diff["resolved"]),
+        "new_fps": new_fps,
+        "risk_delta": risk_delta,
+        "trend": trend,
+        "trend_max": max((t["total"] for t in trend), default=1) or 1,
+        "scans": scans,
+        "audited": sum(1 for f in latest.findings if audit.get(str(f["id"]))),
     })
 
 

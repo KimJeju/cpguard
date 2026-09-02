@@ -19,6 +19,28 @@ class Scan(models.Model):
     sources_json = models.TextField(default="{}")
     # 사람이 확정한 감사 결과 (finding 인덱스 -> 상태)
     audit_json = models.TextField(default="{}")
+    # 프로젝트 = 같은 대상의 스캔 묶음. 스캔 간 신규/해결 비교와 추세의 단위.
+    project = models.CharField(max_length=255, blank=True, default="", db_index=True)
+    new_count = models.IntegerField(default=0)        # 이전 스캔 대비 신규
+    resolved_count = models.IntegerField(default=0)   # 이전 스캔에 있었으나 사라짐
+
+    def previous(self):
+        """같은 프로젝트의 직전 스캔."""
+        if not self.project:
+            return None
+        return (Scan.objects.filter(project=self.project, created_at__lt=self.created_at)
+                .order_by("-created_at").first())
+
+    def compare_with(self, prev) -> dict:
+        """지문(fp) 기준으로 신규/해결/유지 집합을 낸다. 줄 번호가 밀려도 같은 이슈로 본다."""
+        cur = {f.get("fp"): f for f in self.findings if f.get("fp")}
+        old = {f.get("fp"): f for f in (prev.findings if prev else []) if f.get("fp")}
+        return {
+            "new": [cur[k] for k in cur.keys() - old.keys()],
+            "resolved": [old[k] for k in old.keys() - cur.keys()],
+            "persistent": [cur[k] for k in cur.keys() & old.keys()],
+            "new_fps": set(cur.keys() - old.keys()),
+        }
 
     class Meta:
         ordering = ["-created_at"]

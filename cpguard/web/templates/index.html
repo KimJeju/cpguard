@@ -35,6 +35,29 @@
     </div>
   </div>
 
+  {% if projects %}
+  <div class="card">
+    <h2>프로젝트</h2>
+    <table>
+      <tr><th>프로젝트</th><th>최근 스캔</th><th>탐지</th><th>신규 / 해결</th><th>위험도 분포</th><th></th></tr>
+      {% for s in projects %}
+      <tr>
+        <td><a href="{% url 'project_home' s.project|default:s.name %}"><b>{{ s.project|default:s.name }}</b></a></td>
+        <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
+        <td><b>{{ s.finding_count }}</b></td>
+        <td>
+          {% if s.new_count %}<span class="badge v-true_positive">+{{ s.new_count }}</span>{% endif %}
+          {% if s.resolved_count %}<span class="badge v-false_positive">−{{ s.resolved_count }}</span>{% endif %}
+          {% if not s.new_count and not s.resolved_count %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
+        <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">조사</a></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
   <div class="card">
     <h2>스캔 이력</h2>
     {% if scans %}

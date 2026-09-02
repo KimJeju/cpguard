@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}{{ project }} — CPGuard{% endblock %}
+
+{% block head %}
+<style>
+  .ph-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px }
+  .ph-head h1 { margin:0; font-size:20px }
+  .grid2 { display:grid; grid-template-columns: 1fr 340px; gap:16px; align-items:start }
+  .status { display:flex; gap:10px; flex-wrap:wrap; align-items:center }
+  .status .big { font-size:22px; font-weight:800; padding:8px 14px; border-radius:8px; border:1px solid var(--line) }
+  .delta-up { color: var(--crit) } .delta-down { color: var(--low) } .delta-flat { color: var(--muted) }
+  .prio { border-bottom:1px solid #1b222c; padding:9px 4px; display:flex; gap:10px; align-items:flex-start }
+  .prio:last-child { border-bottom:0 }
+  .prio a { color: var(--fg); font-weight:700 }
+  .prio .loc { color: var(--muted); font-family: Consolas, monospace; font-size:11.5px }
+  .newtag { font-size:10px; font-weight:800; background: var(--accent); color:#06121f; border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:middle }
+  .sev-ico { display:inline-block; width:18px; text-align:center; margin-right:4px }
+  .kv { display:grid; grid-template-columns: 90px 1fr; gap:5px 10px; font-size:13px }
+  .kv dt { color: var(--muted) } .kv dd { margin:0 }
+  .trend { display:flex; align-items:flex-end; gap:6px; height:110px; padding:6px 2px 0; border-bottom:1px solid var(--line) }
+  .bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:22px }
+  .bar .col { width:100%; background:#22303f; border-radius:3px 3px 0 0; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden }
+  .bar .seg-critical { background: var(--crit) } .bar .seg-high { background: var(--high) }
+  .bar .seg-medium { background: var(--med) } .bar .seg-low { background: var(--low) }
+  .bar .n { font-size:11px; color: var(--muted) }
+  .bar.cur .n { color: var(--fg); font-weight:700 }
+  .trend-x { display:flex; gap:6px; margin-top:4px } .trend-x div { flex:1; min-width:22px; text-align:center; font-size:10px; color: var(--muted) }
+  table.scans td, table.scans th { font-size:12.5px }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ph-head">
+  <h1>{{ project }}</h1>
+  <span class="muted">프로젝트 · 스캔 {{ scans|length }}회 · 최근 {{ latest.created_at|date:"Y-m-d H:i" }}</span>
+  <span style="margin-left:auto;display:flex;gap:8px">
+    <a class="btn" href="{% url 'detail' latest.pk %}">최신 스캔 조사</a>
+    <a class="btn ghost" href="/">새 스캔 업로드</a>
+  </span>
+</div>
+
+<div class="card">
+  <h2>보안 상태</h2>
+  <div class="status">
+    <span class="big">{{ latest.finding_count }} <span class="muted" style="font-size:13px;font-weight:400">건</span></span>
+    {% for sev, n in counts.items %}<span class="badge {{ sev }}" style="font-size:13px;padding:4px 10px">
+      {% if sev == "critical" %}🔴{% elif sev == "high" %}🟠{% elif sev == "medium" %}🟡{% elif sev == "low" %}🔵{% else %}⚪{% endif %}
+      {{ sev|upper }} {{ n }}</span>{% endfor %}
+    {% if prev %}
+      <span class="sep muted">|</span>
+      <span class="muted">이전 스캔 대비</span>
+      <span class="badge v-true_positive">신규 +{{ new_count }}</span>
+      <span class="badge v-false_positive">해결 −{{ resolved_count }}</span>
+      <span class="{% if risk_delta > 0 %}delta-up{% elif risk_delta < 0 %}delta-down{% else %}delta-flat{% endif %}">
+        {% if risk_delta > 0 %}▲ 위험 증가 (+{{ risk_delta }}){% elif risk_delta < 0 %}▼ 위험 감소 ({{ risk_delta }}){% else %}— 변화 없음{% endif %}
+      </span>
+    {% else %}
+      <span class="muted">첫 스캔 — 다음 스캔부터 신규/해결을 비교합니다</span>
+    {% endif %}
+    <span class="muted" style="margin-left:auto">감사 완료 {{ audited }}/{{ latest.finding_count }}</span>
+  </div>
+  {% if latest.integrity_note %}<div class="err" style="margin-top:12px">스캔 무결성: {{ latest.integrity_note }}</div>{% endif %}
+</div>
+
+<div class="grid2">
+  <div class="card" style="margin-bottom:0">
+    <h2>우선 조사 대상 <span class="muted" style="font-weight:400;font-size:12px">— 신규 → 위험도 순, 감사 안 된 것만</span></h2>
+    {% for f in priority %}
+      <div class="prio">
+        <span class="sev-ico">{% if f.severity == "critical" %}🔴{% elif f.severity == "high" %}🟠{% elif f.severity == "medium" %}🟡{% elif f.severity == "low" %}🔵{% else %}⚪{% endif %}</span>
+        <div style="flex:1;min-width:0">
+          <a href="{% url 'detail' latest.pk %}#f{{ f.id }}">{{ f.rule_id }}</a>
+          {% if f.is_new or f.fp in new_fps %}{% endif %}
+          {% if prev and f.fp in new_fps %}<span class="newtag">NEW</span>{% endif %}
+          <span class="muted" style="font-size:12px"> · {{ f.cwe }}</span>
+          <div class="loc">{{ f.file }}:{{ f.line }}</div>
+        </div>
+        <span class="badge {{ f.severity }}">{{ f.severity|upper }}</span>
+      </div>
+    {% empty %}
+      <p class="muted">감사되지 않은 이슈가 없습니다. 🎉</p>
+    {% endfor %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>최근 스캔</h2>
+      <dl class="kv">
+        <dt>상태</dt><dd>{% if latest.integrity_note %}⚠ 부분 완료{% else %}✔ 완료{% endif %}</dd>
+        <dt>일시</dt><dd>{{ latest.created_at|date:"Y-m-d H:i" }}</dd>
+        <dt>파일</dt><dd>{{ latest.file_count }}</dd>
+        <dt>탐지</dt><dd>{{ latest.finding_count }}</dd>
+        <dt>업로드</dt><dd><code>{{ latest.name }}</code></dd>
+      </dl>
+      <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+        <a class="btn ghost" href="{% url 'detail' latest.pk %}">조사</a>
+        <a class="btn ghost" href="{% url 'export_xlsx' latest.pk %}">분석목록표</a>
+        <a class="btn ghost" href="{% url 'sarif' latest.pk %}">SARIF</a>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0">
+      <h2>추세</h2>
+      <div class="trend">
+        {% for t in trend %}
+          <div class="bar {% if t.pk == latest.pk %}cur{% endif %}" title="{{ t.when|date:'m-d H:i' }} · {{ t.total }}건">
+            <span class="n">{{ t.total }}</span>
+            <div class="col" style="height: {% widthratio t.total trend_max 100 %}px">
+              {% for sev, n in t.counts.items %}<div class="seg-{{ sev }}" style="height: {% widthratio n t.total 100 %}%"></div>{% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="trend-x">{% for t in trend %}<div>{{ t.when|date:"m/d" }}</div>{% endfor %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2>스캔 이력</h2>
+  <table class="scans">
+    <tr><th>일시</th><th>업로드</th><th>파일</th><th>탐지</th><th>신규</th><th>해결</th><th>위험도</th><th></th></tr>
+    {% for s in scans %}
+    <tr>
+      <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
+      <td><a href="{% url 'detail' s.pk %}">{{ s.name }}</a></td>
+      <td class="muted">{{ s.file_count }}</td>
+      <td><b>{{ s.finding_count }}</b></td>
+      <td>{% if s.new_count %}<span class="badge v-true_positive">+{{ s.new_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% if s.resolved_count %}<span class="badge v-false_positive">−{{ s.resolved_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
+      <td style="text-align:right">
+        <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn ghost" type="submit">삭제</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
