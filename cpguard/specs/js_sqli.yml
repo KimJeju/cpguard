@@ -1,0 +1,11 @@
+id: js.sqli
+message: "사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입)."
+severity: critical
+cwe: CWE-89
+languages: [javascript, typescript]
+sources:
+  - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
+sinks:
+  - {pattern: call, callee: [db.query, connection.query, pool.query, sequelize.query, knex.raw], arg: 0}
+sanitizers:
+  - {callee: [escapeSql, mysql.escape]}

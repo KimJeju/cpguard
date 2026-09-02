@@ -1,0 +1,12 @@
+id: js.xss
+message: "사용자 입력이 정제 없이 HTML 출력으로 흘러 들어갑니다 (XSS)."
+severity: high
+cwe: CWE-79
+languages: [javascript, typescript]
+sources:
+  - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
+  - {pattern: member, object: location, property: [hash, search, href]}
+sinks:
+  - {pattern: call, callee: [res.send, res.write, res.end, document.write, element.insertAdjacentHTML], arg: 0}
+sanitizers:
+  - {callee: [escapeHtml, sanitizeHtml, DOMPurify.sanitize, encodeURIComponent]}

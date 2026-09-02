@@ -1,0 +1,11 @@
+id: js.path-traversal
+message: "사용자 입력이 파일 경로로 흘러 들어갑니다 (경로 조작)."
+severity: high
+cwe: CWE-22
+languages: [javascript, typescript]
+sources:
+  - {pattern: member, object: req, property: [query, body, params, headers]}
+sinks:
+  - {pattern: call, callee: [fs.readFile, fs.readFileSync, fs.writeFile, fs.writeFileSync, fs.createReadStream, res.sendFile], arg: 0}
+sanitizers:
+  - {callee: [path.basename, sanitizePath]}

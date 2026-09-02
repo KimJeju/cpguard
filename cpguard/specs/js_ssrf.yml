@@ -1,0 +1,11 @@
+id: js.ssrf
+message: "사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF)."
+severity: high
+cwe: CWE-918
+languages: [javascript, typescript]
+sources:
+  - {pattern: member, object: req, property: [query, body, params, headers]}
+sinks:
+  - {pattern: call, callee: [http.get, https.get, http.request, https.request, fetch, axios.get, axios.post, request], arg: 0}
+sanitizers:
+  - {callee: [isAllowedUrl, validateUrl]}

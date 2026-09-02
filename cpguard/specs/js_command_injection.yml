@@ -1,0 +1,12 @@
+id: js.command-injection
+message: "사용자 입력이 명령 실행 함수로 흘러 들어갑니다 (명령 주입)."
+severity: high
+cwe: CWE-78
+languages: [javascript, typescript]
+sources:
+  - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
+  - {pattern: name, name: [process.argv]}
+sinks:
+  - {pattern: call, callee: [child_process.exec, child_process.execSync, child_process.spawn, exec, execSync], arg: 0}
+sanitizers:
+  - {callee: [shellQuote, shellEscape, quote]}

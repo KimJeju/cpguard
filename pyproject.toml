@@ -10,6 +10,9 @@ dependencies = [
     "pyyaml",
 ]
 
+[project.scripts]
+cpguard = "cpguard.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest"]
 
@@ -22,3 +25,6 @@ include = ["cpguard*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.setuptools.package-data]
+cpguard = ["specs/*.yml"]
