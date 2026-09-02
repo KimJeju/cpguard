@@ -1,0 +1,102 @@
+# 흐름 분석이 필요 없는 웹/암호 위생 점검.
+# 상용 룰팩에서 위험도 3~4 로 분류되는 항목 중, 단일 지점으로 판정 가능한 것들.
+rules:
+  # ---------- 클라이언트측 XSS (프론트엔드 코드의 실질적 위험) ----------
+  - id: web.react-dangerous-html
+    message: "dangerouslySetInnerHTML 사용 — 정제되지 않은 값이면 XSS 가 됩니다."
+    severity: high
+    cwe: CWE-79
+    owasp: "A03:2021-Injection"
+    languages: [javascript, typescript]
+    pattern: 'dangerouslySetInnerHTML'
+    exclude:
+      - 'DOMPurify|sanitize'
+
+  - id: web.inner-html-assign
+    message: "innerHTML/outerHTML 에 직접 대입 — 정제되지 않은 값이면 XSS 가 됩니다."
+    severity: high
+    cwe: CWE-79
+    owasp: "A03:2021-Injection"
+    languages: [javascript, typescript]
+    pattern: '\.(inner|outer)HTML\s*(\+?=)[^=]'
+    exclude:
+      - 'DOMPurify|sanitize|escapeHtml|textContent'
+
+  - id: web.document-write
+    message: "document.write 사용 — DOM 기반 XSS 위험이 있습니다."
+    severity: medium
+    cwe: CWE-79
+    owasp: "A03:2021-Injection"
+    languages: [javascript, typescript]
+    pattern: 'document\.(write|writeln)\s*\('
+
+  # ---------- 토큰 저장 ----------
+  - id: web.token-in-web-storage
+    message: "인증 토큰을 localStorage/sessionStorage 에 저장 — XSS 시 탈취됩니다."
+    severity: medium
+    cwe: CWE-522
+    owasp: "A07:2021-Identification and Authentication Failures"
+    languages: [javascript, typescript]
+    pattern: '(localStorage|sessionStorage)\.setItem\s*\(\s*["''][^"'']*(token|jwt|auth|session|password|secret)'
+
+  # ---------- 전송 구간 보안 ----------
+  - id: web.tls-verification-disabled
+    message: "TLS 인증서 검증이 비활성화되어 있습니다 (중간자 공격 노출)."
+    severity: critical
+    cwe: CWE-295
+    owasp: "A02:2021-Cryptographic Failures"
+    pattern: '(rejectUnauthorized\s*:\s*false|verify\s*=\s*False|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["'']?0|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|InsecureSkipVerify\s*:\s*true)'
+
+  - id: web.insecure-cookie-flags
+    message: "쿠키에 httpOnly/secure 플래그가 꺼져 있습니다."
+    severity: medium
+    cwe: CWE-1004
+    owasp: "A05:2021-Security Misconfiguration"
+    pattern: '(httpOnly|secure|HTTPOnly)\s*[:=]\s*false'
+
+  # ---------- 암호 알고리즘 ----------
+  - id: crypto.weak-hash
+    message: "취약한 해시 알고리즘(MD5/SHA1) 사용 — 비밀번호·무결성 용도로 부적합합니다."
+    severity: medium
+    cwe: CWE-327
+    owasp: "A02:2021-Cryptographic Failures"
+    pattern: '(createHash\s*\(\s*["''](md5|sha1)["'']|hashlib\.(md5|sha1)\s*\(|MessageDigest\.getInstance\s*\(\s*["''](MD5|SHA-?1)["'']|\bmd5\s*\(|\bsha1\s*\()'
+
+  - id: crypto.weak-cipher
+    message: "취약한 암호 알고리즘(DES/RC4/ECB) 사용."
+    severity: high
+    cwe: CWE-327
+    owasp: "A02:2021-Cryptographic Failures"
+    pattern: '(["'']?(DES|RC4|3DES)["'']?\s*[,)]|/ECB/|AES/ECB|MODE_ECB)'
+
+  - id: crypto.insecure-random
+    message: "보안 용도에 예측 가능한 난수를 사용하고 있습니다."
+    severity: medium
+    cwe: CWE-338
+    owasp: "A02:2021-Cryptographic Failures"
+    pattern: '((token|salt|nonce|otp|password|secret|key|session)[^;]{0,60}(Math\.random\s*\(|random\.random\s*\(|mt_rand\s*\(|new Random\s*\()|(Math\.random\s*\(|random\.random\s*\(|mt_rand\s*\(|new Random\s*\()[^;]{0,60}(token|salt|nonce|otp|password|secret|key|session))'
+
+  # ---------- 운영 위생 ----------
+  - id: hygiene.debug-code-left
+    message: "제거되지 않은 디버그 코드가 남아 있습니다."
+    severity: low
+    cwe: CWE-489
+    owasp: "A05:2021-Security Misconfiguration"
+    pattern: '(^|\s)(debugger\s*;|var_dump\s*\(|print_r\s*\(|console\.debug\s*\(|pdb\.set_trace\s*\(|breakpoint\s*\(\s*\))'
+
+  - id: hygiene.debug-enabled
+    message: "디버그 모드가 켜져 있습니다 — 운영 환경에서 정보가 노출됩니다."
+    severity: high
+    cwe: CWE-489
+    owasp: "A05:2021-Security Misconfiguration"
+    pattern: '(DEBUG\s*=\s*True|app\.run\s*\([^)]*debug\s*=\s*True|display_errors\s*[,=]\s*["'']?(On|1))'
+
+  - id: hygiene.secret-in-comment
+    message: "주석에 인증 정보로 보이는 값이 적혀 있습니다."
+    severity: medium
+    cwe: CWE-615
+    owasp: "A07:2021-Identification and Authentication Failures"
+    skip_comments: false
+    pattern: '(//|#|\*)\s*.{0,40}(비밀번호|password|passwd|api[_-]?key|토큰|token)\s*[:=]\s*\S{4,}'
+    exclude:
+      - '(process\.env|os\.environ|getenv|TODO|FIXME|@param|@return)'

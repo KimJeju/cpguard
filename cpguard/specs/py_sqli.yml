@@ -1,0 +1,12 @@
+id: py.sqli
+message: "사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입)."
+severity: critical
+cwe: CWE-89
+owasp: "A03:2021-Injection"
+languages: [python]
+sources:
+  - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
+sinks:
+  - {pattern: call, callee: [execute, executemany, raw, extra, executescript]}
+sanitizers:
+  - {callee: [int, escape_string, quote]}

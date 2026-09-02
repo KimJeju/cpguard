@@ -8,6 +8,7 @@ dependencies = [
     "tree-sitter-javascript",
     "tree-sitter-typescript",
     "tree-sitter-php",
+    "tree-sitter-python",
     "pyyaml",
     "django>=5.0",
 ]
@@ -37,4 +38,4 @@ include = ["cpguard*"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-cpguard = ["specs/*.yml", "web/templates/*.html", "web/migrations/*.py"]
+cpguard = ["specs/*.yml", "patterns/*.yml", "web/templates/*.html", "web/migrations/*.py"]

@@ -16,13 +16,14 @@ hiddenimports = []
 # 우리 패키지의 데이터: 탐지 규칙, 웹 템플릿, 마이그레이션
 datas += [
     ("../cpguard/specs", "cpguard/specs"),
+    ("../cpguard/patterns", "cpguard/patterns"),
     ("../cpguard/web/templates", "cpguard/web/templates"),
     ("../cpguard/web/migrations", "cpguard/web/migrations"),
 ]
 
 # tree-sitter 문법 (컴파일된 확장 모듈)
 for mod in ("tree_sitter", "tree_sitter_javascript", "tree_sitter_typescript",
-            "tree_sitter_php"):
+            "tree_sitter_php", "tree_sitter_python"):
     binaries += collect_dynamic_libs(mod)
     datas += collect_data_files(mod)
     hiddenimports.append(mod)

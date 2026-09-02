@@ -69,6 +69,9 @@ def normalize(tree: Tree, file: str = "<memory>", language: str = "javascript") 
     if language == "php":
         from .normalize_php import normalize_php
         return normalize_php(tree, file)
+    if language == "python":
+        from .normalize_py import normalize_py
+        return normalize_py(tree, file)
     root = tree.root_node
     return ir.Module(loc=loc_of(root, file), body=_block(root.named_children, file))
 

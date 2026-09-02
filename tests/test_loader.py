@@ -15,10 +15,12 @@ def test_parse_ts_source():
 
 def test_language_name_for():
     assert loader.language_name_for("a/b/foo.js") == "javascript"
-    assert loader.language_name_for("foo.tsx") == "typescript"
+    assert loader.language_name_for("foo.tsx") == "tsx"        # JSX 문법 필요
+    assert loader.rule_language("tsx") == "typescript"       # 규칙상으로는 TS
+    assert loader.language_name_for("x.py") == "python"
 
 
 def test_unsupported_ext():
     import pytest
     with pytest.raises(loader.UnsupportedLanguage):
-        loader.language_name_for("foo.py")
+        loader.language_name_for("foo.rb")

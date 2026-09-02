@@ -14,6 +14,7 @@ from pathlib import Path
 from . import ir
 from .cpg.callgraph import collect_functions
 from .parse import loader, normalize
+from .patterns import PatternRule, load_pattern_rules, scan_text
 from .report.finding import Finding
 from .taint import engine
 from .taint.spec import Rule, load_rules
@@ -95,13 +96,23 @@ def parse_file(path: str | Path) -> tuple[ir.Module, bytes, str, bool]:
     return module, src, lang, tree.root_node.has_error
 
 
-def scan_file(path: str | Path, rules: list[Rule] | None = None) -> list[Finding]:
-    """단일 파일 스캔(그 파일 안에서만 프로시저간 분석)."""
+def scan_file(path: str | Path, rules: list[Rule] | None = None,
+              pattern_rules: list[PatternRule] | None = None) -> list[Finding]:
+    """단일 파일 스캔(그 파일 안에서만 프로시저간 분석) + 패턴 규칙."""
     path = Path(path)
     module, src, lang, _ = parse_file(path)
+    rl = loader.rule_language(lang)
     if rules is None:
-        rules = load_rules(language=lang)
-    return engine.analyze(module, src, [r for r in rules if lang in r.languages])
+        rules = load_rules(language=rl)
+    out = engine.analyze(module, src, [r for r in rules if rl in r.languages])
+
+    if pattern_rules is None:
+        pattern_rules = load_pattern_rules(language=rl)
+    if pattern_rules:
+        text = src.decode("utf-8", "replace")
+        out += scan_text(text, str(path), [r for r in pattern_rules
+                                           if not r.languages or rl in r.languages])
+    return out
 
 
 def scan_path(root: str | Path, rules: list[Rule] | None = None,
@@ -114,6 +125,7 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
     root = Path(root)
     if rules is None:
         rules = load_rules()
+    pattern_rules = load_pattern_rules()
 
     report = ScanReport()
     files = [root] if root.is_file() else list(iter_source_files(root, excludes, report))
@@ -140,12 +152,19 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
 
     # 3) 파일별 분석
     findings: list[Finding] = []
-    for _, module, src, lang in parsed:
-        applicable = [r for r in rules if lang in r.languages]
-        if not applicable:
-            continue
-        findings.extend(engine.analyze(
-            module, src, applicable,
-            registry=registry, summaries_by_rule=summaries_by_rule,
-        ))
+    for path, module, src, lang in parsed:
+        rl = loader.rule_language(lang)
+
+        applicable = [r for r in rules if rl in r.languages]
+        if applicable:
+            findings.extend(engine.analyze(
+                module, src, applicable,
+                registry=registry, summaries_by_rule=summaries_by_rule,
+            ))
+
+        # 흐름과 무관한 단일 지점 점검(하드코딩 비밀정보·디버그 코드 등)
+        pr = [r for r in pattern_rules if not r.languages or rl in r.languages]
+        if pr:
+            findings.extend(scan_text(src.decode("utf-8", "replace"), str(path), pr))
+
     return findings, report

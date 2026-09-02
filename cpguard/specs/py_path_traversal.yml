@@ -1,0 +1,12 @@
+id: py.path-traversal
+message: "사용자 입력이 파일 경로로 흘러 들어갑니다 (경로 조작)."
+severity: high
+cwe: CWE-22
+owasp: "A01:2021-Broken Access Control"
+languages: [python]
+sources:
+  - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
+sinks:
+  - {pattern: call, callee: [open, send_file, os.remove, os.unlink, shutil.copy, shutil.rmtree]}
+sanitizers:
+  - {callee: [os.path.basename, basename, secure_filename, safe_join]}

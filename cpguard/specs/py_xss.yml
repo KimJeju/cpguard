@@ -1,0 +1,12 @@
+id: py.xss
+message: "사용자 입력이 정제 없이 HTML 응답으로 흘러 들어갑니다 (XSS)."
+severity: high
+cwe: CWE-79
+owasp: "A03:2021-Injection"
+languages: [python]
+sources:
+  - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
+sinks:
+  - {pattern: call, callee: [HttpResponse, render_template_string, make_response, mark_safe]}
+sanitizers:
+  - {callee: [escape, html.escape, bleach.clean, conditional_escape]}
