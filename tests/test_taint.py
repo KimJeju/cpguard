@@ -74,3 +74,63 @@ def test_multi_hop_propagation():
     }"""
     f = scan(src)[0]
     assert len(f.steps) >= 4  # source -> 여러 전파 -> sink
+
+
+# ---------- 프로시저 간 분석 (Phase 2) ----------
+
+def test_interprocedural_source_and_sink_helpers():
+    """오염 생성과 위험 지점이 서로 다른 함수에 있어도 이어서 추적해야 한다."""
+    src = """
+    function readInput(req){ return req.query.cmd; }
+    function runIt(v){ child_process.exec(v); }
+    function handler(req,res){ const c = readInput(req); runIt(c); }
+    """
+    assert "js.command-injection" in ids(src)
+
+
+def test_interprocedural_trace_is_stitched():
+    """호출자 경로 + 피호출 함수 내부 경로가 하나로 이어져야 한다."""
+    src = """
+    function readInput(req){ return req.query.cmd; }
+    function runIt(v){ child_process.exec(v); }
+    function handler(req,res){ const c = readInput(req); runIt(c); }
+    """
+    f = [x for x in scan(src) if x.rule_id == "js.command-injection"][0]
+    kinds = [s.kind for s in f.steps]
+    assert kinds[0] == "source" and kinds[-1] == "sink"
+    assert "call" in kinds and "param" in kinds
+
+
+def test_param_taint_flows_to_return():
+    """param -> return 전파: wrap 이 오염을 통과시킨다."""
+    src = """
+    function wrap(x){ return "p" + x; }
+    function handler(req){ const a = wrap(req.query.q); child_process.exec(a); }
+    """
+    assert "js.command-injection" in ids(src)
+
+
+def test_function_not_passing_taint_is_not_flagged():
+    """인자가 오염돼도 리턴으로 흐르지 않으면 오염되지 않아야 한다(정밀도)."""
+    src = """
+    function ignore(x){ return "constant"; }
+    function handler(req){ const a = ignore(req.query.q); child_process.exec(a); }
+    """
+    assert "js.command-injection" not in ids(src)
+
+
+def test_sanitizer_inside_helper_blocks_flow():
+    src = """
+    function clean(x){ return shellQuote(x); }
+    function handler(req){ const a = clean(req.query.q); child_process.exec(a); }
+    """
+    assert "js.command-injection" not in ids(src)
+
+
+def test_recursive_function_terminates():
+    """재귀 함수에서도 요약 계산이 종료돼야 한다(고정점 반복 상한)."""
+    src = """
+    function rec(x){ if (x) { return rec(x); } return x; }
+    function handler(req){ const a = rec(req.query.q); child_process.exec(a); }
+    """
+    assert "js.command-injection" in ids(src)

@@ -67,3 +67,16 @@ def test_non_zip_rejected():
     f.name = "x.txt"
     r = c.post("/scan/", {"archive": f}, follow=True)
     assert "zip 파일만" in r.content.decode("utf-8")
+
+
+def test_cross_file_interprocedural_detection():
+    """서로 다른 파일에 걸친 흐름도 탐지해야 한다."""
+    c = Client()
+    z = _zip_bytes({
+        "lib/input.js": "function readInput(req){ return req.query.cmd; }\nmodule.exports = readInput;",
+        "lib/run.js": "function runIt(v){ child_process.exec(v); }\nmodule.exports = runIt;",
+        "app.js": "function handler(req,res){ const c = readInput(req); runIt(c); }",
+    })
+    r = c.post("/scan/", {"archive": z}, follow=True)
+    body = r.content.decode("utf-8")
+    assert "js.command-injection" in body
