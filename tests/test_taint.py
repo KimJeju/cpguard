@@ -134,3 +134,34 @@ def test_recursive_function_terminates():
     function handler(req){ const a = rec(req.query.q); child_process.exec(a); }
     """
     assert "js.command-injection" in ids(src)
+
+
+# ---------- 흐름 민감도 (분기 병합 · 루프 고정점) ----------
+
+def test_taint_in_one_branch_only():
+    src = 'function f(req,flag){ let c="ls"; if(flag){c=req.query.c;} child_process.exec(c); }'
+    assert "js.command-injection" in ids(src)
+
+
+def test_branch_merge_keeps_taint():
+    """else 분기의 안전한 대입이 then 분기의 오염을 지우면 안 된다."""
+    src = 'function f(req,flag){ let c; if(flag){c=req.query.c;} else {c="safe";} child_process.exec(c); }'
+    assert "js.command-injection" in ids(src)
+
+
+def test_loop_fixpoint_propagation():
+    """회전을 거쳐 도달하는 오염도 잡아야 한다."""
+    src = 'function f(req){ let cur="x",nxt="y"; for(var i=0;i<3;i++){cur=nxt; nxt=req.query.c;} child_process.exec(cur); }'
+    assert "js.command-injection" in ids(src)
+
+
+def test_loop_reports_once():
+    """루프 고정점 반복이 같은 취약점을 여러 번 보고하면 안 된다."""
+    src = 'function f(req){ for(var i=0;i<3;i++){ child_process.exec(req.query.c); } }'
+    hits = [f for f in scan(src) if f.rule_id == "js.command-injection"]
+    assert len(hits) == 1
+
+
+def test_branch_sanitized_still_clean():
+    src = 'function f(req,flag){ let c="ls"; if(flag){c=shellQuote(req.query.c);} child_process.exec(c); }'
+    assert "js.command-injection" not in ids(src)

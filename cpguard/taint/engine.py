@@ -13,8 +13,13 @@
    호출지점에서는 요약만 적용하므로 함수 본문을 반복 분석하지 않는다.
    요약은 고정점에 이를 때까지 반복 계산하여 재귀·상호재귀를 처리한다.
 
+3) 흐름 민감도
+   자바스크립트는 구조적 제어흐름이라 IR 트리 자체가 CFG 를 품고 있다. 별도의 기본블록
+   그래프를 세우는 대신, 분기에서 양쪽을 각각 분석해 합치고(merge) 반복문은 오염이 더
+   늘지 않을 때까지 돌려(고정점) 같은 효과를 낸다.
+
 의도적 한계
-   - CFG 미사용: 문을 순서대로 훑는다(경로 민감도 없음).
+   - 경로 민감도 없음: 분기 조건의 참거짓을 해석하지 않고 양쪽을 모두 가능하다고 본다.
    - alias/points-to 없음, 필드 민감도는 경로 문자열 접두 매칭 수준.
    - 호출 해석은 이름 정확 일치만(import 별칭·동적 디스패치 미해석).
 """
@@ -32,6 +37,8 @@ Trace = list[Step]
 
 # 요약 고정점 반복 상한 (재귀 함수에서 무한 반복 방지)
 MAX_SUMMARY_ITERATIONS = 5
+# 반복문 고정점 상한 (오염이 회전을 거쳐 전파되는 경우를 잡되 종료를 보장)
+MAX_LOOP_ITERATIONS = 4
 
 
 @dataclass
@@ -270,7 +277,21 @@ def _run_nested(node: ir.Node, ctx: Ctx) -> None:
 
 # ---------- 문 실행 ----------
 
-def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> None:
+def _merge(a: dict[str, Trace], b: dict[str, Trace]) -> dict[str, Trace]:
+    """두 분기의 오염 상태를 합친다.
+
+    한쪽 분기에서만 오염되어도 합류 이후에는 오염 가능성이 있으므로 오염으로 본다
+    (건전한 과대근사). 이걸 안 하면 else 분기의 안전한 대입이 then 분기의 오염을
+    지워버려 미탐이 생긴다.
+    """
+    out = dict(a)
+    for k, v in b.items():
+        out.setdefault(k, v)
+    return out
+
+
+def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
+    """문 리스트를 분석하고 끝난 시점의 오염 상태를 돌려준다."""
     for s in stmts:
         if isinstance(s, ir.Function):
             _run_function(s, ctx)
@@ -281,6 +302,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> None:
             tr = _taint(s.value, env, ctx)
             p = path_of(s.target)
             if p:
+                env = dict(env)
                 if tr:
                     env[p] = tr + [Step("propagation", s.loc, _snippet(s.loc, ctx.src))]
                 else:
@@ -295,16 +317,37 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> None:
 
         elif isinstance(s, ir.If):
             _check_sinks(s.test, env, ctx)
-            _run(s.then, env, ctx)
-            _run(s.orelse, env, ctx)
+            # 두 분기를 같은 진입 상태에서 각각 분석한 뒤 합류시킨다
+            then_env = _run(s.then, dict(env), ctx)
+            else_env = _run(s.orelse, dict(env), ctx)
+            env = _merge(then_env, else_env)
 
         elif isinstance(s, ir.Loop):
             _check_sinks(s.test, env, ctx)
-            _run(s.body, env, ctx)
+            env = _run_loop(s, env, ctx)
 
         else:
             _check_sinks(s, env, ctx)
             _run_nested(s, ctx)
+
+    return env
+
+
+def _run_loop(node: ir.Loop, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
+    """반복문: 오염 상태가 더 늘지 않을 때까지 돌린 뒤 그 상태로 한 번만 실제 분석한다.
+
+    회전을 거쳐야 오염이 도달하는 경우(cur = nxt; nxt = 오염)를 잡기 위해 고정점이 필요하다.
+    다만 고정점 반복 중에 매번 보고하면 같은 취약점이 여러 번 나오므로,
+    수렴시키는 동안에는 결과를 버리는 문맥으로 돌리고 마지막에 한 번만 실제로 보고한다.
+    """
+    quiet = Ctx(rule=ctx.rule, src=ctx.src, out=[], summaries=ctx.summaries)
+    cur = dict(env)
+    for _ in range(MAX_LOOP_ITERATIONS):
+        nxt = _merge(cur, _run(node.body, dict(cur), quiet))
+        if set(nxt) == set(cur):
+            break
+        cur = nxt
+    return _merge(cur, _run(node.body, dict(cur), ctx))
 
 
 def _run_function(fn: ir.Function, ctx: Ctx) -> None:
