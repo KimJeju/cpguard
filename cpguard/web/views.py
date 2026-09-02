@@ -1,6 +1,7 @@
-"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 결과."""
+"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 감사 작업대."""
 from __future__ import annotations
 
+import csv
 import json
 import shutil
 import tempfile
@@ -8,6 +9,7 @@ from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from ..extract import UnsafeArchive, safe_extract_zip
 from ..report.finding import Finding
@@ -15,35 +17,69 @@ from ..report.sarif import to_sarif
 from ..scanner import scan_path
 from .models import Scan
 
+# 코드 뷰어용 원본 보관 한도 (DB 비대화 방지)
+MAX_SOURCE_BYTES = 200_000
+MAX_SOURCES_TOTAL = 8_000_000
 
-def _finding_to_dict(f: Finding, base: Path) -> dict:
-    def rel(p: str) -> str:
-        try:
-            return str(Path(p).resolve().relative_to(base)).replace("\\", "/")
-        except Exception:
-            return Path(p).name
-
-    return {
-        "rule_id": f.rule_id,
-        "message": f.message,
-        "severity": f.severity,
-        "cwe": f.cwe,
-        "file": rel(f.sink.loc.file),
-        "line": f.sink.loc.start_line,
-        "owasp": f.owasp,
-        "verdict": f.verdict,
-        "confidence": f.confidence,
-        "triage_reason": f.triage_reason,
-        "steps": [
-            {"kind": s.kind, "file": rel(s.loc.file), "line": s.loc.start_line, "code": s.code}
-            for s in f.steps
-        ],
-    }
+AUDIT_STATES = ("", "confirmed", "false_positive", "fixed", "deferred")
 
 
 def _base_context() -> dict:
     from ..triage import available
     return {"scans": Scan.objects.all()[:30], "providers": available()}
+
+
+def _rel(path: str, base: Path) -> str:
+    try:
+        return str(Path(path).resolve().relative_to(base)).replace("\\", "/")
+    except Exception:
+        return Path(path).name
+
+
+def _finding_to_dict(idx: int, f: Finding, base: Path) -> dict:
+    return {
+        "id": idx,
+        "rule_id": f.rule_id,
+        "message": f.message,
+        "severity": f.severity,
+        "cwe": f.cwe,
+        "owasp": f.owasp,
+        "file": _rel(f.sink.loc.file, base),
+        "line": f.sink.loc.start_line,
+        "verdict": f.verdict,
+        "confidence": f.confidence,
+        "triage_reason": f.triage_reason,
+        "triage_provider": f.triage_provider,
+        "steps": [
+            {"kind": s.kind, "file": _rel(s.loc.file, base),
+             "line": s.loc.start_line, "code": s.code}
+            for s in f.steps
+        ],
+    }
+
+
+def _collect_sources(findings: list[Finding], base: Path) -> dict[str, str]:
+    """탐지가 있는 파일의 원본만 모은다 — 코드 뷰어가 흐름을 원문 위에 표시하도록."""
+    wanted: set[str] = set()
+    for f in findings:
+        for s in f.steps:
+            wanted.add(s.loc.file)
+
+    out: dict[str, str] = {}
+    total = 0
+    for abs_path in sorted(wanted):
+        p = Path(abs_path)
+        try:
+            if not p.is_file() or p.stat().st_size > MAX_SOURCE_BYTES:
+                continue
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        total += len(text)
+        if total > MAX_SOURCES_TOTAL:
+            break
+        out[_rel(abs_path, base)] = text
+    return out
 
 
 def index(request):
@@ -79,23 +115,29 @@ def upload(request):
             })
 
         findings, scan_report = scan_path(src_dir)
+        base = src_dir.resolve()
 
         integrity_note = "" if scan_report.complete else scan_report.summary()
         triage_note = ""
         if request.POST.get("triage") and findings:
             from ..triage import TriageUnavailable, triage_findings
             try:
-                triage_findings(findings, provider=request.POST.get('provider') or None)
+                triage_findings(findings, provider=request.POST.get("provider") or None)
             except TriageUnavailable as e:
                 triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
 
-        base = src_dir.resolve()
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        findings.sort(key=lambda f: (order.get(f.severity, 9), f.rule_id))
+
         scan = Scan.objects.create(
             name=up.name,
             file_count=scan_report.scanned,
             finding_count=len(findings),
-            findings_json=json.dumps([_finding_to_dict(f, base) for f in findings], ensure_ascii=False),
+            findings_json=json.dumps(
+                [_finding_to_dict(i, f, base) for i, f in enumerate(findings)],
+                ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
+            sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
             triage_note=triage_note,
             integrity_note=integrity_note,
         )
@@ -105,16 +147,65 @@ def upload(request):
 
 
 def detail(request, pk: int):
+    """감사 작업대 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
     scan = get_object_or_404(Scan, pk=pk)
-    order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-    findings = sorted(scan.findings, key=lambda f: order.get(f["severity"], 9))
-    return render(request, "detail.html", {"scan": scan, "findings": findings})
+    findings = scan.findings
+    audit = scan.audit
+    for f in findings:
+        f["audit"] = audit.get(str(f["id"]), "")
+
+    sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+    findings.sort(key=lambda f: (sev_order.get(f["severity"], 9), f["file"], f["line"]))
+
+    return render(request, "workbench.html", {
+        "scan": scan,
+        # 소스 원문에는 </script> 같은 문자열이 들어있을 수 있다.
+        # 템플릿에서 json_script 필터로 내보내 스크립트 태그 탈출을 막는다.
+        "findings": findings,
+        "sources": scan.sources,
+        "counts": scan.severity_counts,
+        "rule_counts": scan.rule_counts,
+        "file_counts": scan.file_counts[:40],
+        "total": len(findings),
+    })
+
+
+@require_POST
+def set_audit(request, pk: int):
+    """사람이 확정한 감사 결과 저장 (Fortify 의 analysis 필드에 해당)."""
+    scan = get_object_or_404(Scan, pk=pk)
+    try:
+        idx = int(request.POST.get("index", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "잘못된 index"}, status=400)
+    status = request.POST.get("status", "")
+    if status not in AUDIT_STATES:
+        return JsonResponse({"ok": False, "error": "알 수 없는 상태"}, status=400)
+    scan.set_audit(idx, status)
+    return JsonResponse({"ok": True, "index": idx, "status": status})
 
 
 def sarif_download(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
     resp = HttpResponse(scan.sarif_json, content_type="application/json")
     resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.sarif"'
+    return resp
+
+
+def export_csv(request, pk: int):
+    """표 형태 내보내기 — 보고서·엑셀 정리를 위한 실무 기능."""
+    scan = get_object_or_404(Scan, pk=pk)
+    audit = scan.audit
+    resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
+    resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.csv"'
+    resp.write("﻿")  # 엑셀 한글 깨짐 방지
+    w = csv.writer(resp)
+    w.writerow(["번호", "위험도", "규칙", "CWE", "OWASP", "파일", "라인",
+                "설명", "LLM판정", "감사상태", "흐름단계수"])
+    for f in scan.findings:
+        w.writerow([f["id"], f["severity"], f["rule_id"], f["cwe"], f.get("owasp", ""),
+                    f["file"], f["line"], f["message"], f.get("verdict") or "",
+                    audit.get(str(f["id"]), ""), len(f["steps"])])
     return resp
 
 

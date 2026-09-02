@@ -80,3 +80,78 @@ def test_cross_file_interprocedural_detection():
     r = c.post("/scan/", {"archive": z}, follow=True)
     body = r.content.decode("utf-8")
     assert "js.command-injection" in body
+
+
+# ---------- 감사 작업대 ----------
+
+def _seed_scan(c: Client) -> int:
+    z = _zip_bytes({
+        "app/server.js": "app.get('/p', function(req,res){ const h=req.query.h; child_process.exec(h); });",
+        "app/conf.py": 'password = "hunter2secret"\n',
+    })
+    c.post("/scan/", {"archive": z}, follow=True)
+    from cpguard.web.models import Scan
+    return Scan.objects.first().pk
+
+
+def test_workbench_renders_panes_and_data():
+    c = Client()
+    pk = _seed_scan(c)
+    body = c.get(f"/scan/{pk}/").content.decode("utf-8")
+    assert 'id="tree"' in body and 'id="code"' in body and 'id="detail"' in body
+    assert 'id="data-findings"' in body and 'id="data-sources"' in body
+
+
+def test_sources_are_stored_for_code_viewer():
+    c = Client()
+    pk = _seed_scan(c)
+    from cpguard.web.models import Scan
+    scan = Scan.objects.get(pk=pk)
+    assert scan.sources, "코드 뷰어가 쓸 원본이 보관돼야 한다"
+    assert any(p.endswith("server.js") for p in scan.sources)
+
+
+def test_script_tag_in_source_cannot_break_out():
+    """소스에 </script> 가 있어도 페이지 스크립트를 깨뜨리면 안 된다."""
+    c = Client()
+    z = _zip_bytes({
+        "a.js": "// </script><img src=x onerror=alert(1)>\n"
+                "app.get('/p', function(req,res){ child_process.exec(req.query.h); });",
+    })
+    c.post("/scan/", {"archive": z}, follow=True)
+    from cpguard.web.models import Scan
+    body = c.get(f"/scan/{Scan.objects.first().pk}/").content.decode("utf-8")
+    assert "</script><img" not in body          # 원문 그대로 새어나오면 안 됨
+    assert "\u003C" in body or "\u003c" in body  # json_script 가 이스케이프
+
+
+def test_audit_state_persists():
+    c = Client()
+    pk = _seed_scan(c)
+    r = c.post(f"/scan/{pk}/audit/", {"index": "0", "status": "confirmed"})
+    assert r.json()["ok"] is True
+    from cpguard.web.models import Scan
+    assert Scan.objects.get(pk=pk).audit["0"] == "confirmed"
+
+
+def test_audit_rejects_unknown_status():
+    c = Client()
+    pk = _seed_scan(c)
+    r = c.post(f"/scan/{pk}/audit/", {"index": "0", "status": "hacked"})
+    assert r.status_code == 400
+
+
+def test_audit_requires_post():
+    c = Client()
+    pk = _seed_scan(c)
+    assert c.get(f"/scan/{pk}/audit/").status_code == 405
+
+
+def test_csv_export():
+    c = Client()
+    pk = _seed_scan(c)
+    r = c.get(f"/scan/{pk}/export.csv")
+    assert r.status_code == 200
+    text = r.content.decode("utf-8-sig")
+    assert "위험도" in text and "CWE" in text
+    assert "js.command-injection" in text or "secret.hardcoded-password" in text

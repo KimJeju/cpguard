@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+{% block title %}{{ scan.name }} — CPGuard 감사 작업대{% endblock %}
+
+{% block bodyclass %}app{% endblock %}
+
+{% block head %}
+<style>
+  /* ---- 작업대 레이아웃: 좌 이슈트리 / 중앙 코드 / 우 상세 ---- */
+  /* 남은 높이를 전부 차지하는 3분할. 헤더·요약바 높이를 계산할 필요가 없다. */
+  .wb { display: grid; grid-template-columns: 320px 1fr 380px;
+        flex: 1; min-height: 0; }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0;
+          border-right: 1px solid var(--line); }
+  .pane:last-child { border-right: 0; }
+  .pane-head { padding: 8px 12px; border-bottom: 1px solid var(--line);
+               background: var(--panel); display: flex; align-items: center;
+               gap: 8px; flex-wrap: wrap; }
+  .pane-head h3 { margin: 0; font-size: 12px; letter-spacing: .5px;
+                  text-transform: uppercase; color: var(--muted); }
+  .pane-body { overflow: auto; flex: 1; }
+
+  /* ---- 요약 바 ---- */
+  .summary { display: flex; gap: 6px; align-items: center; padding: 6px 12px;
+             border-bottom: 1px solid var(--line); background: #131922;
+             flex-wrap: wrap; font-size: 12px; }
+  .summary .name { font-weight: 700; }
+  .summary .sep { color: var(--line); }
+
+  /* ---- 이슈 트리 ---- */
+  .filters { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+  .filters input, .filters select {
+      width: 100%; background: #0d1219; color: var(--fg);
+      border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px;
+      font-size: 12px; font-family: inherit; }
+  .group { border-bottom: 1px solid var(--line); }
+  .group-hd { padding: 6px 12px; font-size: 11px; font-weight: 700;
+              color: var(--muted); background: #10161e; cursor: pointer;
+              display: flex; justify-content: space-between; user-select: none; }
+  .issue { padding: 7px 12px 7px 18px; border-bottom: 1px solid #1b222c;
+           cursor: pointer; font-size: 12px; line-height: 1.45; }
+  .issue:hover { background: #161d27; }
+  .issue.sel { background: #1b2836; box-shadow: inset 3px 0 0 var(--accent); }
+  .issue .rid { font-weight: 700; }
+  .issue .loc { color: var(--muted); font-size: 11px; font-family: Consolas, monospace; }
+  .issue.audited { opacity: .5; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+         margin-right: 6px; vertical-align: middle; }
+  .d-critical { background: var(--crit); } .d-high { background: var(--high); }
+  .d-medium { background: var(--med); } .d-low { background: var(--low); }
+  .d-info { background: var(--muted); }
+
+  /* ---- 코드 뷰어 ---- */
+  .code { font-family: Consolas, "D2Coding", monospace; font-size: 12.5px;
+          line-height: 1.6; }
+  .code table { border-collapse: collapse; width: 100%; }
+  .code td.ln { width: 1%; text-align: right; padding: 0 12px 0 14px;
+                color: #4a5666; user-select: none; white-space: nowrap;
+                border-right: 1px solid var(--line); }
+  .code td.src { padding: 0 14px; white-space: pre; }
+  .code tr.hl-sink   { background: rgba(255,92,92,.16); }
+  .code tr.hl-source { background: rgba(255,209,102,.14); }
+  .code tr.hl-step   { background: rgba(77,163,255,.11); }
+  .code tr.cur td.ln { color: var(--accent); font-weight: 700; }
+  .code tr.cur { outline: 1px solid rgba(77,163,255,.5); }
+  .badge-step { font-size: 10px; padding: 0 5px; border-radius: 3px;
+                margin-left: 8px; background: #22303f; color: var(--muted); }
+
+  /* ---- 상세 ---- */
+  .kv { display: grid; grid-template-columns: 84px 1fr; gap: 4px 10px;
+        font-size: 12px; padding: 12px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
+  .flow { border-top: 1px solid var(--line); }
+  .flow-step { padding: 7px 12px; border-bottom: 1px solid #1b222c; cursor: pointer;
+               font-size: 12px; }
+  .flow-step:hover { background: #161d27; }
+  .flow-step.cur { background: #1b2836; }
+  .flow-step .k { display: inline-block; width: 78px; color: var(--muted);
+                  font-size: 11px; }
+  .flow-step code { font-size: 11.5px; }
+  .audit-btns { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px;
+                border-top: 1px solid var(--line); }
+  .ab { flex: 1 1 auto; padding: 6px 8px; font-size: 11.5px; border-radius: 5px;
+        border: 1px solid var(--line); background: transparent; color: var(--muted);
+        cursor: pointer; }
+  .ab:hover { border-color: var(--accent); color: var(--fg); }
+  .ab.on { background: var(--accent); color: #06121f; border-color: var(--accent);
+           font-weight: 700; }
+  .empty { padding: 28px 16px; color: var(--muted); text-align: center; font-size: 13px; }
+  .toolbtn { background: transparent; border: 1px solid var(--line); color: var(--muted);
+             border-radius: 5px; padding: 4px 9px; font-size: 11.5px; cursor: pointer;
+             text-decoration: none; }
+  .toolbtn:hover { border-color: var(--accent); color: var(--fg); text-decoration: none; }
+</style>
+{% endblock %}
+
+{% block content_raw %}
+<div class="wrap" style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="summary">
+  <span class="name">{{ scan.name }}</span>
+  <span class="sep">|</span>
+  <span class="muted">{{ scan.created_at|date:"Y-m-d H:i" }}</span>
+  <span class="sep">|</span>
+  <span class="muted">파일 {{ scan.file_count }}</span>
+  <span class="sep">|</span>
+  <span>탐지 <b>{{ total }}</b></span>
+  {% for sev, n in counts.items %}
+    <span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>
+  {% endfor %}
+  <span style="margin-left:auto;display:flex;gap:6px">
+    <a class="toolbtn" href="{% url 'sarif' scan.pk %}">SARIF</a>
+    <a class="toolbtn" href="{% url 'export_csv' scan.pk %}">CSV</a>
+    <a class="toolbtn" href="/">스캔 목록</a>
+  </span>
+</div>
+
+{% if scan.integrity_note %}
+  <div class="err" style="margin:8px 12px">스캔 무결성: {{ scan.integrity_note }} — 결과가 전체를 대표하지 않을 수 있습니다.</div>
+{% endif %}
+{% if scan.triage_note %}
+  <div class="err" style="margin:8px 12px">{{ scan.triage_note }}</div>
+{% endif %}
+
+<div class="wb">
+  <!-- 좌: 이슈 트리 -->
+  <div class="pane">
+    <div class="pane-head">
+      <h3>이슈 <span id="shown"></span></h3>
+      <div class="filters">
+        <input id="q" type="search" placeholder="규칙·파일·메시지 검색">
+        <div style="display:flex;gap:6px">
+          <select id="fsev">
+            <option value="">위험도 전체</option>
+            <option value="critical">critical</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+          </select>
+          <select id="group">
+            <option value="severity">위험도별</option>
+            <option value="rule_id">규칙별</option>
+            <option value="file">파일별</option>
+          </select>
+        </div>
+        <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px">
+          <input type="checkbox" id="hideAudited"> 감사 완료 숨기기
+        </label>
+      </div>
+    </div>
+    <div class="pane-body" id="tree"></div>
+  </div>
+
+  <!-- 중앙: 코드 뷰어 -->
+  <div class="pane">
+    <div class="pane-head">
+      <h3>소스</h3>
+      <span id="codepath" class="muted" style="font-family:Consolas,monospace;font-size:11.5px"></span>
+    </div>
+    <div class="pane-body code" id="code">
+      <div class="empty">왼쪽에서 이슈를 선택하세요.</div>
+    </div>
+  </div>
+
+  <!-- 우: 상세 + 흐름 + 감사 -->
+  <div class="pane">
+    <div class="pane-head"><h3>상세</h3></div>
+    <div class="pane-body" id="detail">
+      <div class="empty">선택된 이슈가 없습니다.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+{{ findings|json_script:"data-findings" }}
+{{ sources|json_script:"data-sources" }}
+<script>
+(function () {
+  const FINDINGS = JSON.parse(document.getElementById('data-findings').textContent);
+  const SOURCES  = JSON.parse(document.getElementById('data-sources').textContent);
+  const SCAN_PK  = {{ scan.pk }};
+  const CSRF = document.cookie.match(/csrftoken=([^;]+)/);
+
+  const AUDIT_LABEL = {
+    '': '미확인', confirmed: '취약 확정', false_positive: '오탐',
+    fixed: '조치완료', deferred: '보류'
+  };
+  const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+  let sel = null, curStep = 0;
+  const el = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // ---------- 필터 ----------
+  function visible() {
+    const q = el('q').value.trim().toLowerCase();
+    const sev = el('fsev').value;
+    const hide = el('hideAudited').checked;
+    return FINDINGS.filter(f => {
+      if (sev && f.severity !== sev) return false;
+      if (hide && f.audit) return false;
+      if (!q) return true;
+      return (f.rule_id + ' ' + f.file + ' ' + f.message + ' ' + (f.cwe || ''))
+             .toLowerCase().includes(q);
+    });
+  }
+
+  // ---------- 좌: 트리 ----------
+  function renderTree() {
+    const items = visible();
+    el('shown').textContent = `(${items.length}/${FINDINGS.length})`;
+    const key = el('group').value;
+    const groups = new Map();
+    for (const f of items) {
+      const k = f[key] || '(없음)';
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(f);
+    }
+    const keys = [...groups.keys()].sort((a, b) =>
+      key === 'severity' ? (SEV_ORDER[a] ?? 9) - (SEV_ORDER[b] ?? 9)
+                         : groups.get(b).length - groups.get(a).length);
+
+    let html = '';
+    if (!items.length) html = '<div class="empty">조건에 맞는 이슈가 없습니다.</div>';
+    for (const k of keys) {
+      const list = groups.get(k);
+      html += `<div class="group"><div class="group-hd"><span>${esc(k)}</span><span>${list.length}</span></div>`;
+      for (const f of list) {
+        html += `<div class="issue${sel === f.id ? ' sel' : ''}${f.audit ? ' audited' : ''}" data-id="${f.id}">
+          <div><span class="dot d-${f.severity}"></span><span class="rid">${esc(f.rule_id)}</span></div>
+          <div class="loc">${esc(f.file)}:${f.line}</div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    el('tree').innerHTML = html;
+    el('tree').querySelectorAll('.issue').forEach(n =>
+      n.onclick = () => select(Number(n.dataset.id)));
+  }
+
+  // ---------- 중앙: 코드 ----------
+  function renderCode(f, stepIdx) {
+    const step = f.steps[stepIdx] || f.steps[f.steps.length - 1];
+    const path = step.file;
+    el('codepath').textContent = path + ':' + step.line;
+    const src = SOURCES[path];
+    if (src === undefined) {
+      el('code').innerHTML = `<div class="empty">원본을 보관하지 않은 파일입니다.<br><code>${esc(path)}</code></div>`;
+      return;
+    }
+    // 이 파일에 걸린 흐름 단계들을 줄 번호로 표시
+    const marks = new Map();
+    f.steps.forEach(s => { if (s.file === path) marks.set(s.line, s.kind); });
+
+    const lines = src.split('\n');
+    let html = '<table>';
+    lines.forEach((ln, i) => {
+      const no = i + 1;
+      const kind = marks.get(no);
+      const cls = [];
+      if (kind === 'sink') cls.push('hl-sink');
+      else if (kind === 'source' || kind === 'param') cls.push('hl-source');
+      else if (kind) cls.push('hl-step');
+      if (no === step.line) cls.push('cur');
+      html += `<tr class="${cls.join(' ')}" id="L${no}"><td class="ln">${no}</td>` +
+              `<td class="src">${esc(ln)}` +
+              (kind ? `<span class="badge-step">${esc(kind)}</span>` : '') +
+              `</td></tr>`;
+    });
+    el('code').innerHTML = html + '</table>';
+    const target = document.getElementById('L' + step.line);
+    if (target) target.scrollIntoView({ block: 'center' });
+  }
+
+  // ---------- 우: 상세 ----------
+  function renderDetail(f) {
+    const v = f.verdict
+      ? `<span class="badge v-${f.verdict}">${esc(f.verdict)}</span>` +
+        (f.confidence != null ? ` <span class="muted">${(f.confidence * 100).toFixed(0)}%</span>` : '')
+      : '<span class="muted">미실행</span>';
+
+    let html = `<dl class="kv">
+      <dt>위험도</dt><dd><span class="badge ${f.severity}">${f.severity.toUpperCase()}</span></dd>
+      <dt>규칙</dt><dd>${esc(f.rule_id)}</dd>
+      <dt>CWE</dt><dd>${esc(f.cwe || '-')}</dd>
+      <dt>OWASP</dt><dd>${esc(f.owasp || '-')}</dd>
+      <dt>위치</dt><dd><code>${esc(f.file)}:${f.line}</code></dd>
+      <dt>설명</dt><dd>${esc(f.message)}</dd>
+      <dt>LLM</dt><dd>${v}</dd>`;
+    if (f.triage_reason)
+      html += `<dt>근거</dt><dd class="muted">${esc(f.triage_reason)}</dd>`;
+    html += '</dl>';
+
+    html += `<div class="flow"><div class="pane-head"><h3>데이터 흐름 (${f.steps.length}단계)</h3></div>`;
+    f.steps.forEach((s, i) => {
+      html += `<div class="flow-step${i === curStep ? ' cur' : ''}" data-step="${i}">
+        <span class="k">${esc(s.kind)}</span>
+        <code>${esc(s.file.split('/').pop())}:${s.line}</code>
+        <div class="muted" style="margin-top:3px"><code>${esc(s.code)}</code></div>
+      </div>`;
+    });
+    html += '</div>';
+
+    html += '<div class="audit-btns">';
+    for (const [k, label] of Object.entries(AUDIT_LABEL)) {
+      html += `<button class="ab${(f.audit || '') === k ? ' on' : ''}" data-audit="${k}">${label}</button>`;
+    }
+    html += '</div>';
+
+    el('detail').innerHTML = html;
+    el('detail').querySelectorAll('.flow-step').forEach(n =>
+      n.onclick = () => { curStep = Number(n.dataset.step); renderDetail(f); renderCode(f, curStep); });
+    el('detail').querySelectorAll('.ab').forEach(n =>
+      n.onclick = () => setAudit(f, n.dataset.audit));
+  }
+
+  function setAudit(f, status) {
+    const body = new URLSearchParams({ index: f.id, status });
+    fetch(`/scan/${SCAN_PK}/audit/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': CSRF ? CSRF[1] : '',
+      },
+      body,
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) return;
+      f.audit = status;
+      renderDetail(f);
+      renderTree();
+    });
+  }
+
+  function select(id) {
+    sel = id;
+    curStep = 0;
+    const f = FINDINGS.find(x => x.id === id);
+    if (!f) return;
+    renderTree();
+    renderDetail(f);
+    renderCode(f, 0);
+  }
+
+  // ---------- 키보드 (Ghidra 식 빠른 이동) ----------
+  document.addEventListener('keydown', e => {
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    const items = visible();
+    if (!items.length) return;
+    const i = items.findIndex(x => x.id === sel);
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault(); select(items[Math.min(i + 1, items.length - 1)].id);
+    } else if (e.key === 'k' || e.key === 'ArrowUp') {
+      e.preventDefault(); select(items[Math.max(i - 1, 0)].id);
+    } else if (sel !== null && (e.key === 'n' || e.key === 'p')) {
+      const f = FINDINGS.find(x => x.id === sel);
+      curStep = e.key === 'n' ? Math.min(curStep + 1, f.steps.length - 1)
+                              : Math.max(curStep - 1, 0);
+      renderDetail(f); renderCode(f, curStep);
+    }
+  });
+
+  ['q', 'fsev', 'group', 'hideAudited'].forEach(id =>
+    el(id).addEventListener('input', renderTree));
+
+  renderTree();
+  if (FINDINGS.length) select(FINDINGS[0].id);
+})();
+</script>
+{% endblock %}

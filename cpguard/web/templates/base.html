@@ -18,6 +18,10 @@
   .logo span{color:var(--accent)}
   .tag{color:var(--muted);font-size:12px}
   main{max-width:1080px;margin:0 auto;padding:28px 24px 60px}
+  header{flex:0 0 auto}
+  /* 작업대처럼 화면을 꽉 채우는 페이지를 위해 body 를 세로 flex 로 둔다 */
+  body.app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  body.app main{max-width:none;margin:0;padding:0;flex:1;min-height:0}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:20px}
   h2{margin:0 0 14px;font-size:16px}
   table{width:100%;border-collapse:collapse}
@@ -40,13 +44,14 @@
        padding:10px 14px;border-radius:8px;margin-bottom:16px}
   code{font-family:Consolas,monospace;background:#0b1017;padding:1px 6px;border-radius:4px;font-size:12.5px}
 </style>
+{% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
 <header>
   <div class="logo">CP<span>Guard</span></div>
   <div class="tag">CPG 기반 taint 분석 정적 보안 스캐너</div>
   <div style="margin-left:auto"><a href="/">스캔 목록</a></div>
 </header>
-<main>{% block content %}{% endblock %}</main>
+{% block content_raw %}<main>{% block content %}{% endblock %}</main>{% endblock %}
 </body>
 </html>
