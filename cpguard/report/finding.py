@@ -27,6 +27,7 @@ class Finding:
     verdict: str | None = None          # true_positive | false_positive | uncertain
     confidence: float | None = None
     triage_reason: str | None = None
+    triage_provider: str | None = None
 
     @property
     def source(self) -> Step:

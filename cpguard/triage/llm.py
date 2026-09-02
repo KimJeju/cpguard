@@ -17,16 +17,16 @@ import os
 from pathlib import Path
 
 from ..report.finding import Finding
+from .providers import Provider, ProviderUnavailable, get_provider
 
-MODEL = "claude-opus-5"
 BATCH_SIZE = 5          # 한 요청에 담을 finding 수
 CONTEXT_LINES = 6       # 각 단계 주변에 붙일 소스 줄 수
 
 VERDICTS = ("true_positive", "false_positive", "uncertain")
 
 
-class TriageUnavailable(RuntimeError):
-    """SDK 미설치 또는 자격증명 없음."""
+# 프로바이더 계층의 예외를 그대로 노출한다(호출자는 이것만 잡으면 된다)
+TriageUnavailable = ProviderUnavailable
 
 
 SYSTEM = """당신은 정적 분석 결과를 검토하는 보안 전문가다.
@@ -52,29 +52,6 @@ SYSTEM = """당신은 정적 분석 결과를 검토하는 보안 전문가다.
 확신이 없으면 uncertain 을 쓰라. 취약점을 놓치는 것이 오탐보다 위험하므로,
 애매하면 false_positive 대신 uncertain 을 택한다.
 reason 은 한국어 한두 문장으로 근거를 명확히 쓴다."""
-
-_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "results": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "index": {"type": "integer"},
-                    "verdict": {"type": "string", "enum": list(VERDICTS)},
-                    "confidence": {"type": "number"},
-                    "reason": {"type": "string"},
-                },
-                "required": ["index", "verdict", "confidence", "reason"],
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["results"],
-    "additionalProperties": False,
-}
-
 
 def _source_lines(path: str, cache: dict[str, list[str]]) -> list[str]:
     if path not in cache:
@@ -117,53 +94,29 @@ def _describe(idx: int, f: Finding, cache: dict[str, list[str]]) -> str:
     return "\n".join(parts)
 
 
-def _client(api_key: str | None):
-    try:
-        import anthropic
-    except ImportError as e:
-        raise TriageUnavailable(
-            "anthropic SDK 가 없습니다. 'pip install anthropic' 후 다시 시도하세요."
-        ) from e
-
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        return anthropic.Anthropic(api_key=key)
-    # 키가 없어도 ant auth login 프로필 등 다른 자격증명이 있을 수 있다.
-    try:
-        return anthropic.Anthropic()
-    except Exception as e:
-        raise TriageUnavailable(f"Anthropic 자격증명을 찾을 수 없습니다: {e}") from e
-
-
-def _triage_batch(client, batch: list[tuple[int, Finding]], cache) -> dict[int, dict]:
+def _triage_batch(provider: Provider, batch: list[tuple[int, Finding]],
+                  cache) -> dict[int, dict]:
     prompt = (
         "다음 정적 분석 후보들을 검토하고 각각 판정하라.\n\n"
         + "\n\n".join(_describe(i, f, cache) for i, f in batch)
         + "\n\n각 후보의 index 를 그대로 사용해 결과를 반환하라."
     )
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=16000,
-        system=SYSTEM,
-        thinking={"type": "adaptive"},
-        output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    text = next((b.text for b in resp.content if b.type == "text"), "")
-    data = json.loads(text)
+    data = provider.complete_json(SYSTEM, prompt)
     return {r["index"]: r for r in data.get("results", [])}
 
 
 def triage_findings(findings: list[Finding], api_key: str | None = None,
-                    batch_size: int = BATCH_SIZE) -> list[Finding]:
+                    batch_size: int = BATCH_SIZE, provider: str | None = None,
+                    model: str | None = None) -> list[Finding]:
     """각 finding 에 verdict/confidence/reason 을 붙인다(원본 목록은 그대로 유지).
 
+    provider: 'claude' | 'openai' | 'gemini'. 생략하면 키가 있는 것을 순서대로 시도한다.
     자격증명이 없거나 SDK 가 없으면 TriageUnavailable 을 던진다 — 호출자가 건너뛰면 된다.
     """
     if not findings:
         return findings
 
-    client = _client(api_key)
+    client = get_provider(provider, api_key=api_key, model=model)
     cache: dict[str, list[str]] = {}
     items = list(enumerate(findings))
 
@@ -175,7 +128,7 @@ def triage_findings(findings: list[Finding], api_key: str | None = None,
             # 한 배치 실패가 전체를 죽이지 않게 한다
             for i, f in batch:
                 f.verdict = "uncertain"
-                f.triage_reason = f"트리아지 실패: {type(e).__name__}"
+                f.triage_reason = f"트리아지 실패({client.name}): {type(e).__name__}"
             continue
         for i, f in batch:
             r = results.get(i)
@@ -186,5 +139,6 @@ def triage_findings(findings: list[Finding], api_key: str | None = None,
             f.verdict = r["verdict"] if r["verdict"] in VERDICTS else "uncertain"
             f.confidence = float(r.get("confidence", 0.0))
             f.triage_reason = r.get("reason", "")
+            f.triage_provider = client.name
 
     return findings

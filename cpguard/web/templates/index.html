@@ -6,7 +6,8 @@
     <h2>프로젝트 업로드</h2>
     <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 취약점을 진단합니다.
        지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code>
-       (<code>node_modules</code> 는 제외)</p>
+       <code>.php</code> <code>.phtml</code>
+       (<code>node_modules</code> 등 의존성 폴더는 제외)</p>
     <form id="scanform" method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
@@ -14,10 +15,23 @@
              style="color:var(--muted);flex:1">
       <button class="btn" type="submit">진단 시작</button>
     </form>
-    <label class="muted" style="display:flex;gap:8px;align-items:center;margin-top:12px;cursor:pointer">
-      <input type="checkbox" name="triage" form="scanform" value="1">
-      LLM 트리아지로 오탐 재검증 (ANTHROPIC_API_KEY 필요, 느려짐)
-    </label>
+    <div style="display:flex;gap:14px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <label class="muted" style="display:flex;gap:8px;align-items:center;cursor:pointer">
+        <input type="checkbox" name="triage" form="scanform" value="1">
+        LLM 트리아지로 오탐 재검증
+      </label>
+      <select name="provider" form="scanform"
+              style="background:var(--panel);color:var(--fg);border:1px solid var(--line);
+                     border-radius:6px;padding:5px 8px">
+        <option value="">자동 선택</option>
+        <option value="claude">Claude</option>
+        <option value="openai">ChatGPT (OpenAI)</option>
+        <option value="gemini">Gemini</option>
+      </select>
+      <span class="muted" style="font-size:12px">
+        {% if providers %}사용 가능: {{ providers|join:", " }}{% else %}API 키 없음 — 환경변수 ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY{% endif %}
+      </span>
+    </div>
   </div>
 
   <div class="card">

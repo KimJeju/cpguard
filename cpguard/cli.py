@@ -21,18 +21,34 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--sarif", metavar="FILE", help="SARIF 2.1.0 결과 저장 경로")
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
     sc.add_argument("--triage", action="store_true",
-                    help="LLM 트리아지로 오탐 재검증 (ANTHROPIC_API_KEY 필요)")
+                    help="LLM 트리아지로 오탐 재검증")
+    sc.add_argument("--provider", choices=["claude", "openai", "gemini"],
+                    help="트리아지에 쓸 LLM (생략 시 키가 있는 것을 자동 선택)")
+    sc.add_argument("--model", help="프로바이더의 모델명 재정의")
 
     sv = sub.add_parser("serve", help="웹 대시보드 실행 (zip 업로드 진단)")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--no-browser", action="store_true", help="브라우저 자동 실행 안 함")
 
+    ap_app = sub.add_parser("app", help="독립 데스크톱 창으로 실행 (브라우저 아님)")
+    ap_app.add_argument("--port", type=int, help="사용할 포트 (생략 시 자동 선택)")
+    ap_app.add_argument("--debug", action="store_true", help="웹뷰 디버그 도구 활성화")
+
     args = ap.parse_args(argv)
 
     if args.cmd == "serve":
         from .web.run import serve
         serve(host=args.host, port=args.port, open_browser=not args.no_browser)
+        return 0
+
+    if args.cmd == "app":
+        from .desktop import DesktopUnavailable, launch
+        try:
+            launch(port=args.port, debug=args.debug)
+        except DesktopUnavailable as e:
+            print(f"[데스크톱 창 실패] {e}", file=sys.stderr)
+            return 1
         return 0
 
     root = Path(args.path)
@@ -45,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.triage and findings:
         from .triage import TriageUnavailable, triage_findings
         try:
-            triage_findings(findings)
+            triage_findings(findings, provider=args.provider, model=args.model)
         except TriageUnavailable as e:
             print(f"[트리아지 건너뜀] {e}", file=sys.stderr)
 

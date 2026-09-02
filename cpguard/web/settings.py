@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -55,3 +56,10 @@ TIME_ZONE = "Asia/Seoul"
 # zip 업로드 허용 크기 (해제 단계에서 다시 검증한다)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 200 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+
+# Django 는 우리 LOGGING 을 적용하기 전에 DEFAULT_LOGGING(관리자 메일 핸들러 포함)을
+# 먼저 구성한다. 로컬 데스크톱 앱에는 불필요하고, 실행 파일로 묶으면 메일 모듈이 없어
+# 기동 자체가 실패한다. LOGGING_CONFIG=None 으로 Django 의 로깅 구성을 건너뛰고
+# 직접 최소 설정만 한다.
+LOGGING_CONFIG = None
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")

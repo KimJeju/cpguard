@@ -41,8 +41,13 @@ def _finding_to_dict(f: Finding, base: Path) -> dict:
     }
 
 
+def _base_context() -> dict:
+    from ..triage import available
+    return {"scans": Scan.objects.all()[:30], "providers": available()}
+
+
 def index(request):
-    return render(request, "index.html", {"scans": Scan.objects.all()[:30]})
+    return render(request, "index.html", _base_context())
 
 
 def upload(request):
@@ -52,10 +57,10 @@ def upload(request):
     up = request.FILES.get("archive")
     if not up:
         return render(request, "index.html",
-                      {"scans": Scan.objects.all()[:30], "error": "zip 파일을 선택하세요."})
+                      {**_base_context(), "error": "zip 파일을 선택하세요."})
     if not up.name.lower().endswith(".zip"):
         return render(request, "index.html",
-                      {"scans": Scan.objects.all()[:30], "error": "zip 파일만 지원합니다."})
+                      {**_base_context(), "error": "zip 파일만 지원합니다."})
 
     workdir = Path(tempfile.mkdtemp(prefix="cpguard_"))
     try:
@@ -69,7 +74,7 @@ def upload(request):
             safe_extract_zip(zip_path, src_dir)
         except UnsafeArchive as e:
             return render(request, "index.html", {
-                "scans": Scan.objects.all()[:30],
+                **_base_context(),
                 "error": f"안전하지 않은 아카이브라 거부했습니다 — {e}",
             })
 
@@ -80,7 +85,7 @@ def upload(request):
         if request.POST.get("triage") and findings:
             from ..triage import TriageUnavailable, triage_findings
             try:
-                triage_findings(findings)
+                triage_findings(findings, provider=request.POST.get('provider') or None)
             except TriageUnavailable as e:
                 triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
 

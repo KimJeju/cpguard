@@ -15,9 +15,16 @@ dependencies = [
 [project.scripts]
 cpguard = "cpguard.cli:main"
 
+[project.gui-scripts]
+cpguard-app = "cpguard.desktop:main"
+
 [project.optional-dependencies]
 dev = ["pytest"]
 triage = ["anthropic>=0.40"]
+desktop = ["pywebview>=5.0"]
+openai = ["openai>=1.40"]
+gemini = ["google-genai>=1.0"]
+all-llm = ["anthropic>=0.40", "openai>=1.40", "google-genai>=1.0"]
 
 [build-system]
 requires = ["setuptools>=68"]

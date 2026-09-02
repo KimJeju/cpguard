@@ -7,3 +7,4 @@ dist/
 build/
 *.sarif
 .DS_Store
+packaging/output/
