@@ -1,0 +1,113 @@
+# 벤더 고유 형식의 API 키·토큰 — 형식 자체가 식별자라 오탐이 거의 없다(신뢰도 high).
+# 현장 점검 스크립트(secret_scan.py)에서 검증된 패턴을 옮겨왔다.
+defaults:
+  category: secret
+  all_files: true
+  mask: secret
+  confidence: high
+  severity: critical
+  cwe: CWE-798
+  owasp: "A07:2021-Identification and Authentication Failures"
+  skip_comments: false
+
+rules:
+  - id: vendor.aws-access-key-id
+    message: "AWS Access Key ID 가 하드코딩되어 있습니다."
+    pattern: '\b(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ABIA|ACCA)[0-9A-Z]{16}\b'
+    exclude: ['EXAMPLE']
+
+  - id: vendor.aws-secret-key
+    message: "AWS Secret Access Key 로 보이는 값이 하드코딩되어 있습니다."
+    group: 1
+    pattern: 'aws.{0,25}(?:secret|private).{0,25}["'']([0-9a-zA-Z/+]{40})["'']'
+
+  - id: vendor.google-api-key
+    message: "Google API 키가 하드코딩되어 있습니다."
+    pattern: '\bAIza[0-9A-Za-z\-_]{30,}'
+
+  - id: vendor.gcp-service-account
+    message: "GCP 서비스 계정 키 파일(JSON)이 포함되어 있습니다."
+    mask: none
+    pattern: '"type"\s*:\s*"service_account"'
+
+  - id: vendor.google-oauth-client
+    message: "Google OAuth 클라이언트 ID 가 하드코딩되어 있습니다."
+    severity: high
+    pattern: '[0-9]{6,}-[0-9A-Za-z_]{20,}\.apps\.googleusercontent\.com'
+
+  - id: vendor.azure-storage-key
+    message: "Azure Storage 계정 키가 하드코딩되어 있습니다."
+    group: 1
+    pattern: 'AccountKey\s*=\s*([0-9A-Za-z+/=]{40,})'
+
+  - id: vendor.azure-sas-token
+    message: "Azure SAS 토큰이 하드코딩되어 있습니다."
+    severity: high
+    pattern: '(?:SharedAccessSignature|[?&]sig=)[0-9A-Za-z%+/=]{20,}'
+
+  - id: vendor.github-token
+    message: "GitHub 토큰이 하드코딩되어 있습니다."
+    pattern: '\b(?:gh[pousr]_[0-9A-Za-z]{30,}|github_pat_[0-9A-Za-z_]{20,})\b'
+
+  - id: vendor.gitlab-token
+    message: "GitLab 토큰이 하드코딩되어 있습니다."
+    pattern: '\bglpat-[0-9A-Za-z\-_]{15,}\b'
+
+  - id: vendor.slack-token
+    message: "Slack 토큰/웹훅이 하드코딩되어 있습니다."
+    pattern: '(\bxox[baprs]-[0-9A-Za-z\-]{10,}\b|https://hooks\.slack\.com/services/[0-9A-Za-z/]+)'
+
+  - id: vendor.stripe-key
+    message: "Stripe 키가 하드코딩되어 있습니다."
+    pattern: '\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{10,}\b'
+
+  - id: vendor.sendgrid-key
+    message: "SendGrid 키가 하드코딩되어 있습니다."
+    pattern: '\bSG\.[0-9A-Za-z_\-]{16,}\.[0-9A-Za-z_\-]{16,}\b'
+
+  - id: vendor.openai-anthropic-key
+    message: "OpenAI/Anthropic API 키가 하드코딩되어 있습니다."
+    pattern: '\bsk-(?:ant-|proj-)?[0-9A-Za-z_\-]{20,}\b'
+    exclude: ['sk_(live|test)_']
+
+  - id: vendor.npm-token
+    message: "npm 토큰이 하드코딩되어 있습니다."
+    pattern: '\bnpm_[0-9A-Za-z]{30,}\b'
+
+  - id: vendor.twilio-key
+    message: "Twilio SID/키가 하드코딩되어 있습니다."
+    severity: high
+    confidence: medium
+    pattern: '\b(?:AC|SK)[0-9a-fA-F]{32}\b'
+
+  - id: vendor.firebase-fcm-key
+    message: "Firebase 서버 키가 하드코딩되어 있습니다."
+    pattern: '\bAAAA[A-Za-z0-9_\-]{7}:[A-Za-z0-9_\-]{100,}'
+
+  - id: vendor.mailgun-mailchimp-key
+    message: "Mailgun/Mailchimp 키가 하드코딩되어 있습니다."
+    severity: high
+    pattern: '(\bkey-[0-9a-zA-Z]{32}\b|\b[0-9a-f]{32}-us[0-9]{1,2}\b)'
+
+  - id: vendor.jwt-token
+    message: "서명이 포함된 JWT 가 소스에 들어 있습니다."
+    severity: high
+    confidence: medium
+    pattern: '\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}'
+
+  # ---------- 국내 서비스 ----------
+  - id: vendor.kr-payment-gateway
+    message: "국내 PG(이니시스/토스/아임포트 등) 결제 키 설정이 하드코딩되어 있습니다."
+    severity: high
+    confidence: medium
+    mask: none
+    pattern: '\b(?:iniapikey|inipay|signkey|mert(?:Key|ID)|merchant[_-]?key|cpid|siteCd|siteKey|imp[_-]?(?:key|secret)|toss[_-]?(?:client|secret)[_-]?key)\b\s*[:=]'
+    exclude: ['process\.env|os\.environ|getenv|\$\{|\{\{']
+
+  - id: vendor.kr-portal-key
+    message: "카카오/네이버/NHN 클라우드 키 설정이 하드코딩되어 있습니다."
+    severity: high
+    confidence: medium
+    mask: none
+    pattern: '\b(?:kakao|naver|nhn|toast|ncloud)[_-]?(?:rest[_-]?)?(?:api[_-]?key|client[_-]?secret|app[_-]?key|secret[_-]?key)\b\s*[:=]\s*["'']'
+    exclude: ['process\.env|os\.environ|getenv|\$\{|\{\{']

@@ -20,9 +20,9 @@ def test_rules_loaded():
 # ---------- 비밀정보 ----------
 
 @pytest.mark.parametrize("rule_id,src", [
-    ("secret.hardcoded-password", 'password="admin1234"'),
-    ("secret.api-key", 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c"'),
-    ("secret.aws-access-key", 'key = "AKIAIOSFODNN7EXAMPLE"'),
+    ("secret.credential-assignment", 'password="admin1234"'),
+    ("secret.credential-assignment", 'api_key = "sk_live_9f8a7b6c5d4e3f2a1b0c"'),
+    ("vendor.aws-access-key-id", 'key = "AKIAIOSFODNN7QWERTYU"'),
     ("secret.private-key", "-----BEGIN RSA PRIVATE KEY-----"),
     ("secret.connection-string", 'u = "mongodb://root:s3cretpw@10.0.0.5:27017/db"'),
 ])
@@ -109,10 +109,13 @@ def test_comment_lines_are_skipped_by_default():
 def test_finding_has_location_and_snippet():
     src = "line one\npassword=\"hunter22\"\nline three"
     f = [x for x in scan_text(src, "a.py", RULES)
-         if x.rule_id == "secret.hardcoded-password"][0]
+         if x.rule_id == "secret.credential-assignment"][0]
     assert f.steps[0].loc.start_line == 2
-    assert "hunter22" in f.steps[0].code
     assert f.steps[0].kind == "match"
+    # 탐지값은 마스킹된다 — 산출물이 유출원이 되지 않게
+    assert "hunter22" not in f.steps[0].code
+    assert "password" in f.steps[0].code
+    assert f.matched_value.startswith("hunt")
 
 
 def test_language_filter():

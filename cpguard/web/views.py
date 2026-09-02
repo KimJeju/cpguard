@@ -50,6 +50,10 @@ def _finding_to_dict(idx: int, f: Finding, base: Path) -> dict:
         "confidence": f.confidence,
         "triage_reason": f.triage_reason,
         "triage_provider": f.triage_provider,
+        "precision": f.precision,
+        "fp_hint": f.fp_hint,
+        "matched_value": f.matched_value,
+        "category": f.category,
         "steps": [
             {"kind": s.kind, "file": _rel(s.loc.file, base),
              "line": s.loc.start_line, "code": s.code}
@@ -206,6 +210,48 @@ def export_csv(request, pk: int):
         w.writerow([f["id"], f["severity"], f["rule_id"], f["cwe"], f.get("owasp", ""),
                     f["file"], f["line"], f["message"], f.get("verdict") or "",
                     audit.get(str(f["id"]), ""), len(f["steps"])])
+    return resp
+
+
+def _findings_from_scan(scan: Scan) -> list[Finding]:
+    """저장된 JSON 을 Finding 객체로 되살린다 (엑셀 리포터가 Finding 을 받는다)."""
+    from ..ir import Loc
+    from ..report.finding import Step
+    out: list[Finding] = []
+    for d in scan.findings:
+        steps = [
+            Step(s["kind"], Loc(file=s["file"], start_line=s["line"], start_col=0,
+                                end_line=s["line"], end_col=0, start_byte=0, end_byte=0),
+                 s["code"])
+            for s in d.get("steps", [])
+        ] or [Step("match", Loc(file=d["file"], start_line=d["line"], start_col=0,
+                                end_line=d["line"], end_col=0, start_byte=0, end_byte=0), "")]
+        out.append(Finding(
+            rule_id=d["rule_id"], message=d["message"], severity=d["severity"],
+            cwe=d.get("cwe", ""), owasp=d.get("owasp", ""), steps=steps,
+            verdict=d.get("verdict"), confidence=d.get("confidence"),
+            triage_reason=d.get("triage_reason"), triage_provider=d.get("triage_provider"),
+            precision=d.get("precision", "high"), fp_hint=bool(d.get("fp_hint", False)),
+            matched_value=d.get("matched_value"), category=d.get("category", "flow"),
+        ))
+    return out
+
+
+def export_xlsx(request, pk: int):
+    """고객 제출용 분석목록표 — 조치여부/조치방법 컬럼과 표준 이슈 의견이 들어간다."""
+    from ..report import excel
+    scan = get_object_or_404(Scan, pk=pk)
+    findings = _findings_from_scan(scan)
+    tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "out.xlsx"
+    try:
+        excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit)
+        data = tmp.read_bytes()
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+    resp = HttpResponse(
+        data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = (
+        f'attachment; filename="{Path(scan.name).stem}_소스코드_취약점진단_분석목록표.xlsx"')
     return resp
 
 

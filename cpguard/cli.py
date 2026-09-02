@@ -19,6 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     sc = sub.add_parser("scan", help="디렉터리/파일 스캔")
     sc.add_argument("path", help="스캔할 프로젝트 경로")
     sc.add_argument("--sarif", metavar="FILE", help="SARIF 2.1.0 결과 저장 경로")
+    sc.add_argument("--xlsx", metavar="FILE", help="고객 제출용 분석목록표(xlsx) 저장 경로")
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
     sc.add_argument("--triage", action="store_true",
                     help="LLM 트리아지로 오탐 재검증")
@@ -78,6 +79,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.sarif:
         sarif.dump(findings, args.sarif, base=root)
         print(f"SARIF 저장: {args.sarif}")
+
+    if args.xlsx:
+        from .report import excel
+        excel.write_workbook(findings, args.xlsx, project=root.name, base=root)
+        print(f"분석목록표 저장: {args.xlsx}")
 
     return 1 if findings else 0
 

@@ -109,6 +109,7 @@
   <span style="margin-left:auto;display:flex;gap:6px">
     <a class="toolbtn" href="{% url 'sarif' scan.pk %}">SARIF</a>
     <a class="toolbtn" href="{% url 'export_csv' scan.pk %}">CSV</a>
+    <a class="toolbtn" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
     <a class="toolbtn" href="/">스캔 목록</a>
   </span>
 </div>

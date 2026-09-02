@@ -1,5 +1,9 @@
 # 흐름 분석이 필요 없는 웹/암호 위생 점검.
 # 상용 룰팩에서 위험도 3~4 로 분류되는 항목 중, 단일 지점으로 판정 가능한 것들.
+defaults:
+  category: config
+  confidence: medium
+
 rules:
   # ---------- 클라이언트측 XSS (프론트엔드 코드의 실질적 위험) ----------
   - id: web.react-dangerous-html

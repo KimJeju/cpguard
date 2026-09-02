@@ -1,0 +1,94 @@
+# 내부 인프라 정보 노출 · 위험 설정 — 비밀정보는 아니지만 공격자에게 지도를 준다.
+defaults:
+  category: infra
+  all_files: true
+  mask: none
+  confidence: medium
+  severity: medium
+  cwe: CWE-200
+  owasp: "A05:2021-Security Misconfiguration"
+
+rules:
+  - id: infra.private-ip
+    message: "사설 IP 주소가 소스에 하드코딩되어 있습니다 (내부망 구조 노출)."
+    severity: low
+    confidence: low
+    pattern: '\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b'
+    exclude: ['127\.0\.0\.1|0\.0\.0\.0|\.0\.0\.0/|/(?:8|12|16)\b']
+
+  - id: infra.jdbc-connection
+    message: "JDBC 접속 문자열이 하드코딩되어 있습니다."
+    confidence: medium
+    pattern: 'jdbc:[a-z0-9]+:[^\s"''<>]{5,200}'
+    exclude: ['\$\{|\{\{|localhost|127\.0\.0\.1|example']
+
+  - id: infra.ado-connection
+    message: "ADO/OLEDB 연결 문자열이 하드코딩되어 있습니다."
+    pattern: '(?:Data\s+Source|Initial\s+Catalog|Integrated\s+Security)\s*=\s*[^;\r\n]{1,80}'
+    exclude: ['\$\{|\{\{|%\(']
+
+  - id: infra.oracle-tns
+    message: "Oracle TNS/SID 접속 정보가 하드코딩되어 있습니다."
+    severity: low
+    pattern: '\(\s*(?:DESCRIPTION|CONNECT_DATA)\s*=|\b(?:SERVICE_NAME|SID)\s*=\s*\w+'
+
+  - id: infra.smtp-ldap-bind
+    message: "SMTP/LDAP 바인딩 계정 설정이 소스에 있습니다."
+    pattern: '\b(?:mail\.smtp\.(?:user|password)|bindDN|bind[_-]?password|ldap\.(?:user|password))\b'
+
+  - id: infra.developer-local-path
+    message: "개발자 로컬 경로가 소스에 남아 있습니다 (사용자명·내부 구조 노출)."
+    severity: low
+    confidence: low
+    languages: [javascript, typescript, php, python]
+    pattern: '([A-Z]:\\Users\\[^\\\s"''<>]{1,40}|/(?:home|Users)/[a-z0-9._\-]{2,30}/)'
+
+  - id: infra.admin-path-hardcoded
+    message: "관리자 경로가 하드코딩되어 있습니다."
+    severity: low
+    confidence: low
+    # 경로 형태만: "/admin", "/admin/". 값이 "admin" 인 문자열(role, 계정명)은 경로가 아니다.
+    pattern: '(?:["'']/(?:admin|manager|adm|console|actuator|phpmyadmin)(?:/|["'']|\?)|/(?:admin|manager|actuator|phpmyadmin)/)'
+    exclude: ['@admin|admin\.py|adminer|\.admin\(|role|isAdmin|is_admin']
+
+  - id: infra.default-test-account
+    message: "기본/테스트 계정 조합(admin/admin 등)이 소스에 있습니다."
+    severity: high
+    confidence: medium
+    mask: secret
+    cwe: CWE-1392
+    owasp: "A07:2021-Identification and Authentication Failures"
+    pattern: '\b(?:admin|root|test|guest|user)\s*[:/]\s*(?:admin|root|test|guest|1234|12345678|password|passwd|test1234|qwer1234|admin1234|p@ssw0rd)\b'
+
+  - id: infra.webview-dangerous-setting
+    message: "WebView 에 위험한 설정(파일 접근·JS 인터페이스)이 켜져 있습니다."
+    severity: high
+    cwe: CWE-749
+    pattern: '(?:setJavaScriptEnabled\s*\(\s*true|setAllowFileAccess(?:FromFileURLs)?\s*\(\s*true|addJavascriptInterface|allowUniversalAccessFromFileURLs)'
+
+  - id: infra.command-execution-api
+    message: "명령 실행 API 사용 — 인자가 외부 입력이면 명령 주입이 됩니다 (흐름 분석 결과와 대조)."
+    severity: low
+    confidence: low
+    category: hygiene
+    cwe: CWE-78
+    owasp: "A03:2021-Injection"
+    pattern: '(?:Runtime\.getRuntime\(\)\.exec|ProcessBuilder\s*\(|os\.system\s*\(|subprocess\.[A-Za-z_]+\([^)]{0,120}shell\s*=\s*True|shell_exec\s*\(|passthru\s*\()'
+
+  - id: hygiene.sql-string-concat
+    message: "SQL 문자열을 결합해 만들고 있습니다 — 파라미터 바인딩을 권장합니다."
+    severity: low
+    confidence: low
+    category: hygiene
+    cwe: CWE-89
+    owasp: "A03:2021-Injection"
+    pattern: '["'']\s*(?:SELECT|INSERT|UPDATE|DELETE)\b[^"'']{0,120}["'']\s*(?:\+|\.|%|\|\|)\s*\w'
+
+  - id: hygiene.kr-leftover-comment
+    message: "임시/테스트용 표시가 남아 있습니다 — 운영 반영 전 정리 대상입니다."
+    severity: info
+    confidence: low
+    category: hygiene
+    cwe: CWE-546
+    skip_comments: false
+    pattern: '(임시|테스트용|삭제\s*예정|하드코딩|나중에\s*수정|급하게|TODO|FIXME|HACK)'
