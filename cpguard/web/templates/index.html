@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+  {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+  <div class="card">
+    <h2>프로젝트 업로드</h2>
+    <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 취약점을 진단합니다.
+       지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code>
+       (<code>node_modules</code> 는 제외)</p>
+    <form method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
+          style="display:flex;gap:12px;align-items:center;margin-top:14px">
+      {% csrf_token %}
+      <input type="file" name="archive" accept=".zip" required
+             style="color:var(--muted);flex:1">
+      <button class="btn" type="submit">진단 시작</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>스캔 이력</h2>
+    {% if scans %}
+    <table>
+      <tr><th>이름</th><th>일시</th><th>파일</th><th>탐지</th><th></th></tr>
+      {% for s in scans %}
+      <tr>
+        <td><a href="{% url 'detail' s.pk %}">{{ s.name }}</a></td>
+        <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
+        <td class="muted">{{ s.file_count }}</td>
+        <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+        <td style="text-align:right">
+          <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">
+            {% csrf_token %}<button class="btn ghost" type="submit">삭제</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+      <p class="muted">아직 스캔 기록이 없습니다.</p>
+    {% endif %}
+  </div>
+{% endblock %}

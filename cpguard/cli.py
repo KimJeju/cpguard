@@ -21,7 +21,17 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--sarif", metavar="FILE", help="SARIF 2.1.0 결과 저장 경로")
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
 
+    sv = sub.add_parser("serve", help="웹 대시보드 실행 (zip 업로드 진단)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--no-browser", action="store_true", help="브라우저 자동 실행 안 함")
+
     args = ap.parse_args(argv)
+
+    if args.cmd == "serve":
+        from .web.run import serve
+        serve(host=args.host, port=args.port, open_browser=not args.no_browser)
+        return 0
 
     root = Path(args.path)
     if not root.exists():
