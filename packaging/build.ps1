@@ -21,9 +21,11 @@ $size = [math]::Round((Get-ChildItem "dist\CPGuard" -Recurse | Measure-Object Le
 Write-Host "  완료: $exe ($size MB)" -ForegroundColor Green
 
 Write-Host "[2/2] Inno Setup 으로 설치 프로그램 생성..." -ForegroundColor Cyan
+# winget 으로 설치하면 사용자 영역(LOCALAPPDATA)에 들어간다 - 그 경로도 함께 본다
 $iscc = @(
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if (-not $iscc) {
