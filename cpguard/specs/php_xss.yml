@@ -1,0 +1,12 @@
+id: php.xss
+message: "사용자 입력이 정제 없이 출력됩니다 (XSS)."
+severity: high
+cwe: CWE-79
+owasp: "A03:2021-Injection"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [echo, print, printf, vprintf, print_r]}
+sanitizers:
+  - {callee: [htmlspecialchars, htmlentities, strip_tags, intval, urlencode, filter_var]}

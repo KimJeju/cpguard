@@ -1,0 +1,11 @@
+id: php.code-injection
+message: "사용자 입력이 코드 실행 함수로 흘러 들어갑니다 (코드 주입)."
+severity: critical
+cwe: CWE-94
+owasp: "A03:2021-Injection"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [eval, assert, create_function, call_user_func, call_user_func_array, unserialize]}
+sanitizers: []

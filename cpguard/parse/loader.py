@@ -8,12 +8,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import tree_sitter_javascript as _tsjs
+import tree_sitter_php as _tsphp
 import tree_sitter_typescript as _tsts
 from tree_sitter import Language, Parser, Tree
 
 _JS = Language(_tsjs.language())
 _TS = Language(_tsts.language_typescript())
 _TSX = Language(_tsts.language_tsx())
+_PHP = Language(_tsphp.language_php())
 
 # 확장자 -> (Language, 언어이름). 언어이름은 taint 스펙의 languages 필드와 매칭된다.
 _BY_EXT: dict[str, tuple[Language, str]] = {
@@ -23,6 +25,9 @@ _BY_EXT: dict[str, tuple[Language, str]] = {
     ".cjs": (_JS, "javascript"),
     ".ts": (_TS, "typescript"),
     ".tsx": (_TSX, "typescript"),
+    ".php": (_PHP, "php"),
+    ".phtml": (_PHP, "php"),
+    ".inc": (_PHP, "php"),
 }
 
 SUPPORTED_EXTENSIONS = frozenset(_BY_EXT)
@@ -47,9 +52,9 @@ def language_name_for(path: str | Path) -> str:
 def parse_source(src: str | bytes, *, language: str = "javascript") -> Tree:
     """소스 문자열/바이트를 파싱해 tree-sitter Tree 반환.
 
-    language: 'javascript' | 'typescript' | 'tsx'.
+    language: 'javascript' | 'typescript' | 'tsx' | 'php'.
     """
-    lang = {"javascript": _JS, "typescript": _TS, "tsx": _TSX}.get(language)
+    lang = {"javascript": _JS, "typescript": _TS, "tsx": _TSX, "php": _PHP}.get(language)
     if lang is None:
         raise UnsupportedLanguage(f"알 수 없는 언어: {language!r}")
     if isinstance(src, str):

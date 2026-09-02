@@ -7,6 +7,7 @@ dependencies = [
     "tree-sitter>=0.25",
     "tree-sitter-javascript",
     "tree-sitter-typescript",
+    "tree-sitter-php",
     "pyyaml",
     "django>=5.0",
 ]

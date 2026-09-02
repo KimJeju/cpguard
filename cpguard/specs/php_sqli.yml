@@ -1,0 +1,12 @@
+id: php.sqli
+message: "사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입)."
+severity: critical
+cwe: CWE-89
+owasp: "A03:2021-Injection"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [mysqli_query, mysql_query, pg_query, query, exec_query, mysqli_multi_query]}
+sanitizers:
+  - {callee: [mysqli_real_escape_string, real_escape_string, intval, floatval, is_numeric, addslashes, prepare, bindParam, quote]}

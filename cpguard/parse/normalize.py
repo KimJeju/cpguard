@@ -62,7 +62,13 @@ def child_by_field(node: TSNode, field: str) -> TSNode | None:
 # ---------- 진입점 ----------
 
 def normalize(tree: Tree, file: str = "<memory>", language: str = "javascript") -> ir.Module:
-    """CST -> ir.Module. 최상위 노드(program)의 자식들을 문으로 변환해 담는다."""
+    """CST -> ir.Module. 언어에 맞는 정규화기로 보낸다.
+
+    분석 코어는 이 함수 위쪽만 보므로, 언어가 늘어도 여기서만 갈래가 생긴다.
+    """
+    if language == "php":
+        from .normalize_php import normalize_php
+        return normalize_php(tree, file)
     root = tree.root_node
     return ir.Module(loc=loc_of(root, file), body=_block(root.named_children, file))
 

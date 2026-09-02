@@ -1,0 +1,12 @@
+id: php.file-inclusion
+message: "사용자 입력이 파일 포함/경로로 흘러 들어갑니다 (LFI/RFI·경로 조작)."
+severity: critical
+cwe: CWE-98
+owasp: "A01:2021-Broken Access Control"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [include, include_once, require, require_once, readfile]}
+sanitizers:
+  - {callee: [basename, realpath, intval, in_array]}

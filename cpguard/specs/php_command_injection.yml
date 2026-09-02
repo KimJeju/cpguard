@@ -1,0 +1,12 @@
+id: php.command-injection
+message: "사용자 입력이 시스템 명령 실행으로 흘러 들어갑니다 (명령 주입)."
+severity: critical
+cwe: CWE-78
+owasp: "A03:2021-Injection"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [system, exec, shell_exec, passthru, popen, proc_open, pcntl_exec]}
+sanitizers:
+  - {callee: [escapeshellarg, escapeshellcmd, intval, is_numeric]}

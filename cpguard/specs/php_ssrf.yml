@@ -1,0 +1,12 @@
+id: php.ssrf
+message: "사용자 입력이 외부 요청 대상으로 흘러 들어갑니다 (SSRF)."
+severity: high
+cwe: CWE-918
+owasp: "A10:2021-Server-Side Request Forgery"
+languages: [php]
+sources:
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+sinks:
+  - {pattern: call, callee: [curl_setopt, curl_exec, fsockopen, file_get_contents, fopen]}
+sanitizers:
+  - {callee: [filter_var, in_array, parse_url]}
