@@ -72,7 +72,7 @@ CPG 기반 taint 분석 + LLM 트리아지를 결합한 정적 보안 분석(SAS
 GitHub Actions 로 PR·푸시마다 자동 스캔하고 결과를 Code Scanning 에 올릴 수 있습니다.
 
 ```yaml
-- uses: KimJeju/cpguard@v0.1.2
+- uses: KimJeju/cpguard@v0.1.3
   with: { path: '.', fail-on: 'high' }   # high 이상 탐지 시 빌드 실패
 - if: always()
   uses: github/codeql-action/upload-sarif@v3
