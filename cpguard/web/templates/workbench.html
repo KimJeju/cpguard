@@ -17,9 +17,9 @@
   .pane-head h3 { margin:0; font-size:11.5px; letter-spacing:.5px; text-transform:uppercase; color:var(--muted) }
   .pane-body { overflow:auto; flex:1; min-height:0 }
   .gutter { background:transparent; cursor:col-resize; position:relative }
-  .gutter:hover, .gutter.drag { background:rgba(77,163,255,.35) }
+  .gutter:hover, .gutter.drag { background:color-mix(in srgb,var(--accent) 35%,transparent) }
   .gutter-h { height:6px; cursor:row-resize; flex:0 0 6px }
-  .gutter-h:hover, .gutter-h.drag { background:rgba(77,163,255,.35) }
+  .gutter-h:hover, .gutter-h.drag { background:color-mix(in srgb,var(--accent) 35%,transparent) }
   .center { display:flex; flex-direction:column; min-width:0; min-height:0 }
   .bottom { height:var(--bh); display:flex; flex-direction:column; border-top:1px solid var(--line); flex:0 0 auto; min-height:0 }
   .bottom.hidden { display:none }
@@ -31,61 +31,71 @@
 
   /* ---- 요약 바 ---- */
   .summary { display:flex; gap:6px; align-items:center; padding:5px 12px; border-bottom:1px solid var(--line);
-             background:#131922; flex-wrap:wrap; font-size:12px; flex:0 0 auto }
+             background:var(--panel-2); flex-wrap:wrap; font-size:12px; flex:0 0 auto }
   .summary .name { font-weight:700 } .summary .sep { color:var(--line) }
   .crumb { color:var(--muted); font-size:11.5px; font-family:Consolas,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0 }
   .crumb b { color:var(--fg) }
 
   /* ---- 탐색기 ---- */
   .filters { display:flex; flex-direction:column; gap:6px; width:100% }
-  .filters input, .filters select { width:100%; background:#0d1219; color:var(--fg); border:1px solid var(--line);
+  .filters input, .filters select { width:100%; background:var(--sunken); color:var(--fg); border:1px solid var(--line);
        border-radius:5px; padding:5px 8px; font-size:12px; font-family:inherit }
   .group { border-bottom:1px solid var(--line) }
-  .group-hd { padding:5px 12px; font-size:11px; font-weight:700; color:var(--muted); background:#10161e; cursor:pointer;
+  .group-hd { padding:5px 12px; font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-2); cursor:pointer;
               display:flex; justify-content:space-between; user-select:none }
   .group.closed .issue { display:none }
-  .issue { padding:6px 12px 6px 16px; border-bottom:1px solid #1b222c; cursor:pointer; font-size:12px; line-height:1.45 }
-  .issue:hover { background:#161d27 } .issue.sel { background:#1b2836; box-shadow:inset 3px 0 0 var(--accent) }
+  .issue { padding:6px 12px 6px 16px; border-bottom:1px solid var(--line-2); cursor:pointer; font-size:12px; line-height:1.45 }
+  .issue:hover { background:var(--hover) } .issue.sel { background:var(--sel); box-shadow:inset 3px 0 0 var(--accent) }
   .issue .rid { font-weight:700 } .issue .loc { color:var(--muted); font-size:11px; font-family:Consolas,monospace }
   .issue.audited { opacity:.5 }
   .sev { display:inline-block; font-size:10.5px; font-weight:800; margin-right:5px; letter-spacing:.3px }
-  .sev-critical { color:var(--crit) } .sev-high { color:var(--high) } .sev-medium { color:var(--med) } .sev-low { color:#7fb2ff } .sev-info { color:var(--muted) }
-  .newtag { font-size:10px; font-weight:800; background:var(--accent); color:#06121f; border-radius:3px; padding:0 5px; margin-left:6px; vertical-align:middle }
-  .fptag { font-size:10px; font-weight:800; background:#3a3f4a; color:var(--med); border-radius:3px; padding:0 5px; margin-left:6px; vertical-align:middle }
+  .sev-critical { color:var(--crit) } .sev-high { color:var(--high) } .sev-medium { color:var(--med) } .sev-low { color:var(--accent) } .sev-info { color:var(--muted) }
+  .newtag { font-size:10px; font-weight:800; background:var(--accent); color:var(--on-accent); border-radius:3px; padding:0 5px; margin-left:6px; vertical-align:middle }
+  .fptag { font-size:10px; font-weight:800; background:var(--elev); color:var(--med); border-radius:3px; padding:0 5px; margin-left:6px; vertical-align:middle }
+
+  /* ---- 소스 트리 ---- */
+  .tnode { padding:4px 12px; cursor:pointer; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; gap:6px; align-items:center; border-bottom:1px solid var(--line-2) }
+  .tnode:hover { background:var(--hover) }
+  .tdir { color:var(--muted); font-weight:600; font-family:inherit }
+  .tdir .caret { display:inline-block; width:10px; transition:transform .1s; color:var(--muted) } .tdir.closed .caret { transform:rotate(-90deg) }
+  .tdir.closed + .tchildren { display:none }
+  .tfile { font-family:Consolas,monospace; font-size:11.5px }
+  .tfile.nosrc { opacity:.5 } .tfile.cur { background:var(--sel); box-shadow:inset 3px 0 0 var(--accent) }
+  .tf-name { flex:1; overflow:hidden; text-overflow:ellipsis } .tf-c { color:var(--muted); font-size:11px; white-space:nowrap }
 
   /* ---- 표 보기 ---- */
   table.ft { width:100%; border-collapse:collapse; font-size:12px }
   table.ft th { position:sticky; top:0; background:var(--panel); color:var(--muted); font-size:11px; text-transform:uppercase;
                 letter-spacing:.4px; padding:7px 10px; border-bottom:1px solid var(--line); cursor:pointer; user-select:none; text-align:left; white-space:nowrap }
   table.ft th.sorted::after { content:" ▾"; color:var(--accent) } table.ft th.sorted.asc::after { content:" ▴" }
-  table.ft td { padding:6px 10px; border-bottom:1px solid #1b222c; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px }
-  table.ft tr { cursor:pointer } table.ft tr:hover td { background:#161d27 } table.ft tr.sel td { background:#1b2836 }
+  table.ft td { padding:6px 10px; border-bottom:1px solid var(--line-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px }
+  table.ft tr { cursor:pointer } table.ft tr:hover td { background:var(--hover) } table.ft tr.sel td { background:var(--sel) }
   table.ft td.mono { font-family:Consolas,monospace; font-size:11.5px; color:var(--muted) }
 
   /* ---- 코드 뷰어 ---- */
   .code { font-family:Consolas,"D2Coding",monospace; font-size:12.5px; line-height:1.6 }
   .code table { border-collapse:collapse; width:100% }
-  .code td.ln { width:1%; text-align:right; padding:0 10px 0 12px; color:#4a5666; user-select:none; white-space:nowrap; border-right:1px solid var(--line) }
+  .code td.ln { width:1%; text-align:right; padding:0 10px 0 12px; color:var(--ln); user-select:none; white-space:nowrap; border-right:1px solid var(--line) }
   .code td.gut { width:1%; padding:0 4px; font-size:10px; text-align:center }
   .code td.src { padding:0 12px; white-space:pre }
-  .code tr.hl-sink { background:rgba(255,92,92,.16) } .code tr.hl-source { background:rgba(255,209,102,.14) } .code tr.hl-step { background:rgba(77,163,255,.11) }
-  .code tr.cur td.ln { color:var(--accent); font-weight:700 } .code tr.cur { outline:1px solid rgba(77,163,255,.5) }
-  .badge-step { font-size:10px; padding:0 5px; border-radius:3px; margin-left:8px; background:#22303f; color:var(--muted) }
+  .code tr.hl-sink { background:color-mix(in srgb,var(--crit) 16%,transparent) } .code tr.hl-source { background:color-mix(in srgb,var(--med) 16%,transparent) } .code tr.hl-step { background:color-mix(in srgb,var(--accent) 14%,transparent) }
+  .code tr.cur td.ln { color:var(--accent); font-weight:700 } .code tr.cur { outline:1px solid color-mix(in srgb,var(--accent) 50%,transparent) }
+  .badge-step { font-size:10px; padding:0 5px; border-radius:3px; margin-left:8px; background:var(--elev); color:var(--muted) }
 
   /* ---- 인스펙터 ---- */
   .kv { display:grid; grid-template-columns:84px 1fr; gap:4px 10px; font-size:12px; padding:12px }
   .kv dt { color:var(--muted) } .kv dd { margin:0; word-break:break-all }
   .flow { border-top:1px solid var(--line) }
-  .flow-step { padding:6px 12px; border-bottom:1px solid #1b222c; cursor:pointer; font-size:12px }
-  .flow-step:hover { background:#161d27 } .flow-step.cur { background:#1b2836 }
+  .flow-step { padding:6px 12px; border-bottom:1px solid var(--line-2); cursor:pointer; font-size:12px }
+  .flow-step:hover { background:var(--hover) } .flow-step.cur { background:var(--sel) }
   .flow-step .k { display:inline-block; width:78px; color:var(--muted); font-size:11px } .flow-step code { font-size:11.5px }
   .audit-btns { display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px; border-top:1px solid var(--line) }
   .ab { flex:1 1 auto; padding:6px 8px; font-size:11.5px; border-radius:5px; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer }
-  .ab:hover { border-color:var(--accent); color:var(--fg) } .ab.on { background:var(--accent); color:#06121f; border-color:var(--accent); font-weight:700 }
+  .ab:hover { border-color:var(--accent); color:var(--fg) } .ab.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:700 }
   .empty { padding:28px 16px; color:var(--muted); text-align:center; font-size:13px }
   .toolbtn { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:5px; padding:3px 8px; font-size:11.5px; cursor:pointer; text-decoration:none; white-space:nowrap }
   .toolbtn:hover { border-color:var(--accent); color:var(--fg); text-decoration:none } .toolbtn.on { color:var(--fg); border-color:var(--accent) }
-  kbd { font-family:Consolas,monospace; font-size:10.5px; background:#0d1219; border:1px solid var(--line); border-radius:3px; padding:0 4px; color:var(--muted) }
+  kbd { font-family:Consolas,monospace; font-size:10.5px; background:var(--sunken); border:1px solid var(--line); border-radius:3px; padding:0 4px; color:var(--muted) }
 
   /* ---- AI 패널 ---- */
   .ai { display:grid; grid-template-columns: 300px 1fr; height:100%; min-height:0 }
@@ -94,7 +104,7 @@
   .ai-main { display:flex; flex-direction:column; min-height:0 }
   .presets { display:flex; gap:6px; flex-wrap:wrap; padding:8px 12px; border-bottom:1px solid var(--line); flex:0 0 auto; align-items:center }
   .ask { display:flex; gap:6px; padding:8px 12px; border-top:1px solid var(--line); flex:0 0 auto }
-  .ask input { flex:1; background:#0d1219; color:var(--fg); border:1px solid var(--line); border-radius:5px; padding:6px 9px; font-size:12px; font-family:inherit }
+  .ask input { flex:1; background:var(--sunken); color:var(--fg); border:1px solid var(--line); border-radius:5px; padding:6px 9px; font-size:12px; font-family:inherit }
   .answer { flex:1; overflow:auto; padding:12px 14px; font-size:12.5px; line-height:1.65; white-space:pre-wrap; min-height:0 }
   .answer a.jump { color:var(--accent); cursor:pointer; text-decoration:underline dotted }
   .answer .meta { color:var(--muted); font-size:11px; margin-bottom:8px }
@@ -107,33 +117,33 @@
   .spin { color:var(--muted); font-size:12px; padding:14px }
 
   /* ---- 문법 하이라이팅 (Ghidra/IDE 식) ---- */
-  .t-kw { color:#c792ea } .t-str { color:#a5d6a7 } .t-com { color:#5c6b7a; font-style:italic }
-  .t-num { color:#f78c6c } .t-fn { color:#82aaff }
+  .t-kw { color:var(--t-kw) } .t-str { color:var(--t-str) } .t-com { color:var(--t-com); font-style:italic }
+  .t-num { color:var(--t-num) } .t-fn { color:var(--t-fn) }
 
   /* ---- 코드 마커 hover 툴팁 ---- */
-  #tip { position:fixed; z-index:60; max-width:280px; background:#0b1017; border:1px solid var(--accent);
-         border-radius:7px; padding:8px 11px; font-size:11.5px; box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; display:none }
+  #tip { position:fixed; z-index:60; max-width:280px; background:var(--sunken); border:1px solid var(--accent);
+         border-radius:7px; padding:8px 11px; font-size:11.5px; box-shadow:0 6px 20px var(--shadow); pointer-events:none; display:none }
   #tip .tt { font-weight:700; margin-bottom:3px } #tip .tm { color:var(--muted); font-size:11px }
   #tip code { font-size:11px }
 
   /* ---- 커맨드 팔레트 (Ctrl+P) ---- */
-  #palette { position:fixed; inset:0; z-index:80; background:rgba(4,8,13,.55); display:none; align-items:flex-start; justify-content:center }
+  #palette { position:fixed; inset:0; z-index:80; background:var(--overlay); display:none; align-items:flex-start; justify-content:center }
   #palette.on { display:flex } #pal-box { margin-top:9vh; width:min(680px,92vw); background:var(--panel); border:1px solid var(--accent);
-       border-radius:10px; box-shadow:0 18px 60px rgba(0,0,0,.6); overflow:hidden; display:flex; flex-direction:column; max-height:72vh }
-  #pal-in { border:0; border-bottom:1px solid var(--line); background:#0d1219; color:var(--fg); padding:13px 16px; font-size:14px; font-family:inherit; outline:none }
+       border-radius:10px; box-shadow:0 18px 60px var(--shadow); overflow:hidden; display:flex; flex-direction:column; max-height:72vh }
+  #pal-in { border:0; border-bottom:1px solid var(--line); background:var(--sunken); color:var(--fg); padding:13px 16px; font-size:14px; font-family:inherit; outline:none }
   #pal-list { overflow:auto; min-height:0 }
-  .pal-grp { padding:5px 14px; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); background:#10161e; position:sticky; top:0 }
-  .pal-row { padding:7px 14px; display:flex; gap:10px; align-items:center; cursor:pointer; font-size:12.5px; border-bottom:1px solid #1b222c }
-  .pal-row.cur { background:#1b2836; box-shadow:inset 3px 0 0 var(--accent) }
+  .pal-grp { padding:5px 14px; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); background:var(--panel-2); position:sticky; top:0 }
+  .pal-row { padding:7px 14px; display:flex; gap:10px; align-items:center; cursor:pointer; font-size:12.5px; border-bottom:1px solid var(--line-2) }
+  .pal-row.cur { background:var(--sel); box-shadow:inset 3px 0 0 var(--accent) }
   .pal-row .pr-main { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .pal-row .pr-loc { color:var(--muted); font-family:Consolas,monospace; font-size:11px; white-space:nowrap }
   .pal-empty { padding:22px; text-align:center; color:var(--muted); font-size:12.5px }
 
   /* ---- 우클릭 컨텍스트 메뉴 ---- */
   #ctxm { position:fixed; z-index:70; min-width:190px; background:var(--panel); border:1px solid var(--line);
-          border-radius:7px; box-shadow:0 10px 30px rgba(0,0,0,.55); padding:4px; display:none }
+          border-radius:7px; box-shadow:0 10px 30px var(--shadow); padding:4px; display:none }
   #ctxm.on { display:block } #ctxm .ci { padding:6px 12px; font-size:12px; border-radius:4px; cursor:pointer; display:flex; gap:10px; justify-content:space-between; white-space:nowrap }
-  #ctxm .ci:hover { background:#1b2836; color:var(--fg) } #ctxm .ci .kx { color:var(--muted); font-size:10.5px }
+  #ctxm .ci:hover { background:var(--sel); color:var(--fg) } #ctxm .ci .kx { color:var(--muted); font-size:10.5px }
   #ctxm .sep { height:1px; background:var(--line); margin:4px 6px }
 </style>
 {% endblock %}
@@ -178,6 +188,7 @@
       <span style="margin-left:auto;display:flex;gap:4px">
         <button class="toolbtn on" id="v-tree" title="그룹 목록">목록</button>
         <button class="toolbtn" id="v-table" title="표 보기 (정렬 가능)">표</button>
+        <button class="toolbtn" id="v-files" title="소스 트리">소스</button>
       </span>
       <div class="filters">
         <input id="q" type="search" placeholder="규칙·파일·메시지·CWE 필터">
@@ -336,7 +347,7 @@
     el('tgl-left').classList.toggle('on', ws.left); el('tgl-right').classList.toggle('on', ws.right); el('tgl-bottom').classList.toggle('on', ws.bottom);
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === ws.tab));
     document.querySelectorAll('.tab-body').forEach(b => b.classList.toggle('on', b.id === 'tab-' + ws.tab));
-    el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table');
+    el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table'); el('v-files').classList.toggle('on', ws.view === 'files');
     el('group').value = ws.group; el('fsev').value = ws.sev; el('fcat').value = ws.cat; el('fnew').value = ws.fnew; el('hideAudited').checked = ws.hideAudited;
   }
 
@@ -357,6 +368,7 @@
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => { ws.tab = t.dataset.tab; ws.bottom = true; applyWS(); saveWS(); });
   el('v-tree').onclick = () => { ws.view = 'tree'; applyWS(); saveWS(); renderTree(); };
   el('v-table').onclick = () => { ws.view = 'table'; applyWS(); saveWS(); renderTree(); };
+  el('v-files').onclick = () => { ws.view = 'files'; applyWS(); saveWS(); renderTree(); };
 
   let sel = null, curStep = 0;
 
@@ -377,6 +389,7 @@
   // ---------- 좌: 목록 / 표 ----------
   function renderTree() {
     const items = visible();
+    if (ws.view === 'files') return renderFiles(items);
     el('shown').textContent = `(${items.length}/${FINDINGS.length})`;
     if (ws.view === 'table') return renderTable(items);
 
@@ -419,6 +432,54 @@
       n.oncontextmenu = e => openCtx(e, FINDINGS.find(x => x.id === Number(n.dataset.id)));
     });
     el('tree').querySelectorAll('th').forEach(h => h.onclick = () => { if (ws.sort === h.dataset.col) ws.asc = !ws.asc; else { ws.sort = h.dataset.col; ws.asc = true; } saveWS(); renderTree(); });
+  }
+
+  // ---------- 좌: 소스 트리 (파일별 집계 · VS Code 탐색기 식) ----------
+  function fileStats(items) {
+    // 파일 -> {건수, 최고위험도, 소스보관여부, 첫이슈id}. 필터된 이슈 기준 + 원본만 있는 파일도 포함.
+    const m = new Map();
+    for (const f of items) {
+      const e = m.get(f.file) || { count: 0, sev: 'info', first: f.id };
+      e.count++; if ((SEV_ORDER[f.severity] ?? 9) < (SEV_ORDER[e.sev] ?? 9)) e.sev = f.severity;
+      m.set(f.file, e);
+    }
+    for (const p of Object.keys(SOURCES)) if (!m.has(p)) m.set(p, { count: 0, sev: 'info', first: null });
+    for (const [p, e] of m) e.src = findSource(p) != null;
+    return m;
+  }
+  function buildTree(files) {
+    const root = { dirs: {}, files: [] };
+    for (const [path, meta] of files) {
+      const parts = path.split('/'); let node = root;
+      for (let i = 0; i < parts.length - 1; i++) { (node.dirs[parts[i]] ??= { dirs: {}, files: [] }); node = node.dirs[parts[i]]; }
+      node.files.push({ name: parts[parts.length - 1], path, meta });
+    }
+    return root;
+  }
+  function renderFiles(items) {
+    const files = fileStats(items);
+    el('shown').textContent = `(${files.size} 파일)`;
+    const root = buildTree(files);
+    let html = '';
+    const walk = (node, depth) => {
+      for (const d of Object.keys(node.dirs).sort((a, b) => a.localeCompare(b))) {
+        html += `<div class="tnode tdir" style="padding-left:${depth * 14 + 10}px"><span class="caret">▾</span><span class="tf-name">${esc(d)}</span></div><div class="tchildren">`;
+        walk(node.dirs[d], depth + 1);
+        html += `</div>`;
+      }
+      for (const f of node.files.sort((a, b) => a.name.localeCompare(b.name))) {
+        const s = f.meta;
+        html += `<div class="tnode tfile${s.src ? '' : ' nosrc'}${curFile === f.path ? ' cur' : ''}" data-file="${esc(f.path)}" data-first="${s.first ?? ''}" title="${esc(f.path)}" style="padding-left:${depth * 14 + 14}px">
+          <span>${s.src ? '📄' : '▫'}</span><span class="tf-name">${esc(f.name)}</span>${s.count ? `<span class="tf-c">${SEV_ICON[s.sev]} ${s.count}</span>` : ''}</div>`;
+      }
+    };
+    walk(root, 0);
+    el('tree').innerHTML = html || '<div class="empty">파일이 없습니다.</div>';
+    el('tree').querySelectorAll('.tdir').forEach(n => n.onclick = () => n.classList.toggle('closed'));
+    el('tree').querySelectorAll('.tfile').forEach(n => n.onclick = () => {
+      if (n.dataset.first !== '') select(Number(n.dataset.first));   // 이슈 있는 파일 -> 첫 이슈 조사
+      else showFile(n.dataset.file, 1, null);                        // 원본만 있는 파일 -> 그냥 열기
+    });
   }
 
   // ---------- 중앙: 코드 ----------

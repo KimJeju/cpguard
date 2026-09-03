@@ -4,21 +4,68 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}CPGuard{% endblock %}</title>
+<script>try{var t=localStorage.getItem('cpguard.theme');if(t&&t!=='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
-  :root{
-    --bg:#0f1419; --panel:#171d26; --line:#242c38; --fg:#e6edf3; --muted:#8b98a8;
-    --accent:#4da3ff; --crit:#ff5c5c; --high:#ff9f43; --med:#ffd166; --low:#6fcf97;
+  /* ---- 테마: 모든 색은 변수로. 배지·하이라이트 틴트는 color-mix 로 accent/severity 에서 파생 ----
+       테마를 추가하려면 [data-theme="x"] 블록에서 이 변수들만 재정의하면 된다. ---- */
+  :root{  /* dark (기본) */
+    color-scheme:dark;
+    --bg:#0f1419; --panel:#171d26; --panel-2:#131922; --sunken:#0d1219;
+    --line:#242c38; --line-2:#1b222c; --hover:#161d27; --sel:#1b2836; --elev:#22303f;
+    --fg:#e6edf3; --muted:#8b98a8; --ln:#4a5666; --accent:#4da3ff; --on-accent:#06121f;
+    --crit:#ff5c5c; --high:#ff9f43; --med:#ffd166; --low:#6fcf97;
+    --t-kw:#c792ea; --t-str:#a5d6a7; --t-com:#5c6b7a; --t-num:#f78c6c; --t-fn:#82aaff;
+    --overlay:rgba(4,8,13,.55); --shadow:rgba(0,0,0,.5);
+    --scroll:rgba(255,255,255,.16); --scroll-hover:rgba(255,255,255,.32);
   }
+  :root[data-theme="light"]{
+    color-scheme:light;
+    --bg:#ffffff; --panel:#f3f3f3; --panel-2:#ececec; --sunken:#ffffff;
+    --line:#d4d4d4; --line-2:#e6e6e6; --hover:#eaeaea; --sel:#d6e6fb; --elev:#e0e0e0;
+    --fg:#1f2328; --muted:#6a737d; --ln:#b0b6bd; --accent:#0969da; --on-accent:#ffffff;
+    --crit:#cf222e; --high:#bc4c00; --med:#9a6700; --low:#1a7f37;
+    --t-kw:#a626a4; --t-str:#50a14f; --t-com:#a0a1a7; --t-num:#b76b01; --t-fn:#4078f2;
+    --overlay:rgba(60,60,60,.35); --shadow:rgba(0,0,0,.22);
+    --scroll:rgba(0,0,0,.20); --scroll-hover:rgba(0,0,0,.36);
+  }
+  :root[data-theme="vscode"]{
+    color-scheme:dark;
+    --bg:#1e1e1e; --panel:#252526; --panel-2:#2d2d2d; --sunken:#1e1e1e;
+    --line:#333333; --line-2:#2a2a2a; --hover:#2a2d2e; --sel:#094771; --elev:#37373d;
+    --fg:#d4d4d4; --muted:#858585; --ln:#858585; --accent:#007acc; --on-accent:#ffffff;
+    --crit:#f14c4c; --high:#ff8c00; --med:#cca700; --low:#89d185;
+    --t-kw:#569cd6; --t-str:#ce9178; --t-com:#6a9955; --t-num:#b5cea8; --t-fn:#dcdcaa;
+    --overlay:rgba(0,0,0,.5); --shadow:rgba(0,0,0,.55);
+    --scroll:rgba(121,121,121,.4); --scroll-hover:rgba(160,160,160,.65);
+  }
+  :root[data-theme="ghidra"]{  /* 회색 — Ghidra 계열 밝은 그레이 */
+    color-scheme:light;
+    --bg:#cfcfca; --panel:#dedeD8; --panel-2:#d2d2cc; --sunken:#f4f4f0;
+    --line:#a8a8a2; --line-2:#c6c6c0; --hover:#c6cbd2; --sel:#b6c9e0; --elev:#c8c8c2;
+    --fg:#1a1a1a; --muted:#55554e; --ln:#80807a; --accent:#2f5b9c; --on-accent:#ffffff;
+    --crit:#b00020; --high:#b25f00; --med:#8a6d00; --low:#2f7d32;
+    --t-kw:#0000c0; --t-str:#007000; --t-com:#808080; --t-num:#b03000; --t-fn:#204a87;
+    --overlay:rgba(80,80,80,.4); --shadow:rgba(0,0,0,.3);
+    --scroll:rgba(0,0,0,.28); --scroll-hover:rgba(0,0,0,.45);
+  }
+
   *{box-sizing:border-box}
+  /* ---- 스크롤바: VSCode 식 얇은 오버레이 (테마 변수로 색) ---- */
+  *{scrollbar-width:thin; scrollbar-color:var(--scroll) transparent}
+  ::-webkit-scrollbar{width:14px;height:14px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--scroll);border:4px solid transparent;background-clip:padding-box;border-radius:8px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--scroll-hover);border:3px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-corner{background:transparent}
+
   body{margin:0;background:var(--bg);color:var(--fg);
        font-family:"Malgun Gothic",-apple-system,Segoe UI,sans-serif;font-size:14px;line-height:1.6}
   a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-  header{border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;gap:12px}
+  header{border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;gap:12px;flex:0 0 auto}
   .logo{font-weight:700;font-size:18px;letter-spacing:.5px}
   .logo span{color:var(--accent)}
   .tag{color:var(--muted);font-size:12px}
   main{max-width:1080px;margin:0 auto;padding:28px 24px 60px}
-  header{flex:0 0 auto}
   /* 작업대처럼 화면을 꽉 채우는 페이지를 위해 body 를 세로 flex 로 둔다 */
   body.app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
   body.app main{max-width:none;margin:0;padding:0;flex:1;min-height:0}
@@ -28,21 +75,24 @@
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
   .badge{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700}
-  .critical{background:rgba(255,92,92,.15);color:var(--crit)}
-  .high{background:rgba(255,159,67,.15);color:var(--high)}
-  .medium{background:rgba(255,209,102,.15);color:var(--med)}
-  .low{background:rgba(111,207,151,.15);color:var(--low)}
-  .info{background:rgba(139,152,168,.15);color:var(--muted)}
-  .v-true_positive{background:rgba(255,92,92,.15);color:var(--crit)}
-  .v-false_positive{background:rgba(111,207,151,.15);color:var(--low)}
-  .v-uncertain{background:rgba(139,152,168,.18);color:var(--muted)}
-  .btn{display:inline-block;background:var(--accent);color:#06121f;border:0;border-radius:7px;
+  .critical{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit)}
+  .high{background:color-mix(in srgb,var(--high) 15%,transparent);color:var(--high)}
+  .medium{background:color-mix(in srgb,var(--med) 15%,transparent);color:var(--med)}
+  .low{background:color-mix(in srgb,var(--low) 15%,transparent);color:var(--low)}
+  .info{background:color-mix(in srgb,var(--muted) 15%,transparent);color:var(--muted)}
+  .v-true_positive{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit)}
+  .v-false_positive{background:color-mix(in srgb,var(--low) 15%,transparent);color:var(--low)}
+  .v-uncertain{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
+  .btn{display:inline-block;background:var(--accent);color:var(--on-accent);border:0;border-radius:7px;
        padding:9px 16px;font-weight:700;cursor:pointer;font-size:13px}
   .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
   .muted{color:var(--muted)}
-  .err{background:rgba(255,92,92,.12);border:1px solid rgba(255,92,92,.35);color:#ffb3b3;
-       padding:10px 14px;border-radius:8px;margin-bottom:16px}
-  code{font-family:Consolas,monospace;background:#0b1017;padding:1px 6px;border-radius:4px;font-size:12.5px}
+  .err{background:color-mix(in srgb,var(--crit) 12%,transparent);border:1px solid color-mix(in srgb,var(--crit) 35%,transparent);
+       color:color-mix(in srgb,var(--crit) 65%,var(--fg));padding:10px 14px;border-radius:8px;margin-bottom:16px}
+  code{font-family:Consolas,monospace;background:var(--sunken);border:1px solid var(--line-2);padding:1px 6px;border-radius:4px;font-size:12.5px}
+  /* ---- 테마 셀렉터 ---- */
+  #theme-sel{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+             padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -50,8 +100,28 @@
 <header>
   <div class="logo">CP<span>Guard</span></div>
   <div class="tag">CPG 기반 taint 분석 정적 보안 스캐너</div>
-  <div style="margin-left:auto"><a href="/">스캔 목록</a></div>
+  <div style="margin-left:auto;display:flex;gap:12px;align-items:center">
+    <select id="theme-sel" title="테마">
+      <option value="dark">다크</option>
+      <option value="light">라이트</option>
+      <option value="vscode">VS Code</option>
+      <option value="ghidra">Ghidra (회색)</option>
+    </select>
+    <a href="/">스캔 목록</a>
+  </div>
 </header>
 {% block content_raw %}<main>{% block content %}{% endblock %}</main>{% endblock %}
+<script>
+  // 테마 선택 — 루트의 data-theme 로 팔레트 전환, 브라우저에 기억.
+  (function () {
+    var KEY = 'cpguard.theme';
+    var root = document.documentElement, sel = document.getElementById('theme-sel');
+    var saved = 'dark';
+    try { saved = localStorage.getItem(KEY) || 'dark'; } catch (e) {}
+    apply(saved);
+    if (sel) { sel.value = saved; sel.addEventListener('change', function () { apply(sel.value); try { localStorage.setItem(KEY, sel.value); } catch (e) {} }); }
+    function apply(t) { if (t === 'dark') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t); }
+  })();
+</script>
 </body>
 </html>
