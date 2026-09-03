@@ -7,7 +7,7 @@
 ;   pyinstaller packaging/cpguard.spec --noconfirm
 
 #define AppName "CPGuard"
-#define AppVersion "0.1.1"
+#define AppVersion "0.1.2"
 #define AppPublisher "CPGuard"
 #define AppURL "https://github.com/KimJeju/cpguard"
 #define AppExeName "CPGuard.exe"
