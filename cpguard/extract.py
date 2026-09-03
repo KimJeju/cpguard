@@ -7,12 +7,15 @@
 """
 from __future__ import annotations
 
+import os
 import zipfile
 from pathlib import Path
 
-MAX_FILES = 20_000
-MAX_TOTAL_BYTES = 500 * 1024 * 1024      # 해제 후 총 500MB
-MAX_COMPRESSION_RATIO = 200              # 압축률 200배 초과 = 폭탄 의심
+# 대형 코드베이스(수만 파일·수 GB)를 받되 zip 폭탄은 막는다. 환경변수로 상향 조정 가능.
+#   CPGUARD_MAX_FILES / CPGUARD_MAX_BYTES / CPGUARD_MAX_RATIO
+MAX_FILES = int(os.environ.get("CPGUARD_MAX_FILES", "200000"))
+MAX_TOTAL_BYTES = int(os.environ.get("CPGUARD_MAX_BYTES", str(8 * 1024 * 1024 * 1024)))  # 8GB
+MAX_COMPRESSION_RATIO = int(os.environ.get("CPGUARD_MAX_RATIO", "200"))  # 압축률 초과 = 폭탄 의심
 
 
 class UnsafeArchive(ValueError):
