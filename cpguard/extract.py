@@ -49,7 +49,21 @@ def safe_extract_zip(zip_path: str | Path, dest: str | Path) -> int:
             if not str(target).startswith(str(dest)):
                 raise UnsafeArchive(f"대상 디렉터리 밖 경로(zip-slip): {i.filename!r}")
 
+        import shutil
         for i in infos:
-            z.extract(i, dest)
+            name = i.filename.replace("\\", "/")
+            target = dest / name
+            os.makedirs(_longpath(target.parent), exist_ok=True)
+            with z.open(i) as src, open(_longpath(target), "wb") as out:
+                shutil.copyfileobj(src, out)
 
     return len(infos)
+
+
+def _longpath(p: Path) -> str:
+    r"""Windows 260자 경로 한계(MAX_PATH) 우회. 깊게 중첩된 대형 프로젝트를 풀 때
+    한 파일의 긴 경로가 해제 전체를 crash 시키던 문제를 막는다(\\?\ 확장 경로)."""
+    s = os.path.abspath(str(p))
+    if os.name == "nt" and not s.startswith("\\\\?\\"):
+        s = "\\\\?\\" + s
+    return s
