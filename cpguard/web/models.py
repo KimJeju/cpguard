@@ -47,7 +47,10 @@ class Scan(models.Model):
 
     @property
     def findings(self) -> list[dict]:
-        return json.loads(self.findings_json)
+        fs = json.loads(self.findings_json)
+        for i, f in enumerate(fs):
+            f.setdefault("id", i)   # 구버전/외부 생성 스캔에 id 가 없어도 안전
+        return fs
 
     @property
     def sources(self) -> dict[str, str]:

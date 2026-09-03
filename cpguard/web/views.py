@@ -465,7 +465,8 @@ def detail(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
     findings = scan.findings
     audit = scan.audit
-    for f in findings:
+    for i, f in enumerate(findings):
+        f.setdefault("id", i)   # 구버전/외부 생성 스캔은 id 가 없을 수 있다
         f["audit"] = audit.get(str(f["id"]), "")
 
     # 이전 스캔 대비 신규 여부를 각 이슈에 표시 (조사 우선순위의 첫 번째 신호)

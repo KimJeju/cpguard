@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="330" viewBox="0 0 880 330" font-family="-apple-system,Segoe UI,Roboto,sans-serif">
+  <rect x="0" y="0" width="880" height="330" rx="14" fill="#0f1419"/>
+  <text x="28" y="42" fill="#e6edf3" font-size="19" font-weight="700">CPGuard — 분석 파이프라인</text>
+  <text x="28" y="64" fill="#8b98a8" font-size="12.5">CPG 기반 taint + 패턴 두 축 · LLM 트리아지</text>
+
+  <!-- 공통 입력 -->
+  <g>
+    <rect x="28" y="96" width="120" height="150" rx="10" fill="#171d26" stroke="#242c38"/>
+    <text x="88" y="130" fill="#e6edf3" font-size="13" font-weight="600" text-anchor="middle">소스 zip</text>
+    <text x="88" y="150" fill="#8b98a8" font-size="11" text-anchor="middle">JS·TS·PHP·PY</text>
+    <text x="88" y="176" fill="#8b98a8" font-size="10.5" text-anchor="middle">안전 해제</text>
+    <text x="88" y="192" fill="#8b98a8" font-size="10.5" text-anchor="middle">(zip-slip·bomb</text>
+    <text x="88" y="206" fill="#8b98a8" font-size="10.5" text-anchor="middle">차단)</text>
+  </g>
+  <path d="M148 171 h30" stroke="#4a5666" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- 흐름 축 (위) -->
+  <g>
+    <rect x="190" y="96" width="120" height="58" rx="10" fill="#131922" stroke="#242c38"/>
+    <text x="250" y="121" fill="#82aaff" font-size="12.5" font-weight="600" text-anchor="middle">tree-sitter</text>
+    <text x="250" y="139" fill="#8b98a8" font-size="10.5" text-anchor="middle">파싱 → IR</text>
+
+    <rect x="336" y="96" width="120" height="58" rx="10" fill="#131922" stroke="#242c38"/>
+    <text x="396" y="121" fill="#c792ea" font-size="12.5" font-weight="600" text-anchor="middle">CPG</text>
+    <text x="396" y="139" fill="#8b98a8" font-size="10" text-anchor="middle">AST·CFG·def-use·call</text>
+
+    <rect x="482" y="96" width="120" height="58" rx="10" fill="#131922" stroke="#242c38"/>
+    <text x="542" y="121" fill="#6fcf97" font-size="12.5" font-weight="600" text-anchor="middle">Taint</text>
+    <text x="542" y="139" fill="#8b98a8" font-size="10" text-anchor="middle">프로시저간·함수요약</text>
+  </g>
+  <path d="M310 125 h22" stroke="#4a5666" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M456 125 h22" stroke="#4a5666" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- 패턴 축 (아래) -->
+  <g>
+    <rect x="190" y="188" width="412" height="58" rx="10" fill="#131922" stroke="#242c38"/>
+    <text x="396" y="213" fill="#ff9f43" font-size="12.5" font-weight="600" text-anchor="middle">패턴 축 (전 언어 · 모든 텍스트)</text>
+    <text x="396" y="231" fill="#8b98a8" font-size="10.5" text-anchor="middle">하드코딩 비밀정보·벤더키 · 개인정보(PII) · TLS·암호·쿠키 위생</text>
+  </g>
+  <path d="M148 210 h30" stroke="#4a5666" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <!-- 합류 → 트리아지 -->
+  <path d="M602 125 C 640 125 640 171 660 171" stroke="#4a5666" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <path d="M602 217 C 640 217 640 171 660 171" stroke="#4a5666" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <g>
+    <rect x="668" y="120" width="120" height="102" rx="10" fill="#171d26" stroke="#242c38"/>
+    <text x="728" y="150" fill="#4da3ff" font-size="12.5" font-weight="600" text-anchor="middle">LLM 트리아지</text>
+    <text x="728" y="169" fill="#8b98a8" font-size="10.5" text-anchor="middle">오탐 재검증</text>
+    <text x="728" y="185" fill="#8b98a8" font-size="10.5" text-anchor="middle">Claude·GPT</text>
+    <text x="728" y="201" fill="#8b98a8" font-size="10.5" text-anchor="middle">·Gemini</text>
+  </g>
+
+  <!-- 산출 -->
+  <path d="M728 222 v18" stroke="#4a5666" stroke-width="1.6" marker-end="url(#a)"/>
+  <g>
+    <rect x="28" y="272" width="760" height="40" rx="10" fill="#131922" stroke="#242c38"/>
+    <text x="408" y="297" fill="#e6edf3" font-size="12" text-anchor="middle">산출: 감사 작업대(3분할·데이터 흐름 시각화) · SARIF · CSV · 분석목록표(xlsx) · 진단 보고서·조치 가이드(PDF)</text>
+  </g>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0 0 L6 3 L0 6 z" fill="#4a5666"/>
+    </marker>
+  </defs>
+</svg>
