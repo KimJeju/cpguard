@@ -94,8 +94,8 @@
       </dl>
       <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
         <a class="btn ghost" href="{% url 'detail' latest.pk %}">조사</a>
-        <a class="btn ghost" href="{% url 'export_xlsx' latest.pk %}">분석목록표</a>
-        <a class="btn ghost" href="{% url 'sarif' latest.pk %}">SARIF</a>
+        <a class="btn ghost" download href="{% url 'export_xlsx' latest.pk %}">분석목록표</a>
+        <a class="btn ghost" download href="{% url 'sarif' latest.pk %}">SARIF</a>
       </div>
     </div>
 

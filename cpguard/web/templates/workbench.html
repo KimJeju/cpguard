@@ -170,11 +170,11 @@
     <button class="toolbtn" id="tgl-left" title="탐색기 접기/펼치기">◧</button>
     <button class="toolbtn" id="tgl-bottom" title="분석 패널">▭</button>
     <button class="toolbtn" id="tgl-right" title="인스펙터 접기/펼치기">◨</button>
-    <a class="toolbtn" href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 PDF">📄 보고서</a>
-    <a class="toolbtn" href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">🛠 조치</a>
-    <a class="toolbtn" href="{% url 'sarif' scan.pk %}">SARIF</a>
-    <a class="toolbtn" href="{% url 'export_csv' scan.pk %}">CSV</a>
-    <a class="toolbtn" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
+    <a class="toolbtn" download href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 PDF">📄 보고서</a>
+    <a class="toolbtn" download href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">🛠 조치</a>
+    <a class="toolbtn" download href="{% url 'sarif' scan.pk %}">SARIF</a>
+    <a class="toolbtn" download href="{% url 'export_csv' scan.pk %}">CSV</a>
+    <a class="toolbtn" download href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
     {% if scan.project %}<a class="toolbtn" href="{% url 'project_home' scan.project %}">{{ scan.project }} 홈</a>{% endif %}
     <a class="toolbtn" href="/">목록</a>
   </span>
