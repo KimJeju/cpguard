@@ -106,7 +106,8 @@ def _serve(host: str, port: int) -> None:
     django.setup()
     from django.core.management import call_command
 
-    from .web.config import apply_to_env  # 저장된 LLM 키를 환경변수로
+    # 절대 import — frozen 앱에선 desktop.py 가 __main__ 이라 상대 import(.web...)가 깨진다
+    from cpguard.web.config import apply_to_env  # 저장된 LLM 키를 환경변수로
     apply_to_env()
     call_command("migrate", verbosity=0, interactive=False)
     call_command("runserver", f"{host}:{port}", use_reloader=False, verbosity=0)
