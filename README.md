@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
-  <img src="https://img.shields.io/badge/tests-193%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-197%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/SAST-CPG%20%2B%20Taint%20%2B%20LLM-4da3ff" alt="SAST">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -24,6 +24,12 @@
 패턴 매칭 중심 상용 SAST의 오탐 한계를 넘기 위해 —
 **tree-sitter 파싱 → 언어중립 IR → CPG(AST·CFG·def-use·call) → 프로시저간 taint(함수 요약) → LLM 트리아지**
 로 정밀 탐지하고, Ghidra/Fortify 결의 3분할 감사 작업대에서 조사·판정·조치까지 연결한다.
+
+<p align="center">
+  <img src="docs/img/workbench.png" width="900" alt="CPGuard 감사 작업대 — 코드 뷰어 위의 Source→Sink taint 흐름과 인스펙터"/>
+  <br/>
+  <sub>감사 작업대 — 코드 뷰어 위에 <b>Source→Sink</b> taint 흐름을 강조하고, 인스펙터에서 규칙·CWE·흐름 단계·판정을 한눈에.</sub>
+</p>
 
 ---
 
@@ -50,6 +56,23 @@
 - 테마 4종(다크 / 라이트 / VS Code / Ghidra) · Apple HIG 결의 리퀴드 글래스 셸
 - **오프라인·클린 머신 설치** — 파이썬·인터넷 없이 단일 exe(PyInstaller + Inno Setup)
 - 네이티브 데스크톱 창(WebView2, 부재 시 브라우저 폴백) 또는 브라우저 대시보드
+
+---
+
+## 🖥 화면
+
+| 대시보드 | 취약점 탐색 (차트·필터·페이지네이션) |
+|:---:|:---:|
+| ![대시보드](docs/img/dashboard.png) | ![취약점 탐색](docs/img/charts.png) |
+| 상태 타일 · 위험도 분포 · 상위 규칙 | 위험도 도넛 · 상위 규칙/CWE 막대 · 대량 탐지 탐색기 |
+
+<p align="center">
+  <img src="docs/img/reports.png" width="780" alt="리포트·내보내기"/>
+  <br/>
+  <sub>리포트·내보내기 — 스캔별 진단 보고서·조치 가이드 PDF · SARIF · CSV · 분석목록표(xlsx)</sub>
+</p>
+
+> 감사 작업대(코드 뷰어 + Source→Sink 흐름 + 인스펙터)는 위쪽 히어로 이미지 참조.
 
 ---
 

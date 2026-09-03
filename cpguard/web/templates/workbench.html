@@ -820,9 +820,13 @@
 
   applyWS();
   renderTree();
-  if (!LARGE) {
-    const wanted = Number((location.hash.match(/^#f(\d+)$/) || [])[1]);
-    if (FINDINGS.length) select(FINDINGS.some(x => x.id === wanted) ? wanted : FINDINGS[0].id);
+  const wanted = Number((location.hash.match(/^#f(\d+)$/) || [])[1]);
+  if (LARGE) {
+    // 대량 모드도 #f<id> 딥링크 지원(프로젝트 홈·리포트에서 특정 이슈로 바로 이동).
+    // idx 0 이 falsy 라 isNaN 로 판별한다.
+    if (!isNaN(wanted)) selectLarge(wanted);
+  } else if (FINDINGS.length) {
+    select(FINDINGS.some(x => x.id === wanted) ? wanted : FINDINGS[0].id);
   }
 })();
 </script>
