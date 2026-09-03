@@ -369,6 +369,25 @@ def scan_findings_api(request, pk: int):
     return JsonResponse({"total": total, "page": page, "size": size, "rows": rows})
 
 
+def scan_finding_api(request, pk: int, idx: int):
+    """단일 finding 의 전체 상세(흐름 steps) + 그 이슈가 touch 하는 원본만 — 대량 모드에서
+    선택 시 지연 로드용."""
+    scan = get_object_or_404(Scan, pk=pk)
+    findings = scan.findings
+    if not (0 <= idx < len(findings)):
+        return JsonResponse({"error": "없는 이슈"}, status=404)
+    f = findings[idx]
+    f["audit"] = scan.audit.get(str(idx), "")
+    prev = scan.previous()
+    new_fps = scan.compare_with(prev)["new_fps"] if prev else set()
+    f["is_new"] = bool(prev) and f.get("fp") in new_fps
+    src = scan.sources
+    want = {s["file"] for s in f.get("steps", [])}
+    subset = {k: v for k, v in src.items()
+              if k in want or any(k.endswith("/" + fn) or fn.endswith("/" + k) for fn in want)}
+    return JsonResponse({"finding": f, "sources": subset})
+
+
 def _fingerprint(f: Finding, rel_file: str) -> str:
     """스캔 간 같은 이슈를 잇는 지문. 줄 번호는 넣지 않는다 — 위에 코드가 추가되면 밀리므로.
 
@@ -543,8 +562,9 @@ def detail(request, pk: int):
     # 임베드하고 나머지는 집계 API(/api/summary, /api/findings)로 조회하도록 안내한다.
     total = len(findings)
     LARGE = 3000
-    truncated = total if total > LARGE else 0
-    if truncated:
+    # ?large=1 로 소량 스캔에서도 대량 모드(서버측 목록)를 강제할 수 있다(데모·검증용).
+    truncated = total if (total > LARGE or request.GET.get("large")) else 0
+    if total > LARGE:
         findings = findings[:LARGE]
 
     return render(request, "workbench.html", {

@@ -291,6 +291,8 @@
   const FINDINGS = JSON.parse(document.getElementById('data-findings').textContent);
   const SOURCES  = JSON.parse(document.getElementById('data-sources').textContent);
   const SCAN_PK  = {{ scan.pk }};
+  const LARGE    = {{ truncated|default:0 }} > 0;   // 대량 모드: 목록을 서버 API 로 페이지·가상 스크롤
+  const TOTAL    = {{ total }};
   const PROJECT  = "{{ scan.project|default:scan.name|escapejs }}";
   const CSRF = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
   const el = id => document.getElementById(id);
@@ -390,8 +392,61 @@
     });
   }
 
+  // ---------- 대량 모드: 서버 API 페이지네이션 + 무한 스크롤 ----------
+  const LG = { page: 0, size: 100, done: false, loading: false, rows: [], total: TOTAL };
+  function lgParams() {
+    const p = new URLSearchParams({ page: LG.page + 1, size: LG.size });
+    if (ws.sev) p.set('severity', ws.sev);
+    const q = el('q').value.trim(); if (q) p.set('q', q);
+    return p.toString();
+  }
+  function renderLargeReset() {
+    LG.page = 0; LG.done = false; LG.rows = []; el('tree').innerHTML = '';
+    renderLargeMore();
+  }
+  function renderLargeMore() {
+    if (LG.done || LG.loading) return;
+    LG.loading = true;
+    fetch(`/scan/${SCAN_PK}/api/findings?${lgParams()}`).then(r => r.json()).then(d => {
+      LG.total = d.total; LG.page = d.page;
+      if (!d.rows.length) LG.done = true;
+      LG.rows.push(...d.rows);
+      if (LG.page * LG.size >= d.total) LG.done = true;
+      el('shown').textContent = `(${LG.rows.length}/${d.total})`;
+      let html = LG.rows.map(r => lgRowHtml(r)).join('');
+      if (!LG.done) html += '<div class="empty" id="lg-more" style="padding:12px">더 불러오는 중…</div>';
+      else if (!LG.rows.length) html += '<div class="empty">조건에 맞는 이슈가 없습니다.</div>';
+      el('tree').innerHTML = html;
+      el('tree').querySelectorAll('.issue').forEach(n => {
+        n.onclick = () => selectLarge(Number(n.dataset.id));
+        n.oncontextmenu = e => { const f = FINDINGS.find(x => x.id === Number(n.dataset.id)); if (f) openCtx(e, f); };
+      });
+      LG.loading = false;
+    }).catch(() => { LG.loading = false; });
+  }
+  function lgRowHtml(r) {
+    return `<div class="issue${sel === r.idx ? ' sel' : ''}" data-id="${r.idx}">
+      <div>${sevTag(r.severity)}<span class="rid">${esc(r.rule_id)}</span></div>
+      <div class="loc">${esc(r.file)}:${r.line}${r.verdict ? ' · ' + esc(r.verdict) : ''}</div></div>`;
+  }
+  function ensureFinding(idx) {
+    const have = FINDINGS.find(x => x.id === idx);
+    if (have) return Promise.resolve(have);
+    return fetch(`/scan/${SCAN_PK}/api/finding/${idx}`).then(r => r.json()).then(d => {
+      Object.assign(SOURCES, d.sources || {});   // 이 이슈의 원본만 병합
+      FINDINGS.push(d.finding);
+      return d.finding;
+    });
+  }
+  function selectLarge(idx) {
+    ensureFinding(idx).then(f => { if (f) select(f.id); });
+  }
+  // 무한 스크롤 — 좌측 목록 하단 근처에서 다음 페이지
+  document.addEventListener('DOMContentLoaded', () => {});
+
   // ---------- 좌: 목록 / 표 ----------
   function renderTree() {
+    if (LARGE) return renderLargeReset();
     const items = visible();
     if (ws.view === 'files') return renderFiles(items);
     el('shown').textContent = `(${items.length}/${FINDINGS.length})`;
@@ -690,8 +745,14 @@
   function select(id) {
     const f = FINDINGS.find(x => x.id === id); if (!f) return;
     sel = id; curStep = 0;
-    if (ws.view === 'table') { ws.view = 'tree'; applyWS(); saveWS(); }   // 표에서 고르면 조사 모드로
-    renderTree(); renderDetail(f); renderCode(f, 0); renderVFlow(f); renderCtx(f);
+    if (LARGE) {
+      // 대량 모드: 목록을 다시 그리지 않고(스크롤 유지) 선택 행만 강조
+      el('tree').querySelectorAll('.issue').forEach(n => n.classList.toggle('sel', Number(n.dataset.id) === id));
+    } else {
+      if (ws.view === 'table') { ws.view = 'tree'; applyWS(); saveWS(); }   // 표에서 고르면 조사 모드로
+      renderTree();
+    }
+    renderDetail(f); renderCode(f, 0); renderVFlow(f); renderCtx(f);
     history.replaceState(null, '', '#f' + id);
   }
 
@@ -718,10 +779,19 @@
   el('fnew').onchange = () => { ws.fnew = el('fnew').value; saveWS(); renderTree(); };
   el('hideAudited').onchange = () => { ws.hideAudited = el('hideAudited').checked; saveWS(); renderTree(); };
 
+  // 대량 모드: 좌측 목록 무한 스크롤
+  el('tree').addEventListener('scroll', () => {
+    if (!LARGE) return;
+    const t = el('tree');
+    if (t.scrollTop + t.clientHeight >= t.scrollHeight - 80) renderLargeMore();
+  });
+
   applyWS();
   renderTree();
-  const wanted = Number((location.hash.match(/^#f(\d+)$/) || [])[1]);
-  if (FINDINGS.length) select(FINDINGS.some(x => x.id === wanted) ? wanted : FINDINGS[0].id);
+  if (!LARGE) {
+    const wanted = Number((location.hash.match(/^#f(\d+)$/) || [])[1]);
+    if (FINDINGS.length) select(FINDINGS.some(x => x.id === wanted) ? wanted : FINDINGS[0].id);
+  }
 })();
 </script>
 {% endblock %}

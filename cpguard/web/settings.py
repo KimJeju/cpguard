@@ -44,9 +44,39 @@ TEMPLATES = [{
     "OPTIONS": {"context_processors": ["django.template.context_processors.request"]},
 }]
 
-DATABASES = {
-    "default": {"ENGINE": "django.db.backends.sqlite3", "NAME": str(DATA_DIR / "cpguard.db")}
-}
+# DB 선택:
+#  - 기본(로컬 데스크톱): SQLite(내장). WAL+동시성 pragma 로 대량 쓰기/조회를 견디게 튜닝.
+#  - 서버/팀 배포: 환경변수 CPGUARD_DATABASE_URL 에 postgres URL 을 주면 PostgreSQL 사용
+#    (psycopg 는 서버에 별도 설치; 오프라인 데스크톱 설치본에는 번들하지 않는다).
+def _database_config():
+    url = os.environ.get("CPGUARD_DATABASE_URL", "").strip()
+    if url.startswith(("postgres://", "postgresql://")):
+        from urllib.parse import unquote, urlparse
+        u = urlparse(url)
+        return {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": (u.path or "/cpguard").lstrip("/") or "cpguard",
+            "USER": unquote(u.username or ""),
+            "PASSWORD": unquote(u.password or ""),
+            "HOST": u.hostname or "localhost",
+            "PORT": str(u.port or 5432),
+            "CONN_MAX_AGE": 60,
+        }
+    return {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(DATA_DIR / "cpguard.db"),
+        "OPTIONS": {
+            # 동시 읽기+쓰기 견디게: WAL 저널, 합리적 동기화, 락 타임아웃, 캐시.
+            "init_command": (
+                "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; "
+                "PRAGMA busy_timeout=5000; PRAGMA cache_size=-16000; PRAGMA foreign_keys=ON;"
+            ),
+            "transaction_mode": "IMMEDIATE",
+        },
+    }
+
+
+DATABASES = {"default": _database_config()}
 
 STATIC_URL = "/static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
