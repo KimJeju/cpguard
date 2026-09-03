@@ -1,4 +1,7 @@
-<h1 align="center">🛡️ CPGuard</h1>
+<p align="center">
+  <img src="assets/icon.png" width="128" alt="CPGuard"/>
+</p>
+<h1 align="center">CPGuard</h1>
 
 <p align="center">
   <b>CPG 기반 Taint 분석 + LLM 트리아지</b>를 결합한 오픈소스 정적 보안 분석(SAST) 도구<br/>
@@ -9,7 +12,7 @@
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
-  <img src="https://img.shields.io/badge/tests-183%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-193%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/SAST-CPG%20%2B%20Taint%20%2B%20LLM-4da3ff" alt="SAST">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
