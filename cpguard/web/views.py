@@ -73,14 +73,18 @@ def _job_prune() -> None:
 
 
 def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
-                  do_triage: bool, provider: str) -> None:
+                  do_triage: bool, provider: str, secrets_only: bool = False) -> None:
     """백그라운드 스캔 — 압축 해제 → 진행 콜백과 함께 스캔 → Scan 레코드 생성.
 
+    secrets_only 면 데이터 흐름 축을 건너뛰고 패턴(시크릿·개인정보·설정)만 돈다.
     요청 스레드가 아니라 여기서 workdir 수명을 책임진다(완료 후 정리).
     """
     from django.db import connection
     # 진단 상태 화면의 단계 체크리스트 순서(트리아지는 켰을 때만)
-    steps = ["extract", "parse", "dataflow"] + (["triage"] if do_triage else []) + ["pattern", "save"]
+    if secrets_only:
+        steps = ["extract", "pattern", "save"]
+    else:
+        steps = ["extract", "parse", "dataflow"] + (["triage"] if do_triage else []) + ["pattern", "save"]
     _job_set(job_id, steps=steps)
     _job_log(job_id, f"업로드 수신: {zip_name}")
     try:
@@ -111,7 +115,9 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             elif total and done and done % max(1, total // 4) == 0 and done != total:
                 _job_log(job_id, f"  {phase} {done}/{total} …")
 
-        findings, scan_report = scan_path(src_dir, progress=prog)
+        if secrets_only:
+            _job_log(job_id, "시크릿·개인정보·설정 패턴 점검 (데이터 흐름 축 생략)")
+        findings, scan_report = scan_path(src_dir, progress=prog, secrets_only=secrets_only)
         integrity_note = "" if scan_report.complete else scan_report.summary()
         _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
@@ -170,7 +176,64 @@ def _base_context() -> dict:
         key = s.project or s.name
         if key not in latest:
             latest[key] = s
-    return {"scans": scans[:30], "projects": list(latest.values()), "providers": available()}
+
+    # ---- 대시보드 집계 (프로젝트별 최신 스캔 기준) ----
+    sev_keys = ["critical", "high", "medium", "low", "info"]
+    agg = {k: 0 for k in sev_keys}
+    total = 0
+    new_total = 0
+    rule_agg: dict[str, int] = {}
+    for s in latest.values():
+        for k, v in s.severity_counts.items():
+            agg[k] = agg.get(k, 0) + v
+        total += s.finding_count
+        new_total += s.new_count
+        for rid, n in s.rule_counts:
+            rule_agg[rid] = rule_agg.get(rid, 0) + n
+    stats = {
+        "total": total,
+        "sev": agg,
+        "sev_max": max(agg.values()) or 1,
+        "crit_high": agg["critical"] + agg["high"],
+        "projects": len(latest),
+        "scans": len(scans),
+        "new_total": new_total,
+        "top_rules": sorted(rule_agg.items(), key=lambda x: -x[1])[:8],
+        "top_rules_max": max(rule_agg.values()) if rule_agg else 1,
+    }
+    sev_labels = [("critical", "심각 Critical"), ("high", "높음 High"),
+                  ("medium", "중간 Medium"), ("low", "낮음 Low"), ("info", "정보 Info")]
+    sev_rows = [{"key": k, "label": lb, "n": agg[k]} for k, lb in sev_labels]
+    return {"scans": scans[:30], "projects": list(latest.values()),
+            "providers": available(), "stats": stats, "sev_rows": sev_rows}
+
+
+def settings_page(request):
+    """LLM API 키 설정 — DATA_DIR/config.json 에 저장하고 환경변수로 적용."""
+    from . import config as appcfg
+    from ..triage import available
+    if request.method == "POST":
+        cfg = appcfg.load()
+        for _cid, env, _label in appcfg.KEYS:
+            if request.POST.get(f"clear_{env}"):
+                cfg.pop(env, None)
+                os.environ.pop(env, None)
+                continue
+            v = (request.POST.get(env) or "").strip()
+            if v and "•" not in v:   # 마스킹된 표시값 그대로면 변경 안 함
+                cfg[env] = v
+                os.environ[env] = v   # 재시작 없이 즉시 적용
+        appcfg.save(cfg)
+        return redirect("settings")
+
+    cfg = appcfg.load()
+    rows = []
+    for _cid, env, label in appcfg.KEYS:
+        stored = cfg.get(env) or os.environ.get(env, "")
+        rows.append({"env": env, "label": label,
+                     "masked": appcfg.mask_key(stored) if stored else "",
+                     "set": bool(stored)})
+    return render(request, "settings.html", {"rows": rows, "providers": available()})
 
 
 def _fingerprint(f: Finding, rel_file: str) -> str:
@@ -252,7 +315,9 @@ def _collect_sources(findings: list[Finding], base: Path) -> dict[str, str]:
 
 
 def index(request):
-    return render(request, "index.html", _base_context())
+    ctx = _base_context()
+    ctx["secrets_mode"] = request.GET.get("mode") == "secrets"
+    return render(request, "index.html", ctx)
 
 
 def upload(request):
@@ -280,7 +345,8 @@ def upload(request):
     _job_set(job_id, status="running", phase="준비", done=0, total=0, findings=0,
              name=up.name, started=time.time())
     args = (job_id, workdir, up.name,
-            bool(request.POST.get("triage")), request.POST.get("provider", ""))
+            bool(request.POST.get("triage")), request.POST.get("provider", ""),
+            bool(request.POST.get("secrets_only")))
 
     if _async_scan():
         threading.Thread(target=_run_scan_job, args=args, daemon=True).start()

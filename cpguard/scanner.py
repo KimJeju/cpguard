@@ -160,9 +160,12 @@ def scan_file(path: str | Path, rules: list[Rule] | None = None,
 
 
 def scan_path(root: str | Path, rules: list[Rule] | None = None,
-              excludes: set[str] | None = None, progress=None) -> tuple[list[Finding], ScanReport]:
+              excludes: set[str] | None = None, progress=None,
+              secrets_only: bool = False) -> tuple[list[Finding], ScanReport]:
     """디렉터리(또는 단일 파일) 스캔. 반환: (findings, 무결성 보고).
 
+    secrets_only: True 면 데이터 흐름(taint) 축을 건너뛰고 패턴 축만 돈다
+    (하드코딩 비밀정보·개인정보·설정 위생 빠른 점검).
     progress: 선택적 콜백 progress(phase, done, total, findings). UI 진행바용.
     phase 는 'parse'/'dataflow'/'pattern'/'done'. total 이 0 이면 진행률 미상(스피너).
 
@@ -182,41 +185,42 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         report.text_scanned = 1
         return findings, report
 
-    # 1) 소스 전부 파싱. 한 파일 실패가 전체를 죽이지는 않되, 조용히 넘기지도 않는다.
-    src_files = list(iter_source_files(root, excludes, report))
-    _p("parse", 0, len(src_files), 0)
-    parsed: list[tuple[Path, ir.Module, bytes, str]] = []
-    source_paths: set[Path] = set()
-    for i, f in enumerate(src_files, 1):
-        source_paths.add(f)
-        try:
-            module, src, lang, has_error = parse_file(f)
-        except Exception as e:
-            report.failed.append((str(f), f"{type(e).__name__}: {e}"))
-            _p("parse", i, len(src_files), 0)
-            continue
-        if has_error:
-            report.partial.append(str(f))
-        parsed.append((f, module, src, lang))
-        _p("parse", i, len(src_files), 0)
-    report.scanned = len(parsed)
-
     findings: list[Finding] = []
 
-    # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
-    if parsed:
-        _p("dataflow", 0, 0, len(findings))  # 요약 계산은 파일 단위 진행률이 없다 → 스피너
-        registry = collect_functions([(m, src, str(p)) for p, m, src, _ in parsed])
-        summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in rules}
-        for i, (path, module, src, lang) in enumerate(parsed, 1):
-            rl = loader.rule_language(lang)
-            applicable = [r for r in rules if rl in r.languages]
-            if applicable:
-                findings.extend(engine.analyze(
-                    module, src, applicable,
-                    registry=registry, summaries_by_rule=summaries_by_rule,
-                ))
-            _p("dataflow", i, len(parsed), len(findings))
+    if not secrets_only:
+        # 1) 소스 전부 파싱. 한 파일 실패가 전체를 죽이지는 않되, 조용히 넘기지도 않는다.
+        src_files = list(iter_source_files(root, excludes, report))
+        _p("parse", 0, len(src_files), 0)
+        parsed: list[tuple[Path, ir.Module, bytes, str]] = []
+        source_paths: set[Path] = set()
+        for i, f in enumerate(src_files, 1):
+            source_paths.add(f)
+            try:
+                module, src, lang, has_error = parse_file(f)
+            except Exception as e:
+                report.failed.append((str(f), f"{type(e).__name__}: {e}"))
+                _p("parse", i, len(src_files), 0)
+                continue
+            if has_error:
+                report.partial.append(str(f))
+            parsed.append((f, module, src, lang))
+            _p("parse", i, len(src_files), 0)
+        report.scanned = len(parsed)
+
+        # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
+        if parsed:
+            _p("dataflow", 0, 0, len(findings))  # 요약 계산은 파일 단위 진행률이 없다 → 스피너
+            registry = collect_functions([(m, src, str(p)) for p, m, src, _ in parsed])
+            summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in rules}
+            for i, (path, module, src, lang) in enumerate(parsed, 1):
+                rl = loader.rule_language(lang)
+                applicable = [r for r in rules if rl in r.languages]
+                if applicable:
+                    findings.extend(engine.analyze(
+                        module, src, applicable,
+                        registry=registry, summaries_by_rule=summaries_by_rule,
+                    ))
+                _p("dataflow", i, len(parsed), len(findings))
 
     # 3) 패턴 축: 모든 텍스트 파일 (소스는 언어 규칙까지, 그 외는 언어무관 규칙만)
     text_files = list(iter_text_files(root, excludes))

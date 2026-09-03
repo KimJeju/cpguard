@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}설정 — CPGuard{% endblock %}
+
+{% block head %}
+<style>
+  .set-wrap { max-width: 720px; }
+  .keyrow { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .keyrow .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .keyrow .name { font-weight: 700; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+  .pill.on { background: color-mix(in srgb, var(--low) 18%, transparent); color: var(--low); }
+  .pill.off { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
+  .keyrow .cur { color: var(--muted); font-family: Consolas, monospace; font-size: 12px; margin-left: auto; }
+  .keyrow input[type=password], .keyrow input[type=text] {
+    width: 100%; background: var(--sunken); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 7px; padding: 9px 11px; font-size: 13px; font-family: Consolas, monospace; }
+  .keyrow .clr { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .note { color: var(--muted); font-size: 12.5px; line-height: 1.7; margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="set-wrap">
+  <h1 style="font-size:20px;margin:0 0 4px">설정</h1>
+  <p class="note" style="margin-bottom:20px">
+    LLM 트리아지·AI 분석에 쓸 API 키를 넣습니다. 키는 이 PC의
+    <code>~/.cpguard/config.json</code> 에만 저장되고(권한 축소), 외부로 전송되지 않습니다.
+    저장 즉시 적용되며 재시작이 필요 없습니다.
+  </p>
+
+  <form method="post" action="{% url 'settings' %}">
+    {% csrf_token %}
+    {% for r in rows %}
+    <div class="keyrow">
+      <div class="top">
+        <span class="name">{{ r.label }}</span>
+        {% if r.set %}<span class="pill on">설정됨</span>{% else %}<span class="pill off">미설정</span>{% endif %}
+        <span class="cur">{% if r.masked %}{{ r.masked }}{% else %}—{% endif %}</span>
+      </div>
+      <input type="password" name="{{ r.env }}" autocomplete="off" spellcheck="false"
+             placeholder="{% if r.set %}변경하려면 새 키 입력 (비우면 유지){% else %}{{ r.env }} 값 입력{% endif %}">
+      {% if r.set %}
+      <label class="clr"><input type="checkbox" name="clear_{{ r.env }}"> 이 키 삭제</label>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
+      <button class="btn" type="submit">저장</button>
+      <a class="btn ghost" href="/">홈으로</a>
+      <span class="note" style="margin:0">
+        사용 가능: {% if providers %}<b>{{ providers|join:", " }}</b>{% else %}없음 — 위에 키를 넣어 활성화하세요{% endif %}
+      </span>
+    </div>
+  </form>
+
+  <p class="note" style="margin-top:22px">
+    키 발급 위치 — Claude: <code>console.anthropic.com</code> ·
+    OpenAI: <code>platform.openai.com/api-keys</code> ·
+    Gemini: <code>aistudio.google.com/apikey</code>.
+    환경변수(<code>ANTHROPIC_API_KEY</code> 등)가 이미 설정돼 있으면 그쪽이 우선합니다.
+  </p>
+</div>
+{% endblock %}

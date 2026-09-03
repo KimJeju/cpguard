@@ -16,6 +16,8 @@ def serve(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) 
     django.setup()
     from django.core.management import call_command
 
+    from .config import apply_to_env  # 저장된 LLM 키를 환경변수로
+    apply_to_env()
     # 정식 마이그레이션 — 설치본을 새 버전으로 덮어써도 스키마가 안전하게 갱신된다
     call_command("migrate", verbosity=0, interactive=False)
 

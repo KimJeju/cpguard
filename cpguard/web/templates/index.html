@@ -1,36 +1,116 @@
 {% extends "base.html" %}
+
+{% block head %}
+<style>
+  /* ---- 상태 타일 ---- */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; }
+  .tile .tn { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+  .tile .tl { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  .tile.accent .tn { color: var(--accent); }
+  .tile.crit .tn { color: var(--crit); }
+  .tile.good .tn { color: var(--low); }
+  .tile .spark { position: absolute; right: 12px; top: 14px; font-size: 20px; opacity: .5; }
+
+  /* ---- 분포 바 ---- */
+  .dbar { display: grid; grid-template-columns: 74px 1fr 42px; align-items: center; gap: 10px; margin: 9px 0; font-size: 12.5px; }
+  .dbar .lab { display: flex; align-items: center; gap: 6px; }
+  .dbar .track { height: 12px; background: var(--sunken); border-radius: 6px; overflow: hidden; }
+  .dbar .fill { height: 100%; border-radius: 6px; min-width: 2px; }
+  .fill.s-critical { background: var(--crit); } .fill.s-high { background: var(--high); }
+  .fill.s-medium { background: var(--med); } .fill.s-low { background: var(--low); } .fill.s-info { background: var(--muted); }
+  .dbar .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.s-critical { background: var(--crit); } .dot.s-high { background: var(--high); }
+  .dot.s-medium { background: var(--med); } .dot.s-low { background: var(--low); } .dot.s-info { background: var(--muted); }
+
+  .rule-bar { display: grid; grid-template-columns: 1fr 40px; align-items: center; gap: 10px; margin: 7px 0; font-size: 12px; }
+  .rule-bar .rn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rule-bar .rt { height: 8px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 4px; margin-top: 3px; min-width: 3px; }
+  .rule-bar .rc { text-align: right; color: var(--muted); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  .empty-hint { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .secrets-toggle { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+  @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
 {% block content %}
   {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
+  <!-- 상태 타일 -->
+  <div class="tiles">
+    <div class="tile accent"><div class="tn">{{ stats.total }}</div><div class="tl">총 탐지 (프로젝트별 최신)</div><span class="spark">🛡️</span></div>
+    <div class="tile crit"><div class="tn">{{ stats.crit_high }}</div><div class="tl">심각 · 높음</div><span class="spark">🔴</span></div>
+    <div class="tile"><div class="tn">{{ stats.projects }}</div><div class="tl">프로젝트 · 스캔 {{ stats.scans }}회</div><span class="spark">📁</span></div>
+    <div class="tile {% if stats.new_total %}crit{% else %}good{% endif %}"><div class="tn">{% if stats.new_total %}+{{ stats.new_total }}{% else %}0{% endif %}</div><div class="tl">최근 신규</div><span class="spark">✨</span></div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:16px">
+    <!-- 위험도 분포 -->
+    <div class="card" style="margin:0">
+      <h2>위험도 분포</h2>
+      {% if stats.total %}
+        {% for r in sev_rows %}
+        <div class="dbar">
+          <span class="lab"><span class="dot s-{{ r.key }}"></span>{{ r.label }}</span>
+          <span class="track"><span class="fill s-{{ r.key }}" style="width:{% widthratio r.n stats.sev_max 100 %}%"></span></span>
+          <span class="n">{{ r.n }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty-hint">아직 스캔 결과가 없습니다. 아래에서 프로젝트를 올려 진단을 시작하세요.</p>
+      {% endif %}
+    </div>
+
+    <!-- 상위 탐지 규칙 -->
+    <div class="card" style="margin:0">
+      <h2>상위 탐지 규칙</h2>
+      {% if stats.top_rules %}
+        {% for rid, n in stats.top_rules %}
+        <div class="rule-bar">
+          <div class="rn"><code>{{ rid }}</code><div class="rt" style="width:{% widthratio n stats.top_rules_max 100 %}%"></div></div>
+          <div class="rc">{{ n }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty-hint">데이터가 쌓이면 가장 많이 나온 규칙이 여기 정렬됩니다.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- 업로드 -->
   <div class="card">
-    <h2>프로젝트 업로드</h2>
-    <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 취약점을 진단합니다.
-       지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code>
-       <code>.php</code> <code>.py</code>
-       (<code>node_modules</code> 등 의존성 폴더는 제외)</p>
+    <h2>{% if secrets_mode %}🔑 시크릿·설정 빠른 점검{% else %}프로젝트 업로드{% endif %}</h2>
+    <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다.
+       지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code> <code>.php</code> <code>.py</code>
+       {% if not secrets_mode %}(데이터 흐름 + 패턴 두 축){% else %}(패턴 축만 — 하드코딩 비밀정보·개인정보·설정 위생){% endif %}</p>
 
     <form id="scanform" method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
       <input type="file" name="archive" accept=".zip" required style="color:var(--muted);flex:1">
-      <button class="btn" type="submit">진단 시작</button>
+      <button class="btn" type="submit">{% if secrets_mode %}시크릿 점검 시작{% else %}진단 시작{% endif %}</button>
     </form>
 
-    <div style="display:flex;gap:14px;align-items:center;margin-top:12px;flex-wrap:wrap">
+    <div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">
+      <label class="secrets-toggle" style="display:flex;gap:8px;align-items:center;cursor:pointer">
+        <input type="checkbox" name="secrets_only" form="scanform" value="1" {% if secrets_mode %}checked{% endif %}>
+        🔑 시크릿·설정만 빠르게 <span class="muted" style="font-size:12px">(데이터 흐름 분석 생략)</span>
+      </label>
       <label class="muted" style="display:flex;gap:8px;align-items:center;cursor:pointer">
         <input type="checkbox" name="triage" form="scanform" value="1">
         LLM 트리아지로 오탐 재검증
       </label>
-      <select name="provider" form="scanform"
-              style="background:var(--panel);color:var(--fg);border:1px solid var(--line);
-                     border-radius:6px;padding:5px 8px">
+      <select name="provider" form="scanform" style="background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
         <option value="">자동 선택</option>
         <option value="claude">Claude</option>
         <option value="openai">ChatGPT (OpenAI)</option>
         <option value="gemini">Gemini</option>
       </select>
       <span class="muted" style="font-size:12px">
-        {% if providers %}사용 가능: {{ providers|join:", " }}{% else %}API 키 없음 — 환경변수 ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY{% endif %}
+        {% if providers %}LLM 사용 가능: {{ providers|join:", " }}{% else %}LLM 키 없음 — <a href="{% url 'settings' %}">설정</a>에서 추가{% endif %}
       </span>
     </div>
   </div>
@@ -69,45 +149,31 @@
         <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
         <td class="muted">{{ s.file_count }}</td>
         <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
-        <td>
-          {% for sev, n in s.severity_counts.items %}
-            <span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>
-          {% empty %}
-            <span class="muted">—</span>
-          {% endfor %}
-        </td>
+        <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% empty %}<span class="muted">—</span>{% endfor %}</td>
         <td style="text-align:right">
-          <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">
-            {% csrf_token %}<button class="btn ghost" type="submit">삭제</button>
-          </form>
+          <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn ghost" type="submit">삭제</button></form>
         </td>
       </tr>
       {% endfor %}
     </table>
     {% else %}
-      <p class="muted">아직 스캔 기록이 없습니다.</p>
+      <p class="empty-hint">아직 스캔 기록이 없습니다.</p>
     {% endif %}
   </div>
 
   <div class="card">
     <h2>탐지 범위</h2>
-    <p class="muted" style="margin-bottom:14px">
-      두 가지 축으로 점검합니다 — 데이터 흐름 추적(입력이 위험 지점까지 흐르는가)과
-      단일 지점 패턴(하드코딩된 비밀정보·취약한 알고리즘 등).
-    </p>
     <table>
       <tr><th>축</th><th>대상 언어</th><th>점검 항목</th></tr>
       <tr>
         <td><b>데이터 흐름</b><br><span class="muted" style="font-size:12px">CPG · 프로시저간</span></td>
         <td class="muted">JS / TS / PHP / Python</td>
-        <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) ·
-            경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)</td>
+        <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)</td>
       </tr>
       <tr>
-        <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점</span></td>
+        <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점 · 🔑 빠른 점검</span></td>
         <td class="muted">전 언어</td>
-        <td class="muted">하드코딩 비밀정보(798) · TLS 검증 비활성(295) · 취약 해시/암호(327) ·
-            예측 가능 난수(338) · 웹스토리지 토큰(522) · 쿠키 플래그(1004) · 디버그 코드(489)</td>
+        <td class="muted">하드코딩 비밀정보(798)·벤더키 · 개인정보(PII) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 예측 가능 난수(338) · 쿠키 플래그(1004) · 디버그 코드(489)</td>
       </tr>
     </table>
   </div>

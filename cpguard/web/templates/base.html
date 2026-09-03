@@ -101,6 +101,12 @@
           border:0;color:var(--muted);cursor:pointer;font-size:13px;border-radius:5px;line-height:1;-webkit-app-region:no-drag}
   .winbtn:hover{background:var(--hover);color:var(--fg)}
   .winbtn.winclose:hover{background:#e81123;color:#fff}
+  /* ---- 앱 툴바 (Ghidra 식 아이콘 툴 스트립) ---- */
+  .apptools{display:flex;align-items:center;gap:2px}
+  .tbtn{width:32px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:6px;
+        color:var(--muted);font-size:15px;text-decoration:none;cursor:pointer;border:1px solid transparent;-webkit-app-region:no-drag}
+  .tbtn:hover{background:var(--hover);color:var(--fg);border-color:var(--line);text-decoration:none}
+  .tsep{width:1px;height:20px;background:var(--line);margin:0 8px}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -109,6 +115,12 @@
   <div class="logo pywebview-drag-region">CP<span>Guard</span></div>
   <div class="tag pywebview-drag-region">CPG 기반 taint 분석 정적 보안 스캐너</div>
   <div class="drag-spacer pywebview-drag-region"></div>
+  <nav class="apptools">
+    <a class="tbtn" href="/" title="홈 · 새 스캔">🏠</a>
+    <a class="tbtn" href="/?mode=secrets" title="시크릿·설정 빠른 점검">🔑</a>
+    <a class="tbtn" href="/settings/" title="설정 · LLM API 키">⚙️</a>
+  </nav>
+  <span class="tsep"></span>
   <select id="theme-sel" title="테마">
     <option value="dark">다크</option>
     <option value="light">라이트</option>

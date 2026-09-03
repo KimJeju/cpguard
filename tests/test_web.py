@@ -194,3 +194,45 @@ def test_run_scan_job_creates_scan():
     job = views._job_get(jid)
     assert job["status"] == "done" and isinstance(job.get("pk"), int)
     assert job["findings"] >= 1
+
+
+def test_settings_save_mask_and_clear():
+    """설정 저장 → 마스킹 표시 → 삭제. 환경 오염은 끝에 정리."""
+    import os as _os
+
+    from cpguard.web import config as appcfg
+    c = Client()
+    try:
+        r = c.post("/settings/", {"ANTHROPIC_API_KEY": "sk-ant-DUMMY1234567890abcd"})
+        assert r.status_code in (302, 200)
+        assert appcfg.load().get("ANTHROPIC_API_KEY") == "sk-ant-DUMMY1234567890abcd"
+        body = c.get("/settings/").content.decode("utf-8")
+        assert "설정됨" in body and "•" in body          # 마스킹 표시
+        assert "sk-ant-DUMMY1234567890abcd" not in body  # 원본 노출 안 함
+        # 삭제
+        c.post("/settings/", {"clear_ANTHROPIC_API_KEY": "1"})
+        assert "ANTHROPIC_API_KEY" not in appcfg.load()
+    finally:
+        appcfg.save({})
+        _os.environ.pop("ANTHROPIC_API_KEY", None)
+
+
+def test_secrets_only_skips_dataflow():
+    """secrets_only 스캔은 데이터 흐름 축을 건너뛰고 패턴만 탐지한다."""
+    from cpguard.scanner import scan_path
+    d = tempfile.mkdtemp(prefix="cpguard_so_")
+    with open(os.path.join(d, "a.py"), "w", encoding="utf-8") as f:
+        f.write('API_KEY = "AKIAIOSFODNN7EXAMPLE"\n'
+                'q = "SELECT * FROM t WHERE x=" + user\n')
+    findings, report = scan_path(d, secrets_only=True)
+    assert report.scanned == 0                       # 소스 파싱 축 생략
+    cats = {getattr(f, "category", "flow") for f in findings}
+    assert "flow" not in cats                         # 데이터 흐름 finding 없음
+    assert any(f.category in ("secret", "pii", "config", "infra", "hygiene") for f in findings)
+
+
+def test_dashboard_shows_stats():
+    c = Client()
+    body = c.get("/").content.decode("utf-8")
+    assert "위험도 분포" in body and "상위 탐지 규칙" in body   # 대시보드 위젯
+    assert "총 탐지" in body                                    # 상태 타일
