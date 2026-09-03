@@ -2,15 +2,19 @@
 
 {% block head %}
 <style>
-  /* ---- 상태 타일 ---- */
-  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; position: relative; overflow: hidden; }
-  .tile .tn { font-size: 30px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
-  .tile .tl { color: var(--muted); font-size: 12px; margin-top: 6px; }
+  /* ---- 상태 타일 (콘텐츠 레이어 · 표준 머티리얼) ---- */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-4); margin-bottom: var(--sp-5); }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-4) var(--sp-5) var(--sp-5);
+          position: relative; overflow: hidden; box-shadow: var(--elev-1); transition: transform .16s ease, box-shadow .16s ease; }
+  .tile:hover { transform: translateY(-2px); box-shadow: var(--elev-2); }
+  .tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: .85; }
+  .tile.crit::before { background: var(--crit); } .tile.good::before { background: var(--low); } .tile.accent::before { background: var(--accent); }
+  .tile .tn { font-size: var(--fs-display); font-weight: 700; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: var(--sp-2); }
+  .tile .tl { color: var(--muted); font-size: var(--fs-caption); margin-top: var(--sp-2); font-weight: 500; }
   .tile.accent .tn { color: var(--accent); }
   .tile.crit .tn { color: var(--crit); }
   .tile.good .tn { color: var(--low); }
-  .tile .spark { position: absolute; right: 12px; top: 14px; font-size: 20px; opacity: .5; }
+  .tile .spark { position: absolute; right: 14px; top: 14px; font-size: 16px; opacity: .35; }
 
   /* ---- 분포 바 ---- */
   .dbar { display: grid; grid-template-columns: 74px 1fr 42px; align-items: center; gap: 10px; margin: 9px 0; font-size: 12.5px; }
