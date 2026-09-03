@@ -128,7 +128,7 @@ exe = EXE(
     name="CPGuard",
     console=False,          # 창 앱이므로 콘솔 숨김
     disable_windowed_traceback=False,
-    icon=None,
+    icon="../assets/cpguard.ico",
 )
 
 coll = COLLECT(

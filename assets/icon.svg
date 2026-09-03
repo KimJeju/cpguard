@@ -1,0 +1,45 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6db8ff"/>
+      <stop offset="0.55" stop-color="#4da3ff"/>
+      <stop offset="1" stop-color="#2b6fd0"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#06121f" flood-opacity="0.35"/>
+    </filter>
+    <filter id="tsh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#1a3f70" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <!-- shield -->
+  <path filter="url(#soft)" d="M128 30 L210 54 Q216 56 216 62 V126
+        C216 180 178 210 128 228 C78 210 40 180 40 126 V62
+        Q40 56 46 54 Z" fill="url(#shield)" stroke="#1f4f8f" stroke-width="3"/>
+  <path d="M128 30 L210 54 Q216 56 216 62 V118
+        C216 130 40 130 40 118 V62 Q40 56 46 54 Z" fill="url(#gloss)"/>
+
+  <!-- CPG initials -->
+  <text x="128" y="130" text-anchor="middle" filter="url(#tsh)"
+        font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-weight="800"
+        font-size="66" letter-spacing="-2" fill="#ffffff">CPG</text>
+
+  <!-- CPG taint-flow motif: source(blue) -> sink(red) -->
+  <g stroke="#eaf3ff" stroke-width="6" stroke-linecap="round" opacity="0.95" fill="none">
+    <path d="M86 176 L128 176"/>
+    <path d="M128 176 L170 176"/>
+  </g>
+  <g fill="#ffffff">
+    <circle cx="86" cy="176" r="12"/>
+    <circle cx="128" cy="176" r="9"/>
+    <circle cx="170" cy="176" r="12"/>
+  </g>
+  <circle cx="86" cy="176" r="5.5" fill="#2b6fd0"/>
+  <circle cx="170" cy="176" r="5.5" fill="#ff5d5d"/>
+</svg>
