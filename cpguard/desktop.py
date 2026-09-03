@@ -18,13 +18,47 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-TITLE = "CPGuard — 정적 보안 분석"
+TITLE = "CPGuard"
 WIDTH, HEIGHT = 1280, 860
 STARTUP_TIMEOUT = 25.0
 
 
 class DesktopUnavailable(RuntimeError):
     """pywebview 미설치 등으로 데스크톱 창을 띄울 수 없음."""
+
+
+class _WinApi:
+    """프레임리스 창의 커스텀 상단바가 부르는 창 제어 API.
+
+    JS 에서 window.pywebview.api.minimize() 처럼 호출한다. OS 제목표시줄을 없앤 대신
+    앱 헤더에 최소화/최대화/닫기 버튼을 두고 여기로 연결한다.
+    """
+
+    def __init__(self) -> None:
+        # 밑줄 접두: pywebview 가 js_api 를 JS 로 노출할 때 이 속성을 훑지 않게 한다.
+        # 공개 속성으로 pywebview Window 를 들면 브리지가 .native 를 재귀 직렬화하다 죽는다.
+        self._window = None
+        self._maximized = False
+
+    def _set_window(self, window) -> None:
+        self._window = window
+
+    def minimize(self) -> None:
+        if self._window:
+            self._window.minimize()
+
+    def toggle_maximize(self) -> None:
+        if not self._window:
+            return
+        if self._maximized:
+            self._window.restore()
+        else:
+            self._window.maximize()
+        self._maximized = not self._maximized
+
+    def close(self) -> None:
+        if self._window:
+            self._window.destroy()
 
 
 def _ensure_std_streams() -> None:
@@ -119,8 +153,12 @@ def launch(port: int | None = None, debug: bool = False) -> None:
     except ImportError as e:
         return _run_in_browser(url, server, reason=f"웹뷰 미탑재: {e!r}")
     try:
-        webview.create_window(TITLE, url, width=WIDTH, height=HEIGHT,
-                              min_size=(900, 600), confirm_close=False)
+        api = _WinApi()
+        # frameless: OS 제목표시줄 제거. 대신 앱 헤더가 드래그 영역·창버튼을 제공한다.
+        window = webview.create_window(TITLE, url, js_api=api, frameless=True,
+                                       width=WIDTH, height=HEIGHT,
+                                       min_size=(900, 600), confirm_close=False)
+        api._set_window(window)
         webview.start(debug=debug)
     except Exception as e:  # WebView2 런타임 부재 등 — 창 대신 브라우저로
         return _run_in_browser(url, server, reason=f"네이티브 창 실패: {e!r}")

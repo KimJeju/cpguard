@@ -93,21 +93,33 @@
   /* ---- 테마 셀렉터 ---- */
   #theme-sel{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
              padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer}
+  /* ---- 커스텀 상단바 (프레임리스 데스크톱 창) ---- */
+  header{-webkit-user-select:none;user-select:none}
+  .drag-spacer{flex:1;align-self:stretch;min-width:20px}
+  #winctl{display:flex;gap:2px;margin-left:6px}
+  .winbtn{width:40px;height:30px;display:flex;align-items:center;justify-content:center;background:transparent;
+          border:0;color:var(--muted);cursor:pointer;font-size:13px;border-radius:5px;line-height:1;-webkit-app-region:no-drag}
+  .winbtn:hover{background:var(--hover);color:var(--fg)}
+  .winbtn.winclose:hover{background:#e81123;color:#fff}
 </style>
 {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <header>
-  <div class="logo">CP<span>Guard</span></div>
-  <div class="tag">CPG 기반 taint 분석 정적 보안 스캐너</div>
-  <div style="margin-left:auto;display:flex;gap:12px;align-items:center">
-    <select id="theme-sel" title="테마">
-      <option value="dark">다크</option>
-      <option value="light">라이트</option>
-      <option value="vscode">VS Code</option>
-      <option value="ghidra">Ghidra (회색)</option>
-    </select>
-    <a href="/">스캔 목록</a>
+  <div class="logo pywebview-drag-region">CP<span>Guard</span></div>
+  <div class="tag pywebview-drag-region">CPG 기반 taint 분석 정적 보안 스캐너</div>
+  <div class="drag-spacer pywebview-drag-region"></div>
+  <select id="theme-sel" title="테마">
+    <option value="dark">다크</option>
+    <option value="light">라이트</option>
+    <option value="vscode">VS Code</option>
+    <option value="ghidra">Ghidra (회색)</option>
+  </select>
+  <a href="/">스캔 목록</a>
+  <div id="winctl" hidden>
+    <button class="winbtn" id="win-min" title="최소화" aria-label="최소화">&#8211;</button>
+    <button class="winbtn" id="win-max" title="최대화" aria-label="최대화">&#9633;</button>
+    <button class="winbtn winclose" id="win-close" title="닫기" aria-label="닫기">&#10005;</button>
   </div>
 </header>
 {% block content_raw %}<main>{% block content %}{% endblock %}</main>{% endblock %}
@@ -121,6 +133,28 @@
     apply(saved);
     if (sel) { sel.value = saved; sel.addEventListener('change', function () { apply(sel.value); try { localStorage.setItem(KEY, sel.value); } catch (e) {} }); }
     function apply(t) { if (t === 'dark') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t); }
+  })();
+
+  // 프레임리스 데스크톱 창(pywebview)일 때만 창 제어 버튼 표시.
+  // 브라우저(serve/폴백)면 브라우저 크롬을 쓰므로 숨긴 채 둔다.
+  (function () {
+    function initWinCtl() {
+      if (!window.pywebview || !window.pywebview.api) return;
+      var c = document.getElementById('winctl'); if (!c) return; c.hidden = false;
+      var api = window.pywebview.api;
+      var min = document.getElementById('win-min'),
+          max = document.getElementById('win-max'),
+          cls = document.getElementById('win-close');
+      if (min) min.onclick = function () { api.minimize(); };
+      if (max) max.onclick = function () { api.toggle_maximize(); };
+      if (cls) cls.onclick = function () { api.close(); };
+      // 드래그 영역 더블클릭 → 최대화 토글 (표준 제목표시줄 동작)
+      document.querySelectorAll('.pywebview-drag-region').forEach(function (el) {
+        el.addEventListener('dblclick', function () { api.toggle_maximize(); });
+      });
+    }
+    if (window.pywebview) initWinCtl();
+    window.addEventListener('pywebviewready', initWinCtl);
   })();
 </script>
 </body>
