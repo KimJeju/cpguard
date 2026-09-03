@@ -1,0 +1,37 @@
+name: CPGuard SAST
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # SARIF → Code Scanning 업로드에 필요
+
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: CPGuard scan
+        id: cpguard
+        uses: ./                 # 외부 저장소에서는 KimJeju/cpguard@main 로 교체
+        with:
+          path: '.'
+          fail-on: 'none'        # 기준 미달 시 빌드 실패시키려면 high / critical 등으로
+          args: '--jobs 4'
+
+      - name: Upload SARIF to Code Scanning
+        if: always()             # 게이트로 스캔이 실패해도 결과는 올린다
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.cpguard.outputs.sarif }}
+          category: cpguard
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: python "${{ github.workspace }}/.github/scripts/sarif_summary.py" "${{ steps.cpguard.outputs.sarif }}" >> "$GITHUB_STEP_SUMMARY"

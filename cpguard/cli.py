@@ -42,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--model", help="프로바이더의 모델명 재정의")
     sc.add_argument("-j", "--jobs", type=int, default=1,
                     help="파싱 병렬 워커 수 (기본 1; 대형 프로젝트에서만 이득)")
+    sc.add_argument("--fail-on", choices=["critical", "high", "medium", "low", "info", "none"],
+                    default=None,
+                    help="CI 게이트: 이 등급 이상 탐지 시 종료코드 1. 'none'=항상 0. 미지정=탐지 있으면 1.")
 
     sv = sub.add_parser("serve", help="웹 대시보드 실행 (zip 업로드 진단)")
     sv.add_argument("--host", default="127.0.0.1")
@@ -101,6 +104,13 @@ def main(argv: list[str] | None = None) -> int:
         excel.write_workbook(findings, args.xlsx, project=root.name, base=root)
         print(f"분석목록표 저장: {args.xlsx}")
 
+    # CI 게이트: --fail-on 지정 시 그 등급 이상 탐지일 때만 실패 코드. 미지정 시 레거시(탐지 있으면 1).
+    if args.fail_on is not None:
+        if args.fail_on == "none":
+            return 0
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        thr = order[args.fail_on]
+        return 1 if any(order.get(f.severity, 9) <= thr for f in findings) else 0
     return 1 if findings else 0
 
 

@@ -27,3 +27,20 @@ def test_scan_prints_unicode_without_crash(tmp_path, capsys):
 
 def test_scan_missing_path_returns_2(tmp_path):
     assert cli.main(["scan", str(tmp_path / "nope")]) == 2
+
+
+def test_fail_on_gate(tmp_path):
+    # command injection = high 등급 탐지가 나오는 소스.
+    src = tmp_path / "v.js"
+    src.write_text(
+        "const cp=require('child_process');"
+        "function h(req){ cp.exec('ls '+req.query.name); }",
+        encoding="utf-8",
+    )
+    base = ["scan", str(tmp_path), "--quiet"]
+    # high 이상 탐지 있음 → --fail-on high 는 실패(1), --fail-on critical 은 통과(0).
+    assert cli.main(base + ["--fail-on", "high"]) == 1
+    assert cli.main(base + ["--fail-on", "critical"]) == 0
+    assert cli.main(base + ["--fail-on", "none"]) == 0
+    # 플래그 없으면 레거시: 탐지 있으면 1.
+    assert cli.main(base) == 1

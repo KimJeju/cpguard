@@ -88,6 +88,34 @@ cpguard app
 대시보드에서: zip 업로드 → 진행 화면(단계 체크리스트·구동 로그) → 작업대에서 조사·판정 →
 ⚙️ 설정에 LLM 키 입력 시 AI 분석·트리아지 활성화. Gemini 는 무료 티어로 사용 가능.
 
+## 🔁 CI/CD (GitHub Actions)
+
+PR·푸시마다 자동 스캔 → SARIF 를 **GitHub Code Scanning** 에 올려 신규 취약점을 코드/PR 에
+인라인 표시. 등급 게이트로 빌드 실패도 가능.
+
+```yaml
+# .github/workflows/cpguard.yml
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: cpguard
+        uses: KimJeju/cpguard@main
+        with:
+          path: '.'
+          fail-on: 'high'      # high 이상 탐지 시 빌드 실패 (none=게이트 안 함)
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: '${{ steps.cpguard.outputs.sarif }}' }
+```
+
+CLI 로도 게이트 가능: `cpguard scan . --sarif out.sarif --fail-on high`
+(해당 등급 이상 탐지 시 종료코드 1). 이 저장소의 [`.github/workflows/cpguard.yml`](.github/workflows/cpguard.yml) 이 실동작 예시.
+
 ---
 
 ## 🧱 아키텍처
@@ -115,10 +143,11 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 - [x] JS/TS/PHP/Python taint 코어 · 패턴 엔진 · LLM 트리아지 · 감사 작업대
 - [x] PDF 진단 보고서·조치 가이드 · 오프라인 설치본
+- [x] Finding DB 테이블화 + 서버측 페이지네이션 · 가상 스크롤(대량 탐지)
+- [x] 싱크 사전 필터링 · 멀티프로세스 · 파싱/요약 캐시 · 트리아지 클러스터링
+- [x] CI/CD 통합 — GitHub Action · SARIF → Code Scanning · 등급 게이트
 - [ ] Java 어댑터
-- [ ] Finding DB 테이블화 + 서버측 페이지네이션(대량 탐지)
-- [ ] 싱크 사전 필터링 · 멀티프로세스 · 증분 스캔
-- [ ] CI/CD 통합(SARIF 업로드)
+- [ ] 정확도 벤치마크 공개(OWASP Benchmark)
 
 ## 📄 라이선스
 

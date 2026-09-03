@@ -1,0 +1,53 @@
+name: 'CPGuard SAST'
+description: 'CPG 기반 taint 분석 + 패턴 SAST 스캔 → SARIF (GitHub Code Scanning 연동)'
+author: 'CPGuard'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  path:
+    description: '스캔 대상 경로'
+    default: '.'
+  sarif:
+    description: 'SARIF 출력 파일 경로'
+    default: 'cpguard.sarif'
+  fail-on:
+    description: "이 등급 이상 탐지 시 액션 실패 (critical|high|medium|low|info|none). 기본 none = 게이트하지 않고 SARIF만 산출."
+    default: 'none'
+  args:
+    description: 'cpguard scan 에 넘길 추가 인자 (예: --jobs 4)'
+    default: ''
+  python-version:
+    description: '사용할 Python 버전'
+    default: '3.11'
+
+outputs:
+  sarif:
+    description: '생성된 SARIF 파일 경로'
+    value: ${{ steps.scan.outputs.sarif }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install CPGuard
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+
+    - name: Run CPGuard scan
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        cpguard scan "${{ inputs.path }}" \
+          --sarif "${{ inputs.sarif }}" \
+          --fail-on "${{ inputs.fail-on }}" \
+          --quiet ${{ inputs.args }}
+        code=$?
+        echo "sarif=${{ inputs.sarif }}" >> "$GITHUB_OUTPUT"
+        # SARIF 는 종료코드와 무관하게 이미 기록됨 → 업로드 스텝이 항상 쓸 수 있게.
+        exit $code
