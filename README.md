@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/tests-197%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/DVWA-recall%20100%25%20·%20precision%2080%25-2e7d32" alt="DVWA benchmark">
   <img src="https://img.shields.io/badge/SAST-CPG%20%2B%20Taint%20%2B%20LLM-4da3ff" alt="SAST">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -172,8 +173,8 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 - [x] Finding DB 테이블화 + 서버측 페이지네이션 · 가상 스크롤(대량 탐지)
 - [x] 싱크 사전 필터링 · 멀티프로세스 · 파싱/요약 캐시 · 트리아지 클러스터링
 - [x] CI/CD 통합 — GitHub Action · SARIF → Code Scanning · 등급 게이트
-- [ ] Java 어댑터
-- [ ] 정확도 벤치마크 공개(OWASP Benchmark)
+- [x] 정확도 벤치마크(DVWA) 공개 — 재현율 100% · 정밀도 80% (측정 대상 4모듈, [상세](bench/README.md))
+- [ ] Java 어댑터 · sanitizer 인식 강화 · OWASP Benchmark 확장
 
 ## 📄 라이선스
 

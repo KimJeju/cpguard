@@ -96,7 +96,10 @@ def evaluate(dvwa: Path) -> dict:
             continue
         row = {"module": module_dir.name, "covered": module_dir.name in COVERED}
         low_file = src / "low.php"
-        row["measurable"] = low_file.is_file() and has_sink(low_file, rules)
+        # 측정 가능 여부는 "이 모듈이 목표하는 취약 유형의 sink" 가 조각 안에 있는지로 본다.
+        # (다른 유형의 sink 가 우연히 있어도, 그 취약점은 이 조각에서 원리상 탐지 불가)
+        exp_rules = [r for r in rules if r.id == COVERED.get(module_dir.name)]
+        row["measurable"] = low_file.is_file() and bool(exp_rules) and has_sink(low_file, exp_rules)
         for level in ("low", "medium", "high", "impossible"):
             f = src / f"{level}.php"
             row[level] = scan(f, rules) if f.is_file() else None
@@ -104,10 +107,18 @@ def evaluate(dvwa: Path) -> dict:
 
     covered = [r for r in rows if r["covered"] and r["measurable"]]
     unmeasurable = [r["module"] for r in rows if r["covered"] and not r["measurable"]]
-    tp = sum(1 for r in covered if r["low"])                     # 취약을 잡음
-    fn = sum(1 for r in covered if r["low"] == [])               # 취약을 놓침
-    fp = sum(1 for r in covered if r["impossible"])              # 안전을 잘못 잡음
-    tn = sum(1 for r in covered if r["impossible"] == [])        # 안전을 통과시킴
+
+    # 해당 모듈이 목표로 하는 데이터흐름 규칙(taint)만으로 판정한다.
+    # 다른 축(패턴·hygiene) 규칙이 impossible.php 에서 발화하는 건 taint 엔진의 오탐이
+    # 아니므로(위험 API 사용 자체를 알리는 별개 축), 이 지표에서 제외해야 정직하다.
+    def hit(r, level):
+        exp = COVERED[r["module"]]
+        return exp in (r.get(level) or [])
+
+    tp = sum(1 for r in covered if hit(r, "low"))                # 취약을 잡음
+    fn = sum(1 for r in covered if not hit(r, "low"))            # 취약을 놓침
+    fp = sum(1 for r in covered if hit(r, "impossible"))         # 안전을 잘못 잡음
+    tn = sum(1 for r in covered if not hit(r, "impossible"))     # 안전을 통과시킴
 
     recall = tp / (tp + fn) if (tp + fn) else 0.0
     precision = tp / (tp + fp) if (tp + fp) else 0.0
@@ -145,10 +156,11 @@ def render(result: dict) -> str:
     for r in result["rows"]:
         if not r["covered"] or not r.get("measurable"):
             continue
+        exp = COVERED[r["module"]]
         low = ",".join(r["low"] or []) or "-"
         imp = ",".join(r["impossible"] or []) or "-"
-        ok_low = "O" if r["low"] else "X(미탐)"
-        ok_imp = "O" if r["impossible"] == [] else "X(오탐)"
+        ok_low = "O" if exp in (r["low"] or []) else "X(미탐)"
+        ok_imp = "O" if exp not in (r["impossible"] or []) else "X(오탐)"
         out.append(f"{r['module']:<16}{'예':<6}{low[:24]:<26}{imp[:22]:<24}{ok_low}/{ok_imp}")
 
     out.append("")

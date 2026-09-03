@@ -1,0 +1,306 @@
+{
+  "rows": [
+    {
+      "module": "api",
+      "covered": false,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "authbypass",
+      "covered": false,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "bac",
+      "covered": false,
+      "measurable": false,
+      "low": [
+        "php.sqli"
+      ],
+      "medium": [
+        "php.sqli"
+      ],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "brute",
+      "covered": false,
+      "measurable": false,
+      "low": [
+        "crypto.weak-hash",
+        "hygiene.secret-in-comment",
+        "php.sqli",
+        "secret.credential-assignment"
+      ],
+      "medium": [
+        "crypto.weak-hash",
+        "hygiene.secret-in-comment",
+        "secret.credential-assignment"
+      ],
+      "high": [
+        "crypto.weak-hash",
+        "hygiene.secret-in-comment",
+        "secret.credential-assignment"
+      ],
+      "impossible": [
+        "crypto.weak-hash",
+        "hygiene.secret-in-comment"
+      ]
+    },
+    {
+      "module": "captcha",
+      "covered": false,
+      "measurable": false,
+      "low": [
+        "crypto.weak-hash",
+        "secret.credential-assignment"
+      ],
+      "medium": [
+        "crypto.weak-hash",
+        "secret.credential-assignment"
+      ],
+      "high": [
+        "crypto.weak-hash",
+        "secret.credential-assignment"
+      ],
+      "impossible": [
+        "crypto.weak-hash"
+      ]
+    },
+    {
+      "module": "cryptography",
+      "covered": false,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "csp",
+      "covered": false,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "csrf",
+      "covered": false,
+      "measurable": false,
+      "low": [
+        "crypto.weak-hash",
+        "secret.credential-assignment"
+      ],
+      "medium": [
+        "crypto.weak-hash",
+        "secret.credential-assignment"
+      ],
+      "high": [
+        "crypto.weak-hash"
+      ],
+      "impossible": [
+        "crypto.weak-hash"
+      ]
+    },
+    {
+      "module": "exec",
+      "covered": true,
+      "measurable": true,
+      "low": [
+        "infra.command-execution-api",
+        "php.command-injection"
+      ],
+      "medium": [
+        "infra.command-execution-api",
+        "php.command-injection"
+      ],
+      "high": [
+        "infra.command-execution-api",
+        "php.command-injection"
+      ],
+      "impossible": [
+        "infra.command-execution-api",
+        "php.command-injection"
+      ]
+    },
+    {
+      "module": "fi",
+      "covered": true,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "javascript",
+      "covered": true,
+      "measurable": false,
+      "low": [
+        "crypto.weak-hash"
+      ],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "open_redirect",
+      "covered": true,
+      "measurable": true,
+      "low": [
+        "php.open-redirect"
+      ],
+      "medium": [
+        "php.open-redirect"
+      ],
+      "high": [
+        "php.open-redirect"
+      ],
+      "impossible": []
+    },
+    {
+      "module": "sqli",
+      "covered": true,
+      "measurable": true,
+      "low": [
+        "php.sqli"
+      ],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "sqli_blind",
+      "covered": true,
+      "measurable": true,
+      "low": [
+        "php.open-redirect",
+        "php.sqli"
+      ],
+      "medium": [],
+      "high": [
+        "php.open-redirect",
+        "php.sqli"
+      ],
+      "impossible": [
+        "php.open-redirect"
+      ]
+    },
+    {
+      "module": "upload",
+      "covered": true,
+      "measurable": false,
+      "low": [
+        "hygiene.kr-leftover-comment"
+      ],
+      "medium": [
+        "hygiene.kr-leftover-comment"
+      ],
+      "high": [
+        "hygiene.kr-leftover-comment"
+      ],
+      "impossible": [
+        "hygiene.kr-leftover-comment"
+      ]
+    },
+    {
+      "module": "weak_id",
+      "covered": false,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [
+        "crypto.weak-hash"
+      ],
+      "impossible": []
+    },
+    {
+      "module": "xss_d",
+      "covered": true,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "xss_r",
+      "covered": true,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    },
+    {
+      "module": "xss_s",
+      "covered": true,
+      "measurable": false,
+      "low": [],
+      "medium": [],
+      "high": [],
+      "impossible": []
+    }
+  ],
+  "unmeasurable": [
+    "fi",
+    "javascript",
+    "upload",
+    "xss_d",
+    "xss_r",
+    "xss_s"
+  ],
+  "metrics": {
+    "modules_covered": 4,
+    "modules_total": 19,
+    "TP": 4,
+    "FN": 0,
+    "FP": 1,
+    "TN": 3,
+    "recall": 1.0,
+    "precision": 0.8,
+    "f1": 0.888888888888889,
+    "false_positive_rate": 0.25
+  },
+  "partial_levels": {
+    "medium": 2,
+    "high": 3
+  },
+  "project_scan": {
+    "total": 248,
+    "by_rule": {
+      "php.xss": 8,
+      "php.open-redirect": 8,
+      "php.sqli": 13,
+      "php.ssrf": 13,
+      "php.code-injection": 2,
+      "php.command-injection": 8,
+      "hygiene.kr-leftover-comment": 89,
+      "crypto.weak-hash": 31,
+      "secret.credential-assignment": 14,
+      "hygiene.secret-in-comment": 6,
+      "infra.admin-path-hardcoded": 10,
+      "infra.command-execution-api": 14,
+      "pii.sensitive-column-name": 1,
+      "web.insecure-cookie-flags": 3,
+      "vendor.kr-payment-gateway": 1,
+      "pii.email-address": 3,
+      "web.inner-html-assign": 6,
+      "hygiene.debug-code-left": 17,
+      "infra.private-ip": 1
+    },
+    "scanned": 179,
+    "partial": 0
+  }
+}
