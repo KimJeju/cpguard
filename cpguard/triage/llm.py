@@ -14,10 +14,30 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from pathlib import Path
 
 from ..report.finding import Finding
 from .providers import Provider, ProviderUnavailable, get_provider
+
+# LLM 서버 일시 오류(특히 Gemini 503 high-demand)는 흔하다 — 짧게 재시도한다.
+_TRANSIENT = ("503", "429", "unavailable", "overloaded", "high demand",
+              "rate limit", "timeout", "temporarily")
+
+
+def _is_transient(e: Exception) -> bool:
+    return any(t in str(e).lower() for t in _TRANSIENT)
+
+
+def _retry(fn, tries: int = 3, delay: float = 2.5):
+    """일시 오류면 백오프 재시도, 그 외(인증·모델오류 등)는 즉시 올린다."""
+    for i in range(tries):
+        try:
+            return fn()
+        except Exception as e:
+            if i == tries - 1 or not _is_transient(e):
+                raise
+            time.sleep(delay * (i + 1))
 
 BATCH_SIZE = 5          # 한 요청에 담을 finding 수
 CONTEXT_LINES = 6       # 각 단계 주변에 붙일 소스 줄 수
@@ -164,7 +184,7 @@ def ask(finding: dict, sources: dict[str, str], preset: str = "explain",
     client = get_provider(provider, model=model)
     q = question.strip() if question else PRESETS.get(preset, PRESETS["explain"])
     prompt = _context_block(finding, sources) + "\n\n질문:\n" + q
-    return client.complete_text(ASK_SYSTEM, prompt), client.name
+    return _retry(lambda: client.complete_text(ASK_SYSTEM, prompt)), client.name
 
 
 def triage_findings(findings: list[Finding], api_key: str | None = None,

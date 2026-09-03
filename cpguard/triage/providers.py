@@ -144,7 +144,7 @@ class OpenAIProvider(Provider):
 class GeminiProvider(Provider):
     name = "gemini"
     env_key = "GEMINI_API_KEY"
-    default_model = "gemini-2.0-flash"
+    default_model = "gemini-3.6-flash"
 
     def _make_client(self):
         try:
