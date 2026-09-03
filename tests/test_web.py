@@ -173,7 +173,9 @@ def test_scan_progress_status_and_page():
 
     page = c.get(f"/scan/progress/{jid}/")
     assert page.status_code == 200
-    assert 'id="fill"' in page.content.decode("utf-8")   # 진행바 존재
+    body = page.content.decode("utf-8")
+    assert 'id="steps"' in body and 'id="log"' in body   # 단계 체크리스트·로그 존재
+    assert 'id="goto"' in body                            # 프로젝트로 이동 버튼
 
     assert c.get("/scan/progress/does-not-exist/status").status_code == 404
 

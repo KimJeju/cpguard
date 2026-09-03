@@ -1,84 +1,150 @@
 {% extends "base.html" %}
-{% block title %}스캔 진행 — {{ name }}{% endblock %}
+{% block title %}진단 상태 — {{ name }}{% endblock %}
 
 {% block head %}
 <style>
-  .scan-wrap { max-width: 640px; margin: 6vh auto 0; }
+  .scan-wrap { max-width: 720px; margin: 5vh auto 0; }
   .scan-wrap h1 { font-size: 20px; margin: 0 0 4px; }
-  .scan-name { color: var(--muted); font-family: Consolas, monospace; font-size: 13px; margin-bottom: 22px; word-break: break-all; }
-  .bar { height: 14px; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .fill { height: 100%; width: 0; background: var(--accent); border-radius: 8px 0 0 8px; transition: width .25s ease; }
-  /* 진행률 미상(요약 계산 등) — 흐르는 줄무늬 */
-  .fill.indet { width: 35% !important; border-radius: 8px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    animation: slide 1.1s linear infinite; }
-  @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
-  .pct { text-align: right; font-size: 12px; color: var(--muted); margin: 6px 2px 0; height: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 24px; margin-top: 22px; }
-  .grid .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
-  .grid .v { font-size: 17px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-  .actions { margin-top: 26px; }
+  .scan-name { color: var(--muted); font-family: Consolas, monospace; font-size: 13px; margin-bottom: 20px; word-break: break-all; }
+
+  /* ---- 단계 체크리스트 ---- */
+  .steps { list-style: none; margin: 0 0 18px; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .step { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--line-2); font-size: 14px; }
+  .step:last-child { border-bottom: 0; }
+  .step .ico { width: 18px; height: 18px; flex: 0 0 18px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+  .step .lbl { flex: 1; }
+  .step .st { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .step.pending .lbl { color: var(--muted); }
+  .step.pending .ico { color: var(--line); }
+  .step.pending .ico::before { content: "○"; }
+
+  .step.running .lbl { color: var(--fg); font-weight: 600; }
+  .step.running .st { color: var(--low); font-weight: 700; }
+  .step.running .ico { position: relative; }
+  .step.running .ico::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--low); box-shadow: 0 0 0 0 var(--low); animation: pulse 1.1s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--low) 70%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+  .step.done .ico { color: var(--low); }
+  .step.done .ico::before { content: "\2713"; }   /* ✓ */
+  .step.done .st { color: var(--low); }
+
+  .step.failed .ico { color: var(--crit); }
+  .step.failed .ico::before { content: "\2715"; }  /* ✕ */
+  .step.failed .st { color: var(--crit); }
+
+  /* ---- 구동 상태 로그 ---- */
+  .logwrap { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .logwrap .hd { padding: 7px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+  .logfeed { height: 190px; overflow: auto; margin: 0; padding: 10px 14px; background: var(--sunken); font-family: Consolas, monospace; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; }
+  .logfeed .cur { color: var(--fg); }
+
+  .footer { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+  .footer .meta { color: var(--muted); font-size: 13px; margin-right: auto; }
+  #goto:disabled { opacity: .45; cursor: default; }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="scan-wrap">
-  <h1>스캔 진행 중</h1>
+  <h1 id="title">진단 진행 중</h1>
   <div class="scan-name">{{ name }}</div>
 
-  <div class="bar"><div class="fill" id="fill"></div></div>
-  <div class="pct" id="pct"></div>
+  <ul class="steps" id="steps"></ul>
 
-  <div class="grid">
-    <div><div class="k">현재 단계</div><div class="v" id="phase">준비</div></div>
-    <div><div class="k">처리</div><div class="v" id="files">—</div></div>
-    <div><div class="k">탐지</div><div class="v" id="findings">0</div></div>
-    <div><div class="k">경과</div><div class="v" id="elapsed">00:00</div></div>
-    <div><div class="k">예상 잔여</div><div class="v" id="remain">—</div></div>
+  <div class="logwrap">
+    <div class="hd">구동 상태 로그</div>
+    <pre class="logfeed" id="log">진단을 준비하고 있습니다…</pre>
   </div>
 
-  <div class="err" id="err" hidden style="margin-top:20px"></div>
-  <div class="actions"><a class="btn ghost" href="/">목록으로 (스캔은 백그라운드에서 계속)</a></div>
+  <div class="err" id="err" hidden style="margin-top:16px"></div>
+
+  <div class="footer">
+    <span class="meta" id="meta"></span>
+    <a class="btn ghost" href="/">목록</a>
+    <button class="btn" id="goto" disabled>프로젝트로 이동 →</button>
+  </div>
 </div>
 
 <script>
 (function () {
   var JOB = "{{ job_id|escapejs }}";
-  var PHASE = { '준비': '준비', parse: '소스 파싱', dataflow: '데이터 흐름 분석',
-                triage: 'LLM 트리아지', pattern: '패턴 검사', done: '완료' };
+  var LABEL = { extract: '압축 해제', parse: '소스 파싱', dataflow: '데이터 흐름 분석',
+                triage: 'LLM 트리아지', pattern: '패턴 검사', save: '결과 집계·저장' };
+  var DEFAULT_STEPS = ['extract', 'parse', 'dataflow', 'pattern', 'save'];
   var el = function (id) { return document.getElementById(id); };
   function fmt(s) { s = Math.max(0, Math.floor(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
-  var timer = setInterval(poll, 400);
+  var pk = null, timer = setInterval(poll, 400);
   poll();
+
+  function stateText(key, d) {
+    if ((key === 'parse' || key === 'pattern') && d.phase === key && d.total > 0) return d.done + ' / ' + d.total;
+    return '';
+  }
+
+  function renderSteps(d) {
+    var steps = (d.steps && d.steps.length) ? d.steps : DEFAULT_STEPS;
+    var cur = steps.indexOf(d.phase);
+    var html = '';
+    for (var i = 0; i < steps.length; i++) {
+      var key = steps[i], cls, st;
+      if (d.status === 'error') {
+        if (i < cur) { cls = 'done'; st = '완료'; }
+        else if (i === cur) { cls = 'failed'; st = '실패'; }
+        else { cls = 'pending'; st = '대기'; }
+      } else if (d.status === 'done') {
+        cls = 'done'; st = '완료';
+      } else if (cur < 0) {
+        cls = 'pending'; st = '대기';
+      } else if (i < cur) {
+        cls = 'done'; st = '완료';
+      } else if (i === cur) {
+        cls = 'running'; st = (stateText(key, d) || '진행 중');
+      } else {
+        cls = 'pending'; st = '대기';
+      }
+      html += '<li class="step ' + cls + '"><span class="ico"></span>' +
+              '<span class="lbl">' + (LABEL[key] || key) + '</span>' +
+              '<span class="st">' + st + '</span></li>';
+    }
+    el('steps').innerHTML = html;
+  }
+
+  function renderLog(d) {
+    var lines = d.log || [];
+    if (!lines.length) return;
+    var box = el('log');
+    var atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+    var html = lines.map(function (l, i) {
+      return i === lines.length - 1 ? '<span class="cur">' + esc(l) + '</span>' : esc(l);
+    }).join('\n');
+    box.innerHTML = html;
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
 
   function poll() {
     fetch('/scan/progress/' + JOB + '/status').then(function (r) { return r.json(); }).then(function (d) {
-      if (d.status === 'unknown') { clearInterval(timer); el('phase').textContent = '만료된 작업'; return; }
+      if (d.status === 'unknown') { clearInterval(timer); el('title').textContent = '만료된 작업'; return; }
+      renderSteps(d);
+      renderLog(d);
+      el('meta').textContent = '탐지 ' + (d.findings || 0) + '건 · 경과 ' + fmt(d.elapsed);
+
       if (d.status === 'error') {
         clearInterval(timer);
-        el('phase').textContent = '오류';
+        el('title').textContent = '진단 실패';
         el('err').hidden = false; el('err').textContent = '스캔 실패 — ' + (d.error || '');
-        el('fill').classList.remove('indet'); return;
-      }
-      el('phase').textContent = PHASE[d.phase] || d.phase || '…';
-      el('findings').textContent = d.findings;
-      el('elapsed').textContent = fmt(d.elapsed);
-      var fill = el('fill');
-      if (d.total > 0) {
-        var p = Math.min(100, Math.round(d.done / d.total * 100));
-        fill.classList.remove('indet'); fill.style.width = p + '%'; el('pct').textContent = p + '%';
-        el('files').textContent = d.done + ' / ' + d.total + ' 파일';
-        el('remain').textContent = (d.done > 0 && d.done < d.total && d.elapsed > 0)
-          ? fmt(d.elapsed / d.done * (d.total - d.done)) : '—';
-      } else {
-        fill.classList.add('indet'); el('pct').textContent = ''; el('files').textContent = '…'; el('remain').textContent = '—';
+        return;
       }
       if (d.status === 'done' && d.pk) {
         clearInterval(timer);
-        el('phase').textContent = '완료'; fill.classList.remove('indet');
-        fill.style.width = '100%'; el('pct').textContent = '100%';
-        location.href = '/scan/' + d.pk + '/';
+        pk = d.pk;
+        el('title').textContent = '진단 완료 ✓';
+        var b = el('goto');
+        b.disabled = false;
+        b.onclick = function () { location.href = '/scan/' + pk + '/'; };
+        b.focus();
       }
     }).catch(function () {});
   }

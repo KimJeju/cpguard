@@ -45,6 +45,16 @@ def _job_get(job_id: str) -> dict:
         return dict(_JOBS.get(job_id, {}))
 
 
+def _job_log(job_id: str, msg: str) -> None:
+    """구동 상태 로그 한 줄 추가(시각 붙임). 최근 200줄만 유지."""
+    line = time.strftime("%H:%M:%S") + "  " + msg
+    with _JOBS_LOCK:
+        log = _JOBS.setdefault(job_id, {}).setdefault("log", [])
+        log.append(line)
+        if len(log) > 200:
+            del log[: len(log) - 200]
+
+
 def _async_scan() -> bool:
     """스캔을 백그라운드 스레드로 돌릴지. 실서비스는 True(진행바 위해).
     pytest 중에는 스레드+테스트DB 트랜잭션이 안 맞으므로 동기로 돌린다.
@@ -69,33 +79,59 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
     요청 스레드가 아니라 여기서 workdir 수명을 책임진다(완료 후 정리).
     """
     from django.db import connection
+    # 진단 상태 화면의 단계 체크리스트 순서(트리아지는 켰을 때만)
+    steps = ["extract", "parse", "dataflow"] + (["triage"] if do_triage else []) + ["pattern", "save"]
+    _job_set(job_id, steps=steps)
+    _job_log(job_id, f"업로드 수신: {zip_name}")
     try:
         src_dir = workdir / "src"
+        _job_set(job_id, status="running", phase="extract", done=0, total=0, findings=0)
+        _job_log(job_id, "압축 해제 중…")
         try:
-            safe_extract_zip(workdir / "upload.zip", src_dir)
+            n = safe_extract_zip(workdir / "upload.zip", src_dir)
         except UnsafeArchive as e:
+            _job_log(job_id, f"거부: 안전하지 않은 아카이브 — {e}")
             _job_set(job_id, status="error", error=f"안전하지 않은 아카이브라 거부했습니다 — {e}", ended=time.time())
             return
+        _job_log(job_id, f"압축 해제 완료 · {n}개 파일")
         base = src_dir.resolve()
 
+        _pstate = {"last": None}
+
         def prog(phase, done, total, nf):
+            if phase == "done":   # 스캐너 종료 신호 — 체크리스트는 save 단계로 이어간다
+                return
             _job_set(job_id, status="running", phase=phase, done=done, total=total, findings=nf)
+            if phase != _pstate["last"]:
+                _pstate["last"] = phase
+                start = {"parse": "소스 파싱 시작", "dataflow": "데이터 흐름 분석 시작",
+                         "pattern": "패턴 검사 시작"}.get(phase)
+                if start:
+                    _job_log(job_id, start + (f" · 대상 {total}개" if total else ""))
+            elif total and done and done % max(1, total // 4) == 0 and done != total:
+                _job_log(job_id, f"  {phase} {done}/{total} …")
 
         findings, scan_report = scan_path(src_dir, progress=prog)
         integrity_note = "" if scan_report.complete else scan_report.summary()
+        _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
         triage_note = ""
         if do_triage and findings:
             _job_set(job_id, status="running", phase="triage", done=0, total=0, findings=len(findings))
+            _job_log(job_id, "LLM 트리아지 실행…")
             from ..triage import TriageUnavailable, triage_findings
             try:
                 triage_findings(findings, provider=provider or None)
+                _job_log(job_id, "트리아지 완료")
             except TriageUnavailable as e:
                 triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
+                _job_log(job_id, f"트리아지 건너뜀 — {e}")
 
         order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
         findings.sort(key=lambda f: (order.get(f.severity, 9), f.rule_id))
 
+        _job_set(job_id, status="running", phase="save", findings=len(findings))
+        _job_log(job_id, "결과 집계·저장 중…")
         project = _project_of(zip_name)
         scan = Scan.objects.create(
             name=zip_name, project=project,
@@ -113,8 +149,10 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             scan.resolved_count = len(diff["resolved"])
             scan.save(update_fields=["new_count", "resolved_count"])
 
+        _job_log(job_id, f"저장 완료 · 스캔 #{scan.pk} · 진단 종료")
         _job_set(job_id, status="done", pk=scan.pk, findings=len(findings), ended=time.time())
     except Exception as e:  # 스캔 중 예외 — 진행 페이지에 그대로 보여준다
+        _job_log(job_id, f"오류: {type(e).__name__}: {e}")
         _job_set(job_id, status="error", error=f"{type(e).__name__}: {e}", ended=time.time())
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
@@ -273,12 +311,14 @@ def scan_status(request, job_id: str):
     return JsonResponse({
         "status": job.get("status", "running"),
         "phase": job.get("phase", ""),
+        "steps": job.get("steps", []),
         "done": job.get("done", 0),
         "total": job.get("total", 0),
         "findings": job.get("findings", 0),
         "pk": job.get("pk"),
         "error": job.get("error"),
         "elapsed": int(time.time() - started) if started else 0,
+        "log": job.get("log", []),
     })
 
 
