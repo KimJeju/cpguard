@@ -157,6 +157,22 @@ def test_csv_export():
     assert "js.command-injection" in text or "secret.hardcoded-password" in text
 
 
+def test_downloads_are_no_store():
+    """다운로드 응답은 캐시 금지여야 한다.
+
+    SQLite 는 삭제된 pk(rowid)를 재사용한다. 네이티브 WebView2 가 /scan/<pk>/export.*
+    GET 을 캐시하면, 같은 pk 를 다른 프로젝트 스캔이 재획득했을 때 이전 프로젝트의
+    파일이 내려간다(현장 재현 버그). never_cache 로 이를 막는다.
+    """
+    c = Client()
+    pk = _seed_scan(c)
+    for url in (f"/scan/{pk}/export.xlsx", f"/scan/{pk}/export.csv",
+                f"/scan/{pk}/sarif/", f"/scan/{pk}/report.pdf", f"/scan/{pk}/guide.pdf"):
+        r = c.get(url)
+        assert r.status_code == 200, url
+        assert "no-store" in r.headers.get("Cache-Control", ""), url
+
+
 def test_scan_progress_status_and_page():
     """진행 상태 API 와 진행 화면 렌더 (백그라운드 잡 머신)."""
     import time as _t

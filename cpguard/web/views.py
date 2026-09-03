@@ -13,6 +13,7 @@ from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from ..extract import UnsafeArchive, safe_extract_zip
@@ -308,11 +309,13 @@ def _pdf_response(scan, kind: str):
     return resp
 
 
+@never_cache
 def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
     return _pdf_response(get_object_or_404(Scan, pk=pk), "combined")
 
 
+@never_cache
 def export_pdf_guide(request, pk: int):
     """유형별 조치 가이드(PDF)."""
     return _pdf_response(get_object_or_404(Scan, pk=pk), "guide")
@@ -678,6 +681,7 @@ def ai_ask(request, pk: int):
     return JsonResponse({"ok": True, "answer": answer, "provider": provider, "preset": preset})
 
 
+@never_cache
 def sarif_download(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
     resp = HttpResponse(scan.sarif_json, content_type="application/json")
@@ -685,6 +689,7 @@ def sarif_download(request, pk: int):
     return resp
 
 
+@never_cache
 def export_csv(request, pk: int):
     """표 형태 내보내기 — 보고서·엑셀 정리를 위한 실무 기능."""
     scan = get_object_or_404(Scan, pk=pk)
@@ -726,6 +731,7 @@ def _findings_from_scan(scan: Scan) -> list[Finding]:
     return out
 
 
+@never_cache
 def export_xlsx(request, pk: int):
     """고객 제출용 분석목록표 — 조치여부/조치방법 컬럼과 표준 이슈 의견이 들어간다."""
     from ..report import excel
