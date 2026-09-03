@@ -73,7 +73,8 @@ def _job_prune() -> None:
 
 
 def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
-                  do_triage: bool, provider: str, secrets_only: bool = False) -> None:
+                  do_triage: bool, provider: str, secrets_only: bool = False,
+                  model: str = "") -> None:
     """백그라운드 스캔 — 압축 해제 → 진행 콜백과 함께 스캔 → Scan 레코드 생성.
 
     secrets_only 면 데이터 흐름 축을 건너뛰고 패턴(시크릿·개인정보·설정)만 돈다.
@@ -130,7 +131,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             avail = available()
             eff = (provider or None) or (avail[0] if avail else None)
             try:
-                triage_findings(findings, provider=provider or None, model=appcfg.model_for(eff))
+                triage_findings(findings, provider=provider or None,
+                                model=(model.strip() or appcfg.model_for(eff)))
                 _job_log(job_id, "트리아지 완료")
             except TriageUnavailable as e:
                 triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
@@ -255,9 +257,12 @@ def settings_page(request):
 
 def compare(request):
     """스냅샷 비교 — 두 스캔을 골라 신규/해결/유지를 지문 기준으로 대조한다."""
-    scans = list(Scan.objects.all()[:80])
+    projects = sorted({p for p in Scan.objects.values_list("project", flat=True) if p})
+    proj = request.GET.get("p") or ""
+    qs = Scan.objects.filter(project=proj) if proj else Scan.objects.all()
+    scans = list(qs[:80])
     a, b = request.GET.get("a"), request.GET.get("b")
-    ctx: dict = {"scans": scans}
+    ctx: dict = {"scans": scans, "projects": projects, "proj": proj}
     if a and b:
         try:
             sa = Scan.objects.get(pk=int(a))
@@ -271,8 +276,36 @@ def compare(request):
 
 
 def reports(request):
-    """리포트 — 스캔별 내보내기(SARIF/CSV/분석목록표) 바로가기."""
+    """리포트 — 스캔별 내보내기(SARIF/CSV/분석목록표/PDF) 바로가기."""
     return render(request, "reports.html", {"scans": list(Scan.objects.all()[:100])})
+
+
+def _pdf_response(scan, kind: str):
+    from ..report import pdf as pdfmod
+    tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "out.pdf"
+    try:
+        if kind == "guide":
+            pdfmod.remediation_guide(scan, tmp)
+            suffix = "조치가이드"
+        else:
+            pdfmod.combined_report(scan, tmp)
+            suffix = "진단결과보고서"
+        data = tmp.read_bytes()
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+    resp = HttpResponse(data, content_type="application/pdf")
+    resp["Content-Disposition"] = f'attachment; filename="{Path(scan.name).stem}_{suffix}.pdf"'
+    return resp
+
+
+def export_pdf_report(request, pk: int):
+    """합본 진단 결과 보고서(PDF)."""
+    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined")
+
+
+def export_pdf_guide(request, pk: int):
+    """유형별 조치 가이드(PDF)."""
+    return _pdf_response(get_object_or_404(Scan, pk=pk), "guide")
 
 
 def _fingerprint(f: Finding, rel_file: str) -> str:
@@ -385,7 +418,7 @@ def upload(request):
              name=up.name, started=time.time())
     args = (job_id, workdir, up.name,
             bool(request.POST.get("triage")), request.POST.get("provider", ""),
-            bool(request.POST.get("secrets_only")))
+            bool(request.POST.get("secrets_only")), request.POST.get("model", ""))
 
     if _async_scan():
         threading.Thread(target=_run_scan_job, args=args, daemon=True).start()

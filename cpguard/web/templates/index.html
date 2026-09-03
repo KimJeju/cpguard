@@ -109,6 +109,13 @@
         <option value="openai">ChatGPT (OpenAI)</option>
         <option value="gemini">Gemini</option>
       </select>
+      <input name="model" form="scanform" list="upmodels" placeholder="모델(선택 · 비우면 설정/기본)"
+             style="background:var(--sunken);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px;font-family:Consolas,monospace;width:210px">
+      <datalist id="upmodels">
+        <option value="claude-haiku-4-5"></option><option value="claude-sonnet-5"></option><option value="claude-opus-5"></option>
+        <option value="gemini-3.6-flash"></option><option value="gemini-3.6-pro"></option>
+        <option value="gpt-4o"></option><option value="gpt-4o-mini"></option>
+      </datalist>
       <span class="muted" style="font-size:12px">
         {% if providers %}LLM 사용 가능: {{ providers|join:", " }}{% else %}LLM 키 없음 — <a href="{% url 'settings' %}">설정</a>에서 추가{% endif %}
       </span>

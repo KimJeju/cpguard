@@ -15,6 +15,8 @@
       <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
       <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
       <td>
+        <a class="btn ghost" href="{% url 'export_pdf_report' s.pk %}">📄 진단보고서</a>
+        <a class="btn ghost" href="{% url 'export_pdf_guide' s.pk %}">🛠 조치가이드</a>
         <a class="btn ghost" href="{% url 'sarif' s.pk %}">SARIF</a>
         <a class="btn ghost" href="{% url 'export_csv' s.pk %}">CSV</a>
         <a class="btn ghost" href="{% url 'export_xlsx' s.pk %}">분석목록표</a>

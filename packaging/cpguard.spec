@@ -70,6 +70,15 @@ hiddenimports += [
     "clr",
 ]
 
+# PDF 산출(reportlab) — 데이터/폰트 포함해 통째로 담는다
+try:
+    d, b, h = collect_all("reportlab")
+    datas += d
+    binaries += b
+    hiddenimports += h
+except Exception:
+    pass
+
 # 선택 의존성(있으면 담고 없으면 건너뜀) — LLM 프로바이더
 for optional in ("anthropic", "openai", "google.genai"):
     try:

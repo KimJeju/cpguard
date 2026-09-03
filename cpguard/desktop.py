@@ -155,6 +155,8 @@ def launch(port: int | None = None, debug: bool = False) -> None:
         import webview
     except ImportError as e:
         return _run_in_browser(url, server, reason=f"웹뷰 미탑재: {e!r}")
+    # 기본값 False 면 WebView2 가 다운로드를 막는다 — 산출물(SARIF/CSV/xlsx/PDF) 내려받기 허용
+    webview.settings["ALLOW_DOWNLOADS"] = True
     try:
         api = _WinApi()
         # frameless: OS 제목표시줄 제거. 대신 앱 헤더가 드래그 영역·창버튼을 제공한다.

@@ -20,6 +20,11 @@
 {% if scans %}
 <div class="card">
   <form method="get" class="pick">
+    <label class="muted" style="font-size:12px">프로젝트</label>
+    <select name="p" onchange="this.form.submit()" style="min-width:160px">
+      <option value="">전체</option>
+      {% for pr in projects %}<option value="{{ pr }}" {% if pr == proj %}selected{% endif %}>{{ pr }}</option>{% endfor %}
+    </select>
     <label class="muted" style="font-size:12px">기준(이전)</label>
     <select name="a">
       {% for s in scans %}<option value="{{ s.pk }}" {% if a and s.pk == a.pk %}selected{% endif %}>{{ s.name }} · {{ s.created_at|date:"m-d H:i" }} · {{ s.finding_count }}건</option>{% endfor %}

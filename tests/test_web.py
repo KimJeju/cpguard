@@ -258,3 +258,28 @@ def test_settings_saves_model_override():
     finally:
         appcfg.save({})
         _os.environ.pop("GEMINI_API_KEY", None)
+
+
+def test_pdf_report_and_guide_download():
+    """합본 보고서·조치가이드 PDF 다운로드 (유효한 PDF)."""
+    c = Client()
+    pk = _seed_scan(c)
+    for url in (f"/scan/{pk}/report.pdf", f"/scan/{pk}/guide.pdf"):
+        r = c.get(url)
+        assert r.status_code == 200
+        assert r["Content-Type"] == "application/pdf"
+        assert r.content[:5] == b"%PDF-"       # PDF 매직
+        assert len(r.content) > 1500
+
+
+def test_upload_accepts_model_override():
+    from cpguard.web import views
+    from pathlib import Path
+    z = _zip_bytes({"a.js": "app.get('/p',function(req,res){child_process.exec(req.query.h);});"})
+    workdir = Path(tempfile.mkdtemp(prefix="cpguard_m_"))
+    (workdir / "upload.zip").write_bytes(z.getvalue())
+    jid = "jm_" + os.urandom(4).hex()
+    views._job_set(jid, status="running", name="a.zip", started=0)
+    # model 인자를 받아도 정상 완료 (트리아지 off 라 실제 호출은 없음)
+    views._run_scan_job(jid, workdir, "a.zip", False, "", False, "claude-haiku-4-5")
+    assert views._job_get(jid)["status"] == "done"
