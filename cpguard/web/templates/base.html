@@ -133,6 +133,17 @@
   /* ---- 드롭다운 앱 메뉴 ---- */
   .menu{position:relative}
   .menu-btn{font-size:17px}
+  /* 커스텀 콤보박스 — 네이티브 datalist 팝업(테마 무시·세리프) 대체 */
+  .cb-menu{position:absolute;z-index:80;max-height:260px;overflow:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm,9px);
+    box-shadow:var(--elev-2,0 8px 24px rgba(0,0,0,.4));padding:5px;
+    scrollbar-width:thin;scrollbar-color:var(--ln) transparent}
+  .cb-menu::-webkit-scrollbar{width:10px}
+  .cb-menu::-webkit-scrollbar-thumb{background:var(--ln);border:3px solid var(--panel);border-radius:6px}
+  .cb-opt{padding:7px 11px;border-radius:6px;font:12px/1.4 Consolas,'Cascadia Code',monospace;
+    color:var(--fg);cursor:pointer;white-space:nowrap}
+  .cb-opt:hover,.cb-opt.active{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+  .cb-empty{padding:7px 11px;color:var(--muted);font-size:12px}
   .menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:210px;
             background:var(--glass);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);
             border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--elev-2);padding:5px;-webkit-app-region:no-drag}
@@ -228,6 +239,62 @@
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); history.back(); }
       else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); history.forward(); }
     });
+  })();
+
+  // 네이티브 datalist 팝업을 테마 커스텀 드롭다운으로 교체 (자유입력 유지)
+  (function () {
+    function enhance(input) {
+      var dl = document.getElementById(input.getAttribute('list'));
+      if (!dl) return;
+      var opts = [].map.call(dl.querySelectorAll('option'), function (o) { return o.value; });
+      input.removeAttribute('list');            // 네이티브 팝업 끔
+      input.setAttribute('autocomplete', 'off');
+      var menu = document.createElement('div');
+      menu.className = 'cb-menu'; menu.hidden = true;
+      document.body.appendChild(menu);
+      var active = -1;
+      function place() {
+        var r = input.getBoundingClientRect();
+        menu.style.left = (r.left + window.scrollX) + 'px';
+        menu.style.top = (r.bottom + window.scrollY + 4) + 'px';
+        menu.style.minWidth = r.width + 'px';
+      }
+      function render() {
+        var q = input.value.trim().toLowerCase();
+        var list = opts.filter(function (v) { return v.toLowerCase().indexOf(q) >= 0; });
+        menu.innerHTML = '';
+        if (!list.length) { menu.innerHTML = '<div class="cb-empty">직접 입력 가능</div>'; active = -1; return; }
+        list.forEach(function (v) {
+          var d = document.createElement('div');
+          d.className = 'cb-opt'; d.textContent = v;
+          d.addEventListener('mousedown', function (e) {
+            e.preventDefault(); input.value = v; close();
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+          menu.appendChild(d);
+        });
+        active = -1;
+      }
+      function open() { place(); render(); menu.hidden = false; }
+      function close() { menu.hidden = true; }
+      input.addEventListener('focus', open);
+      input.addEventListener('click', open);
+      input.addEventListener('input', function () { menu.hidden ? open() : render(); });
+      input.addEventListener('keydown', function (e) {
+        if (menu.hidden) return;
+        var items = menu.querySelectorAll('.cb-opt');
+        if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); }
+        else if (e.key === 'Enter' && active >= 0 && items[active]) { e.preventDefault(); input.value = items[active].textContent; close(); return; }
+        else if (e.key === 'Escape') { close(); return; }
+        else return;
+        [].forEach.call(items, function (it, i) { it.classList.toggle('active', i === active); if (i === active) it.scrollIntoView({ block: 'nearest' }); });
+      });
+      input.addEventListener('blur', function () { setTimeout(close, 130); });
+      window.addEventListener('resize', function () { if (!menu.hidden) place(); });
+      window.addEventListener('scroll', function () { if (!menu.hidden) place(); }, true);
+    }
+    document.querySelectorAll('input[list]').forEach(enhance);
   })();
 </script>
 </body>
