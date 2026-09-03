@@ -500,6 +500,78 @@ def index(request):
     return render(request, "index.html", ctx)
 
 
+def _render_markdown(md: str) -> str:
+    """가이드용 최소 마크다운 → HTML. 외부 의존성 없이(오프라인) 필요한 문법만 지원:
+    제목·목록(순서/비순서)·코드블록·인라인코드·굵게·링크·인용·구분선."""
+    import html
+    import re
+
+    out: list[str] = []
+    list_tag = None          # 'ul' | 'ol' | None
+    in_code = False
+    code_buf: list[str] = []
+
+    def close_list():
+        nonlocal list_tag
+        if list_tag:
+            out.append(f"</{list_tag}>")
+            list_tag = None
+
+    def inline(s: str) -> str:
+        s = html.escape(s)
+        s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+        s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+        s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)",
+                   r'<a href="\2" target="_blank" rel="noopener">\1</a>', s)
+        return s
+
+    for ln in md.split("\n"):
+        if ln.strip().startswith("```"):
+            if in_code:
+                out.append("<pre><code>" + html.escape("\n".join(code_buf)) + "</code></pre>")
+                code_buf, in_code = [], False
+            else:
+                close_list(); in_code = True
+            continue
+        if in_code:
+            code_buf.append(ln); continue
+        if not ln.strip():
+            close_list(); continue
+        m = re.match(r"(#{1,4})\s+(.*)", ln)
+        if m:
+            close_list()
+            lvl = len(m.group(1))
+            out.append(f"<h{lvl}>{inline(m.group(2))}</h{lvl}>"); continue
+        if ln.strip() == "---":
+            close_list(); out.append("<hr>"); continue
+        if ln.startswith("> "):
+            close_list(); out.append(f"<blockquote>{inline(ln[2:])}</blockquote>"); continue
+        m = re.match(r"\s*\d+\.\s+(.*)", ln)
+        if m:
+            if list_tag != "ol":
+                close_list(); out.append("<ol>"); list_tag = "ol"
+            out.append(f"<li>{inline(m.group(1))}</li>"); continue
+        m = re.match(r"\s*[-*]\s+(.*)", ln)
+        if m:
+            if list_tag != "ul":
+                close_list(); out.append("<ul>"); list_tag = "ul"
+            out.append(f"<li>{inline(m.group(1))}</li>"); continue
+        close_list()
+        out.append(f"<p>{inline(ln)}</p>")
+    close_list()
+    if in_code and code_buf:
+        out.append("<pre><code>" + html.escape("\n".join(code_buf)) + "</code></pre>")
+    return "\n".join(out)
+
+
+def guide(request):
+    """사용 가이드 — 번들된 guide.md 를 렌더링."""
+    from django.utils.safestring import mark_safe
+    from pathlib import Path as _P
+    md = (_P(__file__).parent / "guide.md").read_text(encoding="utf-8")
+    return render(request, "guide.html", {"content": mark_safe(_render_markdown(md))})
+
+
 def upload(request):
     """zip 을 받아 workdir 에 저장하고, 스캔은 백그라운드 스레드로 넘긴 뒤
     진행 페이지로 보낸다(스캔 도중 진행바·상태를 보여주기 위함)."""

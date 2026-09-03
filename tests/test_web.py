@@ -254,6 +254,18 @@ def test_settings_save_mask_and_clear():
         _os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
+def test_guide_page_renders_markdown():
+    c = Client()
+    r = c.get("/guide/")
+    assert r.status_code == 200
+    body = r.content.decode("utf-8")
+    assert "사용 가이드" in body
+    assert "<h2>" in body and "<ol>" in body and "<pre>" in body   # 마크다운→HTML
+    # 프로바이더 키 발급 가이드가 설정에 노출되는지
+    s = c.get("/settings/").content.decode("utf-8")
+    assert "발급 가이드" in s and 'id="guide-gemini"' in s
+
+
 def test_settings_saves_workspace_id():
     """워크스페이스 ID(신원 연동 Claude 키용) 저장·적용·삭제."""
     import os as _os

@@ -39,4 +39,4 @@ include = ["cpguard*"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-cpguard = ["specs/*.yml", "patterns/*.yml", "web/templates/*.html", "web/migrations/*.py"]
+cpguard = ["specs/*.yml", "patterns/*.yml", "web/templates/*.html", "web/migrations/*.py", "web/*.md"]
