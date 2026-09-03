@@ -200,7 +200,15 @@ def triage_findings(findings: list[Finding], api_key: str | None = None,
 
     client = get_provider(provider, api_key=api_key, model=model)
     cache: dict[str, list[str]] = {}
-    items = list(enumerate(findings))
+
+    # ---- 클러스터링 (대규모 최적화) ----
+    # 같은 규칙·같은 sink 코드면 판정은 동일하다 → 대표 1건만 LLM 에 보내고 나머지는
+    # 결과를 복사한다. 5만 건도 실제 호출 수는 '고유 클러스터 수'로 줄어든다.
+    clusters: dict = {}
+    for f in findings:
+        clusters.setdefault(_cluster_key(f), []).append(f)
+    reps = [members[0] for members in clusters.values()]
+    items = list(enumerate(reps))
 
     for start in range(0, len(items), batch_size):
         batch = items[start:start + batch_size]
@@ -223,4 +231,18 @@ def triage_findings(findings: list[Finding], api_key: str | None = None,
             f.triage_reason = r.get("reason", "")
             f.triage_provider = client.name
 
+    # 대표 판정을 같은 클러스터의 나머지에 전파
+    for members in clusters.values():
+        rep = members[0]
+        for f in members[1:]:
+            f.verdict = rep.verdict
+            f.confidence = rep.confidence
+            f.triage_reason = rep.triage_reason
+            f.triage_provider = rep.triage_provider
     return findings
+
+
+def _cluster_key(f: Finding):
+    """같은 규칙 + 같은 sink 코드(공백 정규화) = 같은 판정으로 묶는다."""
+    code = "".join((f.steps[-1].code if f.steps else "").split())
+    return (f.rule_id, code)

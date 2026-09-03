@@ -10,8 +10,23 @@ CLI 와 웹 대시보드가 공통으로 쓰는 진입점이다.
 """
 from __future__ import annotations
 
+import hashlib
+import os
+import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
+
+# 파싱 캐시: 같은 (경로+내용)이면 tree-sitter 재파싱을 생략(증분 재스캔 최적화).
+# IR 스키마가 바뀌면 이 버전을 올려 캐시를 무효화한다.
+#
+# 보안: 캐시는 CPGuard 가 직접 만든 자체 파싱 결과를 사용자 홈(~/.cpguard/cache,
+# 앱 전용·비공개 디렉터리)에 쓴 것만 unpickle 한다 — 외부/신뢰불가 입력이 아니다.
+# 그 디렉터리에 쓸 수 있는 주체는 이미 앱과 동일한 신뢰 수준을 가진다.
+_PARSE_CACHE_VER = 1
+
+
+def _parse_cache_dir() -> Path:
+    return Path(os.environ.get("CPGUARD_HOME", Path.home() / ".cpguard")) / "cache" / "parse"
 
 from . import ir
 from .cpg.callgraph import collect_functions
@@ -71,6 +86,33 @@ class ScanReport:
         return " · ".join(parts)
 
 
+def _rule_sink_literals(rule: Rule) -> frozenset[str]:
+    """규칙 sink 의 마지막 경로 세그먼트 집합(엔진의 이름 정확 일치와 동일 기준).
+    'child_process.exec' -> 'exec'. 소스에 이 리터럴이 없으면 그 규칙의 sink 는 없다."""
+    cache = _rule_sink_literals.__dict__.setdefault("_c", {})
+    if rule.id in cache:
+        return cache[rule.id]
+    lits = frozenset(c.split(".")[-1] for s in rule.sinks for c in s.callee if c)
+    cache[rule.id] = lits
+    return lits
+
+
+def _all_sink_literals(rules: list[Rule]) -> frozenset[str]:
+    out: set[str] = set()
+    for r in rules:
+        out |= _rule_sink_literals(r)
+    return frozenset(out)
+
+
+def _parse_one(path_str: str):
+    """멀티프로세스 파싱 워커(최상위 함수라 pickle 가능). 예외는 사유 문자열로."""
+    try:
+        module, src, lang, has_error = parse_file(path_str)
+        return (path_str, module, src, lang, has_error, None)
+    except Exception as e:
+        return (path_str, None, None, None, False, f"{type(e).__name__}: {e}")
+
+
 def _excluded(p: Path, excludes: set[str]) -> bool:
     return any(part in excludes for part in p.parts) or p.name.startswith("~$")
 
@@ -113,18 +155,42 @@ def iter_text_files(root: str | Path, excludes: set[str] | None = None):
         yield p
 
 
-def parse_file(path: str | Path) -> tuple[ir.Module, bytes, str, bool]:
+def parse_file(path: str | Path, use_cache: bool = True) -> tuple[ir.Module, bytes, str, bool]:
     """파일 하나를 파싱해 (IR 모듈, 원본 바이트, 언어이름, 구문오류여부) 반환.
 
     tree-sitter 는 깨진 소스에도 예외를 던지지 않고 ERROR 노드를 넣는다.
     따라서 "예외가 안 났다"는 분석이 온전했다는 뜻이 아니다 — has_error 를 봐야 한다.
+
+    use_cache: (경로+내용) 해시로 파싱 결과를 캐시해 재파싱을 생략한다. 키에 경로를
+    포함하므로 Loc.file 이 다른 파일과 섞이지 않는다(같은 프로젝트 재스캔이 주 이득).
     """
     path = Path(path)
     lang = loader.language_name_for(path)
     src = path.read_bytes()
+
+    cf = None
+    if use_cache:
+        key = hashlib.sha1(f"{path}\0".encode() + src).hexdigest()
+        cf = _parse_cache_dir() / f"{key}-{lang}-v{_PARSE_CACHE_VER}.pkl"
+        try:
+            with open(cf, "rb") as fh:
+                module, has_error = pickle.load(fh)
+            return module, src, lang, has_error
+        except Exception:
+            pass  # 캐시 미스/손상 → 그냥 파싱
+
     tree = loader.parse_source(src, language=lang)
     module = normalize.normalize(tree, file=str(path), language=lang)
-    return module, src, lang, tree.root_node.has_error
+    has_error = tree.root_node.has_error
+
+    if cf is not None:
+        try:
+            cf.parent.mkdir(parents=True, exist_ok=True)
+            with open(cf, "wb") as fh:
+                pickle.dump((module, has_error), fh)
+        except Exception:
+            pass  # 캐시 쓰기 실패는 무시
+    return module, src, lang, has_error
 
 
 def _pattern_scan_file(path: Path, pattern_rules: list[PatternRule],
@@ -161,9 +227,11 @@ def scan_file(path: str | Path, rules: list[Rule] | None = None,
 
 def scan_path(root: str | Path, rules: list[Rule] | None = None,
               excludes: set[str] | None = None, progress=None,
-              secrets_only: bool = False) -> tuple[list[Finding], ScanReport]:
+              secrets_only: bool = False, jobs: int = 1) -> tuple[list[Finding], ScanReport]:
     """디렉터리(또는 단일 파일) 스캔. 반환: (findings, 무결성 보고).
 
+    jobs: 파싱 병렬 워커 수(기본 1=순차). 대형 프로젝트에서만 이득. frozen 앱에서
+    쓰려면 진입점에 multiprocessing.freeze_support() 가 있어야 한다(이미 적용).
     secrets_only: True 면 데이터 흐름(taint) 축을 건너뛰고 패턴 축만 돈다
     (하드코딩 비밀정보·개인정보·설정 위생 빠른 점검).
     progress: 선택적 콜백 progress(phase, done, total, findings). UI 진행바용.
@@ -192,29 +260,58 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         src_files = list(iter_source_files(root, excludes, report))
         _p("parse", 0, len(src_files), 0)
         parsed: list[tuple[Path, ir.Module, bytes, str]] = []
-        source_paths: set[Path] = set()
-        for i, f in enumerate(src_files, 1):
-            source_paths.add(f)
-            try:
-                module, src, lang, has_error = parse_file(f)
-            except Exception as e:
-                report.failed.append((str(f), f"{type(e).__name__}: {e}"))
-                _p("parse", i, len(src_files), 0)
-                continue
-            if has_error:
-                report.partial.append(str(f))
-            parsed.append((f, module, src, lang))
+
+        def _accept(res, i):
+            spath, module, src, lang, has_error, err = res
+            if err is not None:
+                report.failed.append((spath, err))
+            else:
+                if has_error:
+                    report.partial.append(spath)
+                parsed.append((Path(spath), module, src, lang))
             _p("parse", i, len(src_files), 0)
+
+        if jobs and jobs > 1 and len(src_files) > 1:
+            from concurrent.futures import ProcessPoolExecutor
+            with ProcessPoolExecutor(max_workers=jobs) as ex:
+                for i, res in enumerate(ex.map(_parse_one, [str(f) for f in src_files]), 1):
+                    _accept(res, i)
+        else:
+            for i, f in enumerate(src_files, 1):
+                _accept(_parse_one(str(f)), i)
         report.scanned = len(parsed)
 
         # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
         if parsed:
             _p("dataflow", 0, 0, len(findings))  # 요약 계산은 파일 단위 진행률이 없다 → 스피너
+
+            # ---- 싱크 사전 필터링 (대규모 최적화, 정확도 보존) ----
+            # sink 는 이름 정확 일치로만 매칭된다(엔진 한계와 동일). 소스에 그 이름조차
+            # 없는 규칙은 전역에서 생략한다. 파일 단위 필터는 요약 계산 후 수행한다:
+            # 각 규칙의 관심 이름 = sink 리터럴 ∪ (sink 에 닿는 요약을 가진 함수 이름).
+            # 크로스파일 흐름의 finding 은 sink 를 안 가진 '호출부'에서 emit 되므로,
+            # sink_paths 함수 이름을 포함해야 그 호출부 파일을 놓치지 않는다.
+            file_text = {str(p): src.decode("utf-8", "ignore") for p, m, src, _ in parsed}
+            all_lits = _all_sink_literals(rules)
+            present = {lit for t in file_text.values() for lit in all_lits if lit in t}
+            active = [r for r in rules if _rule_sink_literals(r) & present]
+
             registry = collect_functions([(m, src, str(p)) for p, m, src, _ in parsed])
-            summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in rules}
+            summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in active}
+
+            rule_names: dict = {}   # rule_id -> 이 규칙 분석이 의미있는 '관심 이름' 집합
+            for r in active:
+                names = set(_rule_sink_literals(r))
+                for fname, summ in summaries_by_rule[r.id].items():
+                    if summ.sink_paths:                      # 이 함수는 인자가 sink 에 닿는다
+                        names.add(fname.split(".")[-1])      # 호출부 텍스트 매칭용 단순명
+                rule_names[r.id] = names
+
             for i, (path, module, src, lang) in enumerate(parsed, 1):
                 rl = loader.rule_language(lang)
-                applicable = [r for r in rules if rl in r.languages]
+                t = file_text[str(path)]
+                applicable = [r for r in active if rl in r.languages
+                              and any(n in t for n in rule_names[r.id])]
                 if applicable:
                     findings.extend(engine.analyze(
                         module, src, applicable,

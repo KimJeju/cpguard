@@ -10,6 +10,8 @@ import webbrowser
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> None:
+    import multiprocessing
+    multiprocessing.freeze_support()  # frozen 앱에서 멀티프로세스 워커가 앱을 재실행하지 않도록
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cpguard.web.settings")
 
     import django

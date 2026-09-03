@@ -283,3 +283,21 @@ def test_upload_accepts_model_override():
     # model 인자를 받아도 정상 완료 (트리아지 off 라 실제 호출은 없음)
     views._run_scan_job(jid, workdir, "a.zip", False, "", False, "claude-haiku-4-5")
     assert views._job_get(jid)["status"] == "done"
+
+
+def test_finding_rows_and_scale_apis():
+    """FindingRow 적재 + 집계/페이지네이션 API (대량 탐지 서버측 질의)."""
+    c = Client()
+    pk = _seed_scan(c)
+    from cpguard.web.models import FindingRow
+    assert FindingRow.objects.filter(scan_id=pk).count() > 0
+
+    s = c.get(f"/scan/{pk}/api/summary").json()
+    assert s["total"] > 0 and s["severity"] and s["top_rules"]
+
+    d = c.get(f"/scan/{pk}/api/findings?size=1&page=1").json()
+    assert d["size"] == 1 and len(d["rows"]) <= 1 and d["total"] >= 1
+    assert {"severity", "rule_id", "file", "line"} <= set(d["rows"][0].keys())
+
+    hi = c.get(f"/scan/{pk}/api/findings?severity=high").json()
+    assert all(r["severity"] == "high" for r in hi["rows"])

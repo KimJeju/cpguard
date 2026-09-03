@@ -98,3 +98,29 @@ class Scan(models.Model):
         for f in self.findings:
             out[f["severity"]] = out.get(f["severity"], 0) + 1
         return out
+
+
+class FindingRow(models.Model):
+    """탐지 1건의 인덱스된 행 — 서버측 필터·정렬·집계·페이지네이션용(대량 탐지 대응).
+
+    findings_json(전체 blob)과 별개로, 5만 건 규모에서도 O(page) 질의가 되도록
+    스캔 생성 시 함께 적재한다. 상세 흐름/코드는 여전히 findings_json 에서 본다.
+    """
+    scan = models.ForeignKey(Scan, related_name="rows", on_delete=models.CASCADE)
+    idx = models.IntegerField()                       # 스캔 내 finding id
+    severity = models.CharField(max_length=12, db_index=True)
+    rule_id = models.CharField(max_length=100, db_index=True)
+    cwe = models.CharField(max_length=24, blank=True, default="")
+    owasp = models.CharField(max_length=100, blank=True, default="")
+    file = models.CharField(max_length=600, db_index=True)
+    line = models.IntegerField(default=0)
+    fp = models.CharField(max_length=40, blank=True, default="", db_index=True)
+    category = models.CharField(max_length=20, blank=True, default="")
+    verdict = models.CharField(max_length=20, blank=True, default="")
+    message = models.TextField(blank=True, default="")
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["scan", "severity"]),
+            models.Index(fields=["scan", "rule_id"]),
+        ]

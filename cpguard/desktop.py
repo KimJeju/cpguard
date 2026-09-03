@@ -170,6 +170,8 @@ def launch(port: int | None = None, debug: bool = False) -> None:
 
 
 def main() -> int:
+    import multiprocessing
+    multiprocessing.freeze_support()  # frozen 앱에서 멀티프로세스 워커가 앱을 재실행하지 않도록
     try:
         launch()
     except DesktopUnavailable as e:

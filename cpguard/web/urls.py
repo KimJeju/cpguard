@@ -18,6 +18,8 @@ urlpatterns = [
     path("scan/<int:pk>/ai/", views.ai_ask, name="ai_ask"),
     path("scan/<int:pk>/export.csv", views.export_csv, name="export_csv"),
     path("scan/<int:pk>/export.xlsx", views.export_xlsx, name="export_xlsx"),
+    path("scan/<int:pk>/api/summary", views.scan_summary_api, name="scan_summary_api"),
+    path("scan/<int:pk>/api/findings", views.scan_findings_api, name="scan_findings_api"),
     path("scan/<int:pk>/report.pdf", views.export_pdf_report, name="export_pdf_report"),
     path("scan/<int:pk>/guide.pdf", views.export_pdf_guide, name="export_pdf_guide"),
 ]

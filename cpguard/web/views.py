@@ -118,7 +118,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
 
         if secrets_only:
             _job_log(job_id, "시크릿·개인정보·설정 패턴 점검 (데이터 흐름 축 생략)")
-        findings, scan_report = scan_path(src_dir, progress=prog, secrets_only=secrets_only)
+        jobs = int(os.environ.get("CPGUARD_JOBS", "1") or "1")
+        findings, scan_report = scan_path(src_dir, progress=prog, secrets_only=secrets_only, jobs=jobs)
         integrity_note = "" if scan_report.complete else scan_report.summary()
         _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
@@ -153,6 +154,15 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
             triage_note=triage_note, integrity_note=integrity_note,
         )
+        # 인덱스된 Finding 행 적재(서버측 필터·집계·페이지네이션용, 대량 탐지 대응)
+        from .models import FindingRow
+        FindingRow.objects.bulk_create([
+            FindingRow(scan=scan, idx=d["id"], severity=d["severity"], rule_id=d["rule_id"],
+                       cwe=d.get("cwe") or "", owasp=d.get("owasp") or "", file=d["file"], line=d["line"],
+                       fp=d.get("fp") or "", category=d.get("category") or "",
+                       verdict=d.get("verdict") or "", message=d.get("message") or "")
+            for d in scan.findings], batch_size=1000)
+
         prev = scan.previous()
         if prev is not None:
             diff = scan.compare_with(prev)
@@ -306,6 +316,57 @@ def export_pdf_report(request, pk: int):
 def export_pdf_guide(request, pk: int):
     """유형별 조치 가이드(PDF)."""
     return _pdf_response(get_object_or_404(Scan, pk=pk), "guide")
+
+
+# ---- 대량 탐지: 서버측 집계·페이지네이션 API (Finding 테이블 질의) ----
+
+def scan_summary_api(request, pk: int):
+    """스캔 집계(위험도·상위 규칙·상위 파일) — DB 집계라 5만 건도 즉답."""
+    from django.db.models import Count
+    from .models import FindingRow
+    get_object_or_404(Scan, pk=pk)
+    qs = FindingRow.objects.filter(scan_id=pk)
+    sev = {r["severity"]: r["n"] for r in qs.values("severity").annotate(n=Count("id"))}
+    rules = qs.values("rule_id").annotate(n=Count("id")).order_by("-n")[:15]
+    files = qs.values("file").annotate(n=Count("id")).order_by("-n")[:15]
+    return JsonResponse({
+        "total": qs.count(), "severity": sev,
+        "top_rules": [[r["rule_id"], r["n"]] for r in rules],
+        "top_files": [[r["file"], r["n"]] for r in files],
+    })
+
+
+def scan_findings_api(request, pk: int):
+    """필터·정렬·페이지네이션된 finding 목록(JSON). 작업대 가상 스크롤용."""
+    from django.db.models import Case, IntegerField, Q, When
+    from .models import FindingRow
+    get_object_or_404(Scan, pk=pk)
+    qs = FindingRow.objects.filter(scan_id=pk)
+
+    if sev := request.GET.get("severity"):
+        qs = qs.filter(severity=sev)
+    if rule := request.GET.get("rule"):
+        qs = qs.filter(rule_id=rule)
+    if f := request.GET.get("file"):
+        qs = qs.filter(file=f)
+    if q := (request.GET.get("q") or "").strip():
+        qs = qs.filter(Q(rule_id__icontains=q) | Q(file__icontains=q)
+                       | Q(message__icontains=q) | Q(cwe__icontains=q))
+
+    sev_rank = Case(When(severity="critical", then=0), When(severity="high", then=1),
+                    When(severity="medium", then=2), When(severity="low", then=3),
+                    default=4, output_field=IntegerField())
+    qs = qs.annotate(_sr=sev_rank).order_by("_sr", "rule_id", "file", "line")
+
+    total = qs.count()
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+        size = min(max(1, int(request.GET.get("size", 100))), 500)
+    except ValueError:
+        page, size = 1, 100
+    rows = list(qs[(page - 1) * size: page * size].values(
+        "idx", "severity", "rule_id", "cwe", "owasp", "file", "line", "fp", "category", "verdict"))
+    return JsonResponse({"total": total, "page": page, "size": size, "rows": rows})
 
 
 def _fingerprint(f: Finding, rel_file: str) -> str:
@@ -478,6 +539,14 @@ def detail(request, pk: int):
     sev_order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
     findings.sort(key=lambda f: (sev_order.get(f["severity"], 9), f["file"], f["line"]))
 
+    # 대량 탐지 가드: 5만 건을 통째로 브라우저에 임베드하면 멈춘다. 위험도 상위 N 만
+    # 임베드하고 나머지는 집계 API(/api/summary, /api/findings)로 조회하도록 안내한다.
+    total = len(findings)
+    LARGE = 3000
+    truncated = total if total > LARGE else 0
+    if truncated:
+        findings = findings[:LARGE]
+
     return render(request, "workbench.html", {
         "scan": scan,
         "prev": prev,
@@ -488,7 +557,9 @@ def detail(request, pk: int):
         "counts": scan.severity_counts,
         "rule_counts": scan.rule_counts,
         "file_counts": scan.file_counts[:40],
-        "total": len(findings),
+        "total": total,
+        "shown": len(findings),
+        "truncated": truncated,
     })
 
 

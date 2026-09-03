@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def _force_utf8_output() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    multiprocessing.freeze_support()  # frozen 앱에서 워커가 앱을 재실행하지 않도록
     _force_utf8_output()
     ap = argparse.ArgumentParser(prog="cpguard", description="CPG 기반 taint 분석 정적 보안 스캐너")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -38,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--provider", choices=["claude", "openai", "gemini"],
                     help="트리아지에 쓸 LLM (생략 시 키가 있는 것을 자동 선택)")
     sc.add_argument("--model", help="프로바이더의 모델명 재정의")
+    sc.add_argument("-j", "--jobs", type=int, default=1,
+                    help="파싱 병렬 워커 수 (기본 1; 대형 프로젝트에서만 이득)")
 
     sv = sub.add_parser("serve", help="웹 대시보드 실행 (zip 업로드 진단)")
     sv.add_argument("--host", default="127.0.0.1")
@@ -69,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"경로 없음: {root}", file=sys.stderr)
         return 2
 
-    findings, report = scan_path(root)
+    findings, report = scan_path(root, jobs=args.jobs)
 
     if args.triage and findings:
         from .triage import TriageUnavailable, triage_findings
