@@ -144,6 +144,17 @@
     color:var(--fg);cursor:pointer;white-space:nowrap}
   .cb-opt:hover,.cb-opt.active{background:color-mix(in srgb,var(--accent) 22%,transparent)}
   .cb-empty{padding:7px 11px;color:var(--muted);font-size:12px}
+  /* 커스텀 셀렉트 트리거 — 네이티브 select 팝업(테마 무시) 대체 */
+  .cb-select{display:inline-flex;align-items:center;gap:10px;justify-content:space-between;
+    background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    padding:5px 10px;font-size:12px;cursor:pointer;user-select:none;vertical-align:middle}
+  .cb-select[data-mono]{font-family:Consolas,'Cascadia Code',monospace}
+  .cb-select .cb-ph{color:var(--muted)}
+  .cb-select .cb-chev{margin-left:auto;opacity:.55;font-size:10px;transition:transform .12s}
+  .cb-select.open{border-color:var(--accent)}
+  .cb-select.open .cb-chev{transform:rotate(180deg)}
+  .cb-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .cb-opt.sel{color:var(--accent)}
   .menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:210px;
             background:var(--glass);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);
             border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--elev-2);padding:5px;-webkit-app-region:no-drag}
@@ -295,6 +306,61 @@
       window.addEventListener('scroll', function () { if (!menu.hidden) place(); }, true);
     }
     document.querySelectorAll('input[list]').forEach(enhance);
+  })();
+
+  // 네이티브 select 를 테마 커스텀 드롭다운으로 교체 (select[data-custom])
+  (function () {
+    function enhanceSelect(sel) {
+      sel.style.display = 'none';
+      var trigger = document.createElement('div');
+      trigger.className = 'cb-select'; trigger.tabIndex = 0; trigger.setAttribute('role', 'button');
+      if (sel.hasAttribute('data-mono')) trigger.setAttribute('data-mono', '');
+      if (sel.style.minWidth) trigger.style.minWidth = sel.style.minWidth;
+      var label = document.createElement('span');
+      var chev = document.createElement('span'); chev.className = 'cb-chev'; chev.textContent = '▾';
+      trigger.appendChild(label); trigger.appendChild(chev);
+      sel.parentNode.insertBefore(trigger, sel.nextSibling);
+      var menu = document.createElement('div'); menu.className = 'cb-menu'; menu.hidden = true;
+      document.body.appendChild(menu);
+      function syncLabel() {
+        var o = sel.options[sel.selectedIndex];
+        label.className = (o && o.value === '') ? 'cb-ph' : '';
+        label.textContent = o ? o.text : '';
+      }
+      function build() {
+        menu.innerHTML = '';
+        [].forEach.call(sel.options, function (o) {
+          var d = document.createElement('div');
+          d.className = 'cb-opt' + (o.selected ? ' sel' : '');
+          d.textContent = o.text;
+          d.addEventListener('mousedown', function (e) {
+            e.preventDefault(); sel.value = o.value; syncLabel(); close();
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+          menu.appendChild(d);
+        });
+      }
+      function place() {
+        var r = trigger.getBoundingClientRect();
+        menu.style.left = (r.left + window.scrollX) + 'px';
+        menu.style.top = (r.bottom + window.scrollY + 4) + 'px';
+        menu.style.minWidth = r.width + 'px';
+      }
+      function open() { build(); place(); menu.hidden = false; trigger.classList.add('open'); }
+      function close() { menu.hidden = true; trigger.classList.remove('open'); }
+      trigger.addEventListener('click', function () { menu.hidden ? open() : close(); });
+      trigger.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); menu.hidden ? open() : close(); }
+        else if (e.key === 'Escape') close();
+      });
+      document.addEventListener('mousedown', function (e) {
+        if (!menu.hidden && !menu.contains(e.target) && !trigger.contains(e.target)) close();
+      });
+      window.addEventListener('resize', function () { if (!menu.hidden) place(); });
+      window.addEventListener('scroll', function () { if (!menu.hidden) place(); }, true);
+      syncLabel();
+    }
+    document.querySelectorAll('select[data-custom]').forEach(enhanceSelect);
   })();
 </script>
 </body>
