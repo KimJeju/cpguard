@@ -12,7 +12,19 @@ from .report import console, sarif
 from .scanner import scan_path
 
 
+def _force_utf8_output() -> None:
+    """한글 Windows 콘솔(cp949)은 em-dash·화살표 같은 문자를 인코딩하지 못해
+    print 에서 UnicodeEncodeError 로 죽는다. 한국어 우선 도구이므로 출력 스트림을
+    utf-8 로 맞춰 크래시를 없앤다. 리다이렉트·캡처된 스트림이면 조용히 넘어간다."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_output()
     ap = argparse.ArgumentParser(prog="cpguard", description="CPG 기반 taint 분석 정적 보안 스캐너")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
