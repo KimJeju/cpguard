@@ -91,7 +91,7 @@
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
       <input type="file" name="archive" accept=".zip" required style="color:var(--muted);flex:1">
-      <button class="btn" type="submit">{% if secrets_mode %}시크릿 점검 시작{% else %}진단 시작{% endif %}</button>
+      <button class="btn" type="submit">진단 시작</button>
     </form>
 
     <div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">

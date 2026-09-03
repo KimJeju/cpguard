@@ -107,6 +107,8 @@
         color:var(--muted);font-size:15px;text-decoration:none;cursor:pointer;border:1px solid transparent;-webkit-app-region:no-drag}
   .tbtn:hover{background:var(--hover);color:var(--fg);border-color:var(--line);text-decoration:none}
   .tsep{width:1px;height:20px;background:var(--line);margin:0 8px}
+  .tsep2{width:1px;height:16px;background:var(--line);margin:0 4px}
+  .tbtn:disabled,.tbtn[aria-disabled=true]{opacity:.35;cursor:default;pointer-events:none}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -116,6 +118,9 @@
   <div class="tag pywebview-drag-region">CPG 기반 taint 분석 정적 보안 스캐너</div>
   <div class="drag-spacer pywebview-drag-region"></div>
   <nav class="apptools">
+    <button class="tbtn" id="nav-back" title="뒤로 (Alt+←)">◀</button>
+    <button class="tbtn" id="nav-fwd" title="앞으로 (Alt+→)">▶</button>
+    <span class="tsep2"></span>
     <a class="tbtn" href="/" title="홈 · 새 스캔">🏠</a>
     <a class="tbtn" href="/?mode=secrets" title="시크릿·설정 빠른 점검">🔑</a>
     <a class="tbtn" href="/settings/" title="설정 · LLM API 키">⚙️</a>
@@ -167,6 +172,17 @@
     }
     if (window.pywebview) initWinCtl();
     window.addEventListener('pywebviewready', initWinCtl);
+  })();
+
+  // 툴바 뒤로/앞으로 (Ghidra 식 네비게이션) + Alt+←/→
+  (function () {
+    var back = document.getElementById('nav-back'), fwd = document.getElementById('nav-fwd');
+    if (back) back.onclick = function () { history.back(); };
+    if (fwd) fwd.onclick = function () { history.forward(); };
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); history.back(); }
+      else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); history.forward(); }
+    });
   })();
 </script>
 </body>
