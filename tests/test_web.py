@@ -138,6 +138,23 @@ def test_audit_state_persists():
     assert Scan.objects.get(pk=pk).audit["0"] == "confirmed"
 
 
+def test_audit_note_saves_as_plaintext():
+    c = Client()
+    pk = _seed_scan(c)
+    from cpguard.web.models import Scan
+    payload = "오탐 근거: 테스트 코드 <script>alert(1)</script>"
+    r = c.post(f"/scan/{pk}/note/", {"index": "0", "note": payload})
+    assert r.json()["ok"] is True
+    # 평문 그대로 저장(렌더는 프런트에서 escape) — 저장 단계에서 변형하지 않는다
+    assert Scan.objects.get(pk=pk).audit_notes["0"] == payload
+    # 상세/작업대 응답이 note 를 실어 준다
+    d = c.get(f"/scan/{pk}/api/finding/0").json()
+    assert d["finding"]["audit_note"] == payload
+    # 빈 값으로 저장하면 삭제
+    c.post(f"/scan/{pk}/note/", {"index": "0", "note": "  "})
+    assert "0" not in Scan.objects.get(pk=pk).audit_notes
+
+
 def test_audit_rejects_unknown_status():
     c = Client()
     pk = _seed_scan(c)

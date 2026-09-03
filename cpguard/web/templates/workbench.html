@@ -47,6 +47,7 @@
   .group.closed .issue { display:none }
   .issue { padding:6px 12px 6px 16px; border-bottom:1px solid var(--line-2); cursor:pointer; font-size:12px; line-height:1.45 }
   .issue:hover { background:var(--hover) } .issue.sel { background:var(--sel); box-shadow:inset 3px 0 0 var(--accent) }
+  .issue > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .issue .rid { font-weight:700 } .issue .loc { color:var(--muted); font-size:11px; font-family:Consolas,monospace }
   .issue.audited { opacity:.5 }
   .sev { display:inline-block; font-size:10.5px; font-weight:800; margin-right:5px; letter-spacing:.3px }
@@ -90,9 +91,21 @@
   .flow-step { padding:6px 12px; border-bottom:1px solid var(--line-2); cursor:pointer; font-size:12px }
   .flow-step:hover { background:var(--hover) } .flow-step.cur { background:var(--sel) }
   .flow-step .k { display:inline-block; width:78px; color:var(--muted); font-size:11px } .flow-step code { font-size:11.5px }
-  .audit-btns { display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px; border-top:1px solid var(--line) }
+  .audit-btns { display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px 0; border-top:1px solid var(--line) }
   .ab { flex:1 1 auto; padding:6px 8px; font-size:11.5px; border-radius:5px; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer }
   .ab:hover { border-color:var(--accent); color:var(--fg) } .ab.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:700 }
+  /* ---- 감사자 의견 메모 ---- */
+  .note-box { padding:10px 12px 12px }
+  .note-box label { display:block; font-size:11px; color:var(--muted); margin-bottom:5px; font-weight:600 }
+  .note-box textarea { width:100%; box-sizing:border-box; min-height:64px; resize:vertical; background:var(--sunken);
+    color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px 9px; font-size:12px;
+    font-family:inherit; line-height:1.5 }
+  .note-box textarea:focus { outline:none; border-color:var(--accent) }
+  .note-row { display:flex; align-items:center; gap:8px; margin-top:6px }
+  .note-save { padding:5px 14px; font-size:12px; border-radius:6px; border:1px solid var(--accent);
+    background:var(--accent); color:var(--on-accent); cursor:pointer; font-weight:700 }
+  .note-save:disabled { opacity:.5; cursor:default }
+  .note-status { font-size:11.5px; color:var(--muted) }
   .empty { padding:28px 16px; color:var(--muted); text-align:center; font-size:13px }
   .toolbtn { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:5px; padding:3px 8px; font-size:11.5px; cursor:pointer; text-decoration:none; white-space:nowrap }
   .toolbtn:hover { border-color:var(--accent); color:var(--fg); text-decoration:none } .toolbtn.on { color:var(--fg); border-color:var(--accent) }
@@ -427,14 +440,17 @@
   function lgRowHtml(r) {
     return `<div class="issue${sel === r.idx ? ' sel' : ''}" data-id="${r.idx}">
       <div>${sevTag(r.severity)}<span class="rid">${esc(r.rule_id)}</span></div>
-      <div class="loc">${esc(r.file)}:${r.line}${r.verdict ? ' · ' + esc(r.verdict) : ''}</div></div>`;
+      <div class="loc" title="${esc(r.file)}:${r.line}">${esc(r.file)}:${r.line}${r.verdict ? ' · ' + esc(r.verdict) : ''}</div></div>`;
   }
   function ensureFinding(idx) {
+    // 대량 모드는 원본을 임베드하지 않으므로, 이미 목록에 있는 이슈여도 원본이 없으면
+    // 한 번 가져와 병합한다(_loaded 로 재요청 방지). 그래야 코드 뷰어가 흐름을 보여준다.
     const have = FINDINGS.find(x => x.id === idx);
-    if (have) return Promise.resolve(have);
+    if (have && have._loaded) return Promise.resolve(have);
     return fetch(`/scan/${SCAN_PK}/api/finding/${idx}`).then(r => r.json()).then(d => {
       Object.assign(SOURCES, d.sources || {});   // 이 이슈의 원본만 병합
-      FINDINGS.push(d.finding);
+      if (have) { Object.assign(have, d.finding); have._loaded = true; return have; }
+      d.finding._loaded = true; FINDINGS.push(d.finding);
       return d.finding;
     });
   }
@@ -473,7 +489,7 @@
   function issueHtml(f) {
     return `<div class="issue${sel === f.id ? ' sel' : ''}${f.audit ? ' audited' : ''}" data-id="${f.id}">
       <div>${sevTag(f.severity)}<span class="rid">${esc(f.rule_id)}</span>${f.is_new ? '<span class="newtag">NEW</span>' : ''}${f.fp_hint ? '<span class="fptag" title="같은 줄에 환경변수/예시 신호 — 오탐 가능">?</span>' : ''}</div>
-      <div class="loc">${esc(f.file)}:${f.line}${f.audit ? ' · ' + esc(AUDIT_LABEL[f.audit]) : ''}</div></div>`;
+      <div class="loc" title="${esc(f.file)}:${f.line}">${esc(f.file)}:${f.line}${f.audit ? ' · ' + esc(AUDIT_LABEL[f.audit]) : ''}</div></div>`;
   }
   const COLS = [['severity','위험도'],['rule_id','규칙'],['file','파일'],['line','줄'],['cwe','CWE'],['precision','신뢰도'],['audit','감사']];
   function renderTable(items) {
@@ -601,9 +617,25 @@
     f.steps.forEach((s, i) => { html += `<div class="flow-step${i === curStep ? ' cur' : ''}" data-step="${i}"><span class="k">${esc(s.kind)}</span><code>${esc(s.file.split('/').pop())}:${s.line}</code><div class="muted" style="margin-top:3px"><code>${esc(s.code)}</code></div></div>`; });
     html += '</div><div class="audit-btns">';
     for (const [k, label] of Object.entries(AUDIT_LABEL)) html += `<button class="ab${(f.audit || '') === k ? ' on' : ''}" data-audit="${k}">${label}</button>`;
-    el('detail').innerHTML = html + '</div>';
+    html += '</div>';
+    // 감사자 의견 메모 — 값은 .value 로 넣어 HTML 로 렌더되지 않게 한다(평문 취급).
+    html += `<div class="note-box"><label>감사자 의견</label>`
+      + `<textarea id="note-input" placeholder="이 이슈에 대한 판단 근거·메모를 적으세요 (평문)"></textarea>`
+      + `<div class="note-row"><button class="note-save" id="note-save">저장</button>`
+      + `<span class="note-status" id="note-status"></span></div></div>`;
+    el('detail').innerHTML = html;
     el('detail').querySelectorAll('.flow-step').forEach(n => n.onclick = () => gotoStep(f, Number(n.dataset.step)));
     el('detail').querySelectorAll('.ab').forEach(n => n.onclick = () => setAudit(f, n.dataset.audit));
+    const ta = el('note-input'); ta.value = f.audit_note || '';   // HTML 아님 — 평문 값 주입
+    const save = el('note-save'), st = el('note-status');
+    ta.oninput = () => { st.textContent = ''; };
+    save.onclick = () => saveNote(f, ta.value, save, st);
+  }
+  function saveNote(f, note, btn, st) {
+    btn.disabled = true; st.textContent = '저장 중…';
+    fetch(`/scan/${SCAN_PK}/note/`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF }, body: new URLSearchParams({ index: f.id, note }) })
+      .then(r => r.json()).then(d => { btn.disabled = false; if (d.ok) { f.audit_note = d.note; st.textContent = '저장됨 ✓'; } else { st.textContent = '저장 실패'; } })
+      .catch(() => { btn.disabled = false; st.textContent = '저장 실패'; });
   }
   function gotoStep(f, i) { curStep = i; renderDetail(f); renderCode(f, curStep); renderVFlow(f); }
 

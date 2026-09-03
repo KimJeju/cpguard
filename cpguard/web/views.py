@@ -23,8 +23,11 @@ from ..scanner import scan_path
 from .models import Scan
 
 # 코드 뷰어용 원본 보관 한도 (DB 비대화 방지)
-MAX_SOURCE_BYTES = 200_000
-MAX_SOURCES_TOTAL = 8_000_000
+# 원본 보관 상한 — 대형 프로젝트(수천 파일에 탐지)에서도 뷰어가 원본을 보여줄 수 있게
+# 넉넉히. 파일당 1MB, 총 64MB. 대량 모드에서는 페이지에 임베드하지 않고 이슈 선택 시
+# 지연 로드(scan_finding_api)하므로 큰 총량도 감당한다.
+MAX_SOURCE_BYTES = int(os.environ.get("CPGUARD_MAX_SOURCE_BYTES", str(1_000_000)))
+MAX_SOURCES_TOTAL = int(os.environ.get("CPGUARD_MAX_SOURCES_TOTAL", str(64_000_000)))
 
 AUDIT_STATES = ("", "confirmed", "false_positive", "fixed", "deferred")
 
@@ -387,6 +390,7 @@ def scan_finding_api(request, pk: int, idx: int):
         return JsonResponse({"error": "없는 이슈"}, status=404)
     f = findings[idx]
     f["audit"] = scan.audit.get(str(idx), "")
+    f["audit_note"] = scan.audit_notes.get(str(idx), "")
     prev = scan.previous()
     new_fps = scan.compare_with(prev)["new_fps"] if prev else set()
     f["is_new"] = bool(prev) and f.get("fp") in new_fps
@@ -554,9 +558,11 @@ def detail(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
     findings = scan.findings
     audit = scan.audit
+    notes = scan.audit_notes
     for i, f in enumerate(findings):
         f.setdefault("id", i)   # 구버전/외부 생성 스캔은 id 가 없을 수 있다
         f["audit"] = audit.get(str(f["id"]), "")
+        f["audit_note"] = notes.get(str(f["id"]), "")
 
     # 이전 스캔 대비 신규 여부를 각 이슈에 표시 (조사 우선순위의 첫 번째 신호)
     prev = scan.previous()
@@ -576,13 +582,17 @@ def detail(request, pk: int):
     if total > LARGE:
         findings = findings[:LARGE]
 
+    # 대량 모드에서는 원본을 페이지에 임베드하지 않는다(64MB 를 통째로 넣으면 브라우저가 멈춘다).
+    # 이슈를 고르면 scan_finding_api 가 그 이슈의 원본만 지연 로드한다.
+    sources = {} if truncated else scan.sources
+
     return render(request, "workbench.html", {
         "scan": scan,
         "prev": prev,
         # 소스 원문에는 </script> 같은 문자열이 들어있을 수 있다.
         # 템플릿에서 json_script 필터로 내보내 스크립트 태그 탈출을 막는다.
         "findings": findings,
-        "sources": scan.sources,
+        "sources": sources,
         "counts": scan.severity_counts,
         "rule_counts": scan.rule_counts,
         "file_counts": scan.file_counts[:40],
@@ -648,6 +658,19 @@ def set_audit(request, pk: int):
         return JsonResponse({"ok": False, "error": "알 수 없는 상태"}, status=400)
     scan.set_audit(idx, status)
     return JsonResponse({"ok": True, "index": idx, "status": status})
+
+
+@require_POST
+def set_audit_note(request, pk: int):
+    """감사자 의견 메모 저장 — 평문으로만 저장하고 표시 시 escape 한다(HTML 렌더 안 함)."""
+    scan = get_object_or_404(Scan, pk=pk)
+    try:
+        idx = int(request.POST.get("index", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "잘못된 index"}, status=400)
+    note = request.POST.get("note", "")
+    scan.set_audit_note(idx, note)
+    return JsonResponse({"ok": True, "index": idx, "note": scan.audit_notes.get(str(idx), "")})
 
 
 @require_POST

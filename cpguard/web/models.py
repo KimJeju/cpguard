@@ -19,6 +19,8 @@ class Scan(models.Model):
     sources_json = models.TextField(default="{}")
     # 사람이 확정한 감사 결과 (finding 인덱스 -> 상태)
     audit_json = models.TextField(default="{}")
+    # 감사자 의견 메모 (finding 인덱스 -> 평문 텍스트). HTML 렌더 안 함(표시 시 escape).
+    audit_notes_json = models.TextField(default="{}")
     # 프로젝트 = 같은 대상의 스캔 묶음. 스캔 간 신규/해결 비교와 추세의 단위.
     project = models.CharField(max_length=255, blank=True, default="", db_index=True)
     new_count = models.IntegerField(default=0)        # 이전 스캔 대비 신규
@@ -68,6 +70,20 @@ class Scan(models.Model):
             a.pop(str(index), None)
         self.audit_json = json.dumps(a)
         self.save(update_fields=["audit_json"])
+
+    @property
+    def audit_notes(self) -> dict[str, str]:
+        return json.loads(self.audit_notes_json)
+
+    def set_audit_note(self, index: int, note: str) -> None:
+        n = self.audit_notes
+        note = (note or "").strip()
+        if note:
+            n[str(index)] = note[:4000]   # 과도한 길이 방지
+        else:
+            n.pop(str(index), None)
+        self.audit_notes_json = json.dumps(n)
+        self.save(update_fields=["audit_notes_json"])
 
     @property
     def rule_counts(self) -> list[tuple[str, int]]:
