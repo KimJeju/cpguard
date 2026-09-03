@@ -187,6 +187,7 @@
     </div>
   </div>
   <span class="tsep"></span>
+  <button class="tbtn" id="lang-toggle" title="언어 / Language" style="font-size:11px;font-weight:700;letter-spacing:.5px">EN</button>
   <select id="theme-sel" title="테마">
     <option value="dark">다크</option>
     <option value="light">라이트</option>
@@ -362,6 +363,140 @@
       syncLabel();
     }
     document.querySelectorAll('select[data-custom]').forEach(enhanceSelect);
+  })();
+
+  // ── 한국어 ↔ English 토글 ──────────────────────────────────────────────
+  // UI 는 한국어가 원본. EN 은 사전으로 텍스트 노드를 치환하고, MutationObserver 로
+  // 동적으로 그려지는 내용(작업대 등)도 자동 번역한다. KO 로 돌아갈 때는 원본이므로 reload.
+  (function () {
+    var DICT = {
+      // 헤더/네비
+      "CPG 기반 taint 분석 정적 보안 스캐너": "CPG-based taint analysis · static security scanner",
+      "메뉴": "Menu", "테마": "Theme", "다크": "Dark", "라이트": "Light", "Ghidra (회색)": "Ghidra (gray)",
+      "홈 · 새 스캔": "Home · New scan", "시크릿 빠른 점검": "Quick secrets scan", "스냅샷 비교": "Compare snapshots",
+      "리포트": "Reports", "설정 · LLM": "Settings · LLM", "사용 가이드": "User guide", "뒤로": "Back", "앞으로": "Forward",
+      "최소화": "Minimize", "최대화": "Maximize", "닫기": "Close", "홈으로": "Home", "← 홈으로": "← Home",
+      // 대시보드
+      "총 탐지 (프로젝트별 최신)": "Total findings (latest per project)", "심각 · 높음": "Critical · High",
+      "최근 신규": "Recently new", "위험도 분포": "Severity distribution", "상위 탐지 규칙": "Top rules",
+      "프로젝트 업로드": "Upload project", "파일 선택": "Choose file", "선택된 파일 없음": "No file selected",
+      "진단 시작": "Start scan", "LLM 트리아지로 오탐 재검증": "Re-verify false positives with LLM triage",
+      "자동 선택": "Auto", "프로젝트": "Project", "스캔 이력": "Scan history", "데이터가 쌓이면 가장 많이 나온 규칙이 여기 정렬됩니다.": "The most frequent rules will be listed here as data accumulates.",
+      "아직 스캔 결과가 없습니다. 아래에서 프로젝트를 올려 진단을 시작하세요.": "No scan results yet. Upload a project below to start.",
+      // 위험도
+      "심각": "Critical", "높음": "High", "중간": "Medium", "낮음": "Low", "정보": "Info",
+      "Critical": "Critical", "High": "High", "Medium": "Medium", "Low": "Low", "Info": "Info",
+      // 업로드 옵션
+      "자유 입력": "Custom entry",
+      // 작업대
+      "감사 작업대": "Audit workbench", "이슈": "Issues", "목록": "List", "표": "Table", "소스": "Source",
+      "위험도 전체": "All severities", "유형 전체": "All types", "위험도별": "By severity", "규칙별": "By rule",
+      "파일별": "By file", "유형별": "By type", "전체": "All", "신규만": "New only", "오탐힌트만": "FP hints only",
+      "감사 완료 숨기기": "Hide audited", "경로 복사": "Copy path", "줄 이동": "Go to line",
+      "AI 분석": "AI analysis", "데이터 흐름": "Data flow", "로그": "Log", "상세": "Details",
+      "위험도": "Severity", "규칙": "Rule", "유형": "Type", "위치": "Location", "신뢰도": "Confidence",
+      "설명": "Description", "근거": "Reason", "탐지값": "Matched value", "파일": "File", "줄": "Line",
+      "감사": "Audit", "미확인": "Unreviewed", "취약 확정": "Confirmed", "오탐": "False positive",
+      "조치완료": "Fixed", "보류": "Deferred", "감사자 의견": "Auditor note", "저장": "Save", "저장 중…": "Saving…",
+      "저장됨 ✓": "Saved ✓", "저장 실패": "Save failed", "미실행": "Not run", "왼쪽에서 이슈를 선택하세요.": "Select an issue on the left.",
+      "이슈를 선택하면 맥락이 여기 잡힙니다.": "Select an issue to load its context here.", "원본을 보관하지 않은 파일입니다.": "Source for this file was not stored.",
+      "이 탐지 설명": "Explain this", "왜 취약한가": "Why vulnerable", "흐름 추적": "Trace flow", "악용 가능성": "Exploitability",
+      "검증 지점 찾기": "Find validation", "안전한 코드 제안": "Suggest safe code", "개발자 가이드": "Developer guide",
+      "선택된 이슈가 없습니다.": "No issue selected.", "클릭하여 자세히": "Click for details",
+      // 프로젝트 홈
+      "보안 상태": "Security status", "우선 조사 대상": "Investigate first", "최신 스캔 자세히": "Inspect latest scan",
+      "새 스캔 업로드": "Upload new scan", "최근 스캔": "Latest scan", "자세히": "Details", "분석목록표": "Analysis sheet",
+      "위험도 추세": "Severity trend", "취약점 탐색": "Vulnerability explorer", "상위 규칙 (클릭 = 필터)": "Top rules (click to filter)",
+      "상위 CWE": "Top CWE", "규칙 전체": "All rules", "종류 전체": "All types", "파일·규칙·CWE 검색": "Search file / rule / CWE",
+      "이전": "Prev", "다음": "Next", "일시": "Date", "업로드": "Upload", "탐지": "Findings", "신규": "New", "해결": "Resolved",
+      "삭제": "Delete", "조사": "Investigate", "변화 없음": "No change", "첫 스캔 — 다음 스캔부터 신규/해결을 비교합니다": "First scan — new/resolved will be compared from the next scan",
+      // 진행
+      "진단 진행 중": "Scanning…", "진단 완료 ✓": "Scan complete ✓", "진단 실패": "Scan failed",
+      "압축 해제": "Extract", "소스 파싱": "Source parsing", "데이터 흐름 분석": "Data flow analysis",
+      "패턴 검사": "Pattern scan", "결과 집계·저장": "Aggregate · save", "LLM 트리아지": "LLM triage",
+      "대기": "Pending", "진행 중": "Running", "완료": "Done", "실패": "Failed", "프로젝트로 이동 →": "Go to project →",
+      "구동 상태 로그": "Runtime log", "업로드하고 있어요…": "Uploading…",
+      // 리포트/설정
+      "리포트 · 내보내기": "Reports · Export", "진단보고서": "Report", "조치가이드": "Remediation guide",
+      "설정": "Settings", "저장됨": "Set", "미설정": "Not set", "선택": "Optional", "발급 가이드": "Get key",
+      "모델": "Model", "이 키 삭제": "Delete this key",
+      // 작업대 툴바·기타
+      "보고서": "Report", "조치": "Remediation", "패널": "Panel", "단계": "Step", "이동": "Move",
+      "규칙·파일·메시지·CWE 필터": "Filter: rule / file / message / CWE", "집계 API": "aggregation API",
+      "모델 · 설정/기본값": "Model · default", "LLM 사용 가능:": "LLM available:",
+      "시크릿·설정만 빠르게": "Secrets & config only", "(데이터 흐름 분석 생략)": "(skip data-flow)",
+      "소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다. 지원:": "Upload a source project as zip; it is extracted and scanned automatically. Supported:"
+    };
+    var PAT = [
+      [/^탐지\s+(\d+)건$/, "$1 findings"],
+      [/^탐지\s+(\d+)건\s*·\s*(.+)$/, "$1 findings · $2"],
+      [/^(\d+)\s*건$/, "$1"],
+      [/^감사 완료\s+(\d+)\/(\d+)$/, "Audited $1/$2"],
+      [/^(\d+)\s*\/\s*(\d+)$/, "$1 / $2"],
+      [/^총\s+(\d+)건 탐지$/, "$1 findings total"],
+      [/^(\d+)–(\d+)\s*\/\s*(\d+)건$/, "$1–$2 / $3"],
+      [/^프로젝트 · 스캔 (\d+)회 · 최근 (.+)$/, "Project · $1 scans · latest $2"],
+      [/^프로젝트 · 스캔 (\d+)회$/, "Project · $1 scans"],
+      [/^신규 \+(\d+)$/, "New +$1"],
+      [/^해결 [−-](\d+)$/, "Resolved -$1"],
+      [/^파일\s+(\d+)$/, "Files $1"],
+      [/^데이터 흐름 \((\d+)단계\)$/, "Data flow ($1 steps)"],
+      [/^감사 완료\s+(\d+)\/(\d+)$/, "Audited $1/$2"]
+    ];
+    var ATTRS = ["title", "placeholder", "aria-label"];
+    function tr(s) {
+      var k = s.trim(); if (!k) return null;
+      if (DICT[k] !== undefined) return DICT[k];
+      for (var i = 0; i < PAT.length; i++) {
+        var m = k.match(PAT[i][0]);
+        if (m) return PAT[i][1].replace(/\$(\d)/g, function (_, d) { return m[+d]; });
+      }
+      return null;
+    }
+    function applyText(root) {
+      var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+      var n, batch = [];
+      while ((n = w.nextNode())) batch.push(n);
+      batch.forEach(function (node) {
+        var raw = node.nodeValue; if (!raw || !raw.trim()) return;
+        var en = tr(raw); if (en === null) return;
+        node.nodeValue = raw.replace(raw.trim(), en);
+      });
+    }
+    function applyAttr(root) {
+      ATTRS.forEach(function (a) {
+        var els = (root.querySelectorAll ? root.querySelectorAll("[" + a + "]") : []);
+        [].forEach.call(els, function (el) {
+          var v = el.getAttribute(a); var en = tr(v); if (en !== null) el.setAttribute(a, en);
+        });
+      });
+    }
+    function applyEN(root) { root = root || document.body; applyText(root); applyAttr(root); }
+
+    var LANG = (function () { try { return localStorage.getItem("cpguard.lang") || "ko"; } catch (e) { return "ko"; } })();
+    var btn = document.getElementById("lang-toggle");
+    function setBtn() { if (btn) btn.textContent = (LANG === "en") ? "한글" : "EN"; }
+    setBtn();
+
+    if (LANG === "en") {
+      applyEN(document.body);
+      // 동적 렌더(작업대 목록·상세 등)도 계속 번역
+      new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          [].forEach.call(m.addedNodes, function (nd) {
+            if (nd.nodeType === 1) applyEN(nd);
+            else if (nd.nodeType === 3 && nd.nodeValue && nd.nodeValue.trim()) {
+              var en = tr(nd.nodeValue); if (en !== null) nd.nodeValue = nd.nodeValue.replace(nd.nodeValue.trim(), en);
+            }
+          });
+        });
+      }).observe(document.body, { childList: true, subtree: true });
+    }
+    if (btn) btn.addEventListener("click", function () {
+      var next = (LANG === "en") ? "ko" : "en";
+      try { localStorage.setItem("cpguard.lang", next); } catch (e) {}
+      location.reload();   // KO=원본이므로 reload 로 확실히 원복/적용
+    });
   })();
 </script>
 </body>
