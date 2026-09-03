@@ -78,13 +78,15 @@
         {% if e.set %}<span class="pill on">설정됨</span>{% else %}<span class="pill off">선택</span>{% endif %}
       </div>
       <input type="text" name="{{ e.env }}" value="{{ e.value }}" autocomplete="off" spellcheck="false"
-             placeholder="예: wrkspc_… (신원 연동 키가 아니면 비워 두세요)">
+             placeholder="wrkspc_ 로 시작하는 ID (이름 'Default' 아님)">
       {% if e.set %}
       <label class="clr"><input type="checkbox" name="clear_{{ e.env }}"> 삭제</label>
       {% endif %}
       <div class="note" style="margin-top:6px">
-        Claude 키 사용 시 <code>anthropic-workspace-id is required</code> 오류가 나면 이 값을 채우세요.
-        워크스페이스 ID 는 <code>console.anthropic.com</code> → Settings → Workspaces 에서 확인합니다.
+        <b>이름이 아니라 ID</b> 입니다 — <code>wrkspc_01AbCd…</code> 형식.
+        <code>console.anthropic.com</code> → <b>Settings → Workspaces</b> 의 <b>ID 열</b>에서 복사하세요
+        (<code>Default</code> 는 이름이라 안 됩니다).
+        <br>더 쉬운 방법: 키를 <b>특정 워크스페이스로 제한</b>해 새로 발급하면 이 값이 아예 필요 없습니다.
       </div>
     </div>
     {% endfor %}
@@ -118,8 +120,11 @@
       <li>키를 <b>복사</b>(한 번만 표시됨) → 위 <b>Claude</b> 칸에 붙여넣고 저장</li>
     </ol>
     <div class="tip">💡 결제/크레딧을 등록해야 실제 호출이 됩니다(Billing).
-      키에서 <code>anthropic-workspace-id is required</code> 오류가 나면
-      <b>신원 연동 키</b>이니 아래 <b>워크스페이스 ID</b> 칸도 채우세요.</div>
+      <br><b>가장 쉬운 해결:</b> 키 생성 시 <b>특정 워크스페이스로 제한(Default 등)</b>해서 발급하면
+      워크스페이스 ID 가 필요 없습니다.
+      <br><code>anthropic-workspace-id is required</code> 오류(신원 연동 키)면, 아래 칸에
+      <b>워크스페이스 ID</b> 를 넣으세요 — <b>이름(Default)이 아니라</b> <code>wrkspc_…</code> 형식 ID.
+      Settings → Workspaces 의 <b>ID 열</b>에서 복사합니다.</div>
     <div class="m-actions"><a class="btn" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">콘솔 열기 ↗</a><button class="btn ghost" data-close type="button">닫기</button></div>
   </div>
 
