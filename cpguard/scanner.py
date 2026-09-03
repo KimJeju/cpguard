@@ -160,8 +160,11 @@ def scan_file(path: str | Path, rules: list[Rule] | None = None,
 
 
 def scan_path(root: str | Path, rules: list[Rule] | None = None,
-              excludes: set[str] | None = None) -> tuple[list[Finding], ScanReport]:
+              excludes: set[str] | None = None, progress=None) -> tuple[list[Finding], ScanReport]:
     """디렉터리(또는 단일 파일) 스캔. 반환: (findings, 무결성 보고).
+
+    progress: 선택적 콜백 progress(phase, done, total, findings). UI 진행바용.
+    phase 는 'parse'/'dataflow'/'pattern'/'done'. total 이 0 이면 진행률 미상(스피너).
 
     성능 메모: 요약 계산은 (규칙 수 × 함수 수 × 파라미터 수 × 반복) 에 비례한다.
     대형 프로젝트에서 느려지면 규칙별 소스/싱크 사전 필터링이 다음 최적화 지점이다.
@@ -171,6 +174,7 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         rules = load_rules()
     pattern_rules = load_pattern_rules()
     report = ScanReport()
+    _p = progress or (lambda *a, **k: None)
 
     if root.is_file():
         findings = scan_file(root, rules, pattern_rules)
@@ -179,27 +183,32 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         return findings, report
 
     # 1) 소스 전부 파싱. 한 파일 실패가 전체를 죽이지는 않되, 조용히 넘기지도 않는다.
+    src_files = list(iter_source_files(root, excludes, report))
+    _p("parse", 0, len(src_files), 0)
     parsed: list[tuple[Path, ir.Module, bytes, str]] = []
     source_paths: set[Path] = set()
-    for f in iter_source_files(root, excludes, report):
+    for i, f in enumerate(src_files, 1):
         source_paths.add(f)
         try:
             module, src, lang, has_error = parse_file(f)
         except Exception as e:
             report.failed.append((str(f), f"{type(e).__name__}: {e}"))
+            _p("parse", i, len(src_files), 0)
             continue
         if has_error:
             report.partial.append(str(f))
         parsed.append((f, module, src, lang))
+        _p("parse", i, len(src_files), 0)
     report.scanned = len(parsed)
 
     findings: list[Finding] = []
 
     # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
     if parsed:
+        _p("dataflow", 0, 0, len(findings))  # 요약 계산은 파일 단위 진행률이 없다 → 스피너
         registry = collect_functions([(m, src, str(p)) for p, m, src, _ in parsed])
         summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in rules}
-        for path, module, src, lang in parsed:
+        for i, (path, module, src, lang) in enumerate(parsed, 1):
             rl = loader.rule_language(lang)
             applicable = [r for r in rules if rl in r.languages]
             if applicable:
@@ -207,9 +216,12 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
                     module, src, applicable,
                     registry=registry, summaries_by_rule=summaries_by_rule,
                 ))
+            _p("dataflow", i, len(parsed), len(findings))
 
     # 3) 패턴 축: 모든 텍스트 파일 (소스는 언어 규칙까지, 그 외는 언어무관 규칙만)
-    for path in iter_text_files(root, excludes):
+    text_files = list(iter_text_files(root, excludes))
+    _p("pattern", 0, len(text_files), len(findings))
+    for i, path in enumerate(text_files, 1):
         lang: str | None = None
         if path.suffix.lower() in loader.SUPPORTED_EXTENSIONS:
             try:
@@ -221,5 +233,8 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
             report.text_scanned += 1
         except Exception as e:
             report.failed.append((str(path), f"pattern: {type(e).__name__}: {e}"))
+        _p("pattern", i, len(text_files), len(findings))
+
+    _p("done", report.scanned, report.scanned, len(findings))
 
     return findings, report

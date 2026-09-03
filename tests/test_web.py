@@ -155,3 +155,40 @@ def test_csv_export():
     text = r.content.decode("utf-8-sig")
     assert "위험도" in text and "CWE" in text
     assert "js.command-injection" in text or "secret.hardcoded-password" in text
+
+
+def test_scan_progress_status_and_page():
+    """진행 상태 API 와 진행 화면 렌더 (백그라운드 잡 머신)."""
+    import time as _t
+
+    from cpguard.web import views
+    c = Client()
+    jid = "testjob_" + os.urandom(4).hex()
+    views._job_set(jid, status="running", phase="parse", done=3, total=10,
+                   findings=2, name="proj.zip", started=_t.time())
+
+    d = c.get(f"/scan/progress/{jid}/status").json()
+    assert d["status"] == "running" and d["total"] == 10 and d["phase"] == "parse"
+    assert d["done"] == 3 and d["findings"] == 2
+
+    page = c.get(f"/scan/progress/{jid}/")
+    assert page.status_code == 200
+    assert 'id="fill"' in page.content.decode("utf-8")   # 진행바 존재
+
+    assert c.get("/scan/progress/does-not-exist/status").status_code == 404
+
+
+def test_run_scan_job_creates_scan():
+    """백그라운드 잡 함수가 압축해제→스캔→Scan 생성까지 하고 done/pk 를 남긴다."""
+    from pathlib import Path
+
+    from cpguard.web import views
+    z = _zip_bytes({"a.js": "app.get('/p',function(req,res){child_process.exec(req.query.h);});"})
+    workdir = Path(tempfile.mkdtemp(prefix="cpguard_job_"))
+    (workdir / "upload.zip").write_bytes(z.getvalue())
+    jid = "job_" + os.urandom(4).hex()
+    views._job_set(jid, status="running", name="a.zip", started=0)
+    views._run_scan_job(jid, workdir, "a.zip", False, "")
+    job = views._job_get(jid)
+    assert job["status"] == "done" and isinstance(job.get("pk"), int)
+    assert job["findings"] >= 1

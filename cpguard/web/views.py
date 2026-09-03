@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shutil
 import tempfile
+import threading
+import time
+import uuid
 from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
@@ -22,6 +26,101 @@ MAX_SOURCE_BYTES = 200_000
 MAX_SOURCES_TOTAL = 8_000_000
 
 AUDIT_STATES = ("", "confirmed", "false_positive", "fixed", "deferred")
+
+# ---- 스캔 진행 상태 (백그라운드 스레드 → 진행바 폴링) ----
+# 로컬 단일 프로세스 데스크톱 앱이라 메모리 dict 로 충분하다.
+# ponytail: 전역 dict + 락. 다중 워커로 가면 캐시/DB 로 옮겨야 한다.
+_JOBS: dict[str, dict] = {}
+_JOBS_LOCK = threading.Lock()
+_JOB_TTL = 3600  # 완료된 잡을 이 시간(초) 뒤 정리
+
+
+def _job_set(job_id: str, **kw) -> None:
+    with _JOBS_LOCK:
+        _JOBS.setdefault(job_id, {}).update(kw)
+
+
+def _job_get(job_id: str) -> dict:
+    with _JOBS_LOCK:
+        return dict(_JOBS.get(job_id, {}))
+
+
+def _async_scan() -> bool:
+    """스캔을 백그라운드 스레드로 돌릴지. 실서비스는 True(진행바 위해).
+    pytest 중에는 스레드+테스트DB 트랜잭션이 안 맞으므로 동기로 돌린다.
+    CPGUARD_SCAN_ASYNC=0 으로 강제 동기도 가능."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    return os.environ.get("CPGUARD_SCAN_ASYNC", "1") != "0"
+
+
+def _job_prune() -> None:
+    now = time.time()
+    with _JOBS_LOCK:
+        for jid in [j for j, v in _JOBS.items()
+                    if v.get("status") in ("done", "error") and now - v.get("ended", now) > _JOB_TTL]:
+            _JOBS.pop(jid, None)
+
+
+def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
+                  do_triage: bool, provider: str) -> None:
+    """백그라운드 스캔 — 압축 해제 → 진행 콜백과 함께 스캔 → Scan 레코드 생성.
+
+    요청 스레드가 아니라 여기서 workdir 수명을 책임진다(완료 후 정리).
+    """
+    from django.db import connection
+    try:
+        src_dir = workdir / "src"
+        try:
+            safe_extract_zip(workdir / "upload.zip", src_dir)
+        except UnsafeArchive as e:
+            _job_set(job_id, status="error", error=f"안전하지 않은 아카이브라 거부했습니다 — {e}", ended=time.time())
+            return
+        base = src_dir.resolve()
+
+        def prog(phase, done, total, nf):
+            _job_set(job_id, status="running", phase=phase, done=done, total=total, findings=nf)
+
+        findings, scan_report = scan_path(src_dir, progress=prog)
+        integrity_note = "" if scan_report.complete else scan_report.summary()
+
+        triage_note = ""
+        if do_triage and findings:
+            _job_set(job_id, status="running", phase="triage", done=0, total=0, findings=len(findings))
+            from ..triage import TriageUnavailable, triage_findings
+            try:
+                triage_findings(findings, provider=provider or None)
+            except TriageUnavailable as e:
+                triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
+
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        findings.sort(key=lambda f: (order.get(f.severity, 9), f.rule_id))
+
+        project = _project_of(zip_name)
+        scan = Scan.objects.create(
+            name=zip_name, project=project,
+            file_count=scan_report.scanned, finding_count=len(findings),
+            findings_json=json.dumps(
+                [_finding_to_dict(i, f, base) for i, f in enumerate(findings)], ensure_ascii=False),
+            sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
+            sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
+            triage_note=triage_note, integrity_note=integrity_note,
+        )
+        prev = scan.previous()
+        if prev is not None:
+            diff = scan.compare_with(prev)
+            scan.new_count = len(diff["new"])
+            scan.resolved_count = len(diff["resolved"])
+            scan.save(update_fields=["new_count", "resolved_count"])
+
+        _job_set(job_id, status="done", pk=scan.pk, findings=len(findings), ended=time.time())
+    except Exception as e:  # 스캔 중 예외 — 진행 페이지에 그대로 보여준다
+        _job_set(job_id, status="error", error=f"{type(e).__name__}: {e}", ended=time.time())
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+        # 백그라운드 스레드일 때만 커넥션 정리 — 동기(테스트) 실행에선 요청 커넥션을 닫으면 안 된다
+        if threading.current_thread() is not threading.main_thread():
+            connection.close()
 
 
 def _base_context() -> dict:
@@ -119,6 +218,8 @@ def index(request):
 
 
 def upload(request):
+    """zip 을 받아 workdir 에 저장하고, 스캔은 백그라운드 스레드로 넘긴 뒤
+    진행 페이지로 보낸다(스캔 도중 진행바·상태를 보여주기 위함)."""
     if request.method != "POST":
         return redirect("index")
 
@@ -130,61 +231,55 @@ def upload(request):
         return render(request, "index.html",
                       {**_base_context(), "error": "zip 파일만 지원합니다."})
 
+    _job_prune()
     workdir = Path(tempfile.mkdtemp(prefix="cpguard_"))
-    try:
-        zip_path = workdir / "upload.zip"
-        with open(zip_path, "wb") as fh:
-            for chunk in up.chunks():
-                fh.write(chunk)
+    # 업로드 바이트는 요청 안에서 저장해야 한다(스레드는 request.FILES 에 못 접근).
+    with open(workdir / "upload.zip", "wb") as fh:
+        for chunk in up.chunks():
+            fh.write(chunk)
 
-        src_dir = workdir / "src"
-        try:
-            safe_extract_zip(zip_path, src_dir)
-        except UnsafeArchive as e:
-            return render(request, "index.html", {
-                **_base_context(),
-                "error": f"안전하지 않은 아카이브라 거부했습니다 — {e}",
-            })
+    job_id = uuid.uuid4().hex
+    _job_set(job_id, status="running", phase="준비", done=0, total=0, findings=0,
+             name=up.name, started=time.time())
+    args = (job_id, workdir, up.name,
+            bool(request.POST.get("triage")), request.POST.get("provider", ""))
 
-        findings, scan_report = scan_path(src_dir)
-        base = src_dir.resolve()
+    if _async_scan():
+        threading.Thread(target=_run_scan_job, args=args, daemon=True).start()
+        return redirect("scan_progress", job_id=job_id)
 
-        integrity_note = "" if scan_report.complete else scan_report.summary()
-        triage_note = ""
-        if request.POST.get("triage") and findings:
-            from ..triage import TriageUnavailable, triage_findings
-            try:
-                triage_findings(findings, provider=request.POST.get("provider") or None)
-            except TriageUnavailable as e:
-                triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
+    # 동기 실행 — 결과로 직행 (테스트/CLI 유사 환경)
+    _run_scan_job(*args)
+    job = _job_get(job_id)
+    if job.get("status") == "error":
+        return render(request, "index.html", {**_base_context(), "error": job.get("error", "스캔 실패")})
+    return redirect("detail", pk=job["pk"])
 
-        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
-        findings.sort(key=lambda f: (order.get(f.severity, 9), f.rule_id))
 
-        project = request.POST.get("project", "").strip() or _project_of(up.name)
-        scan = Scan.objects.create(
-            name=up.name,
-            project=project,
-            file_count=scan_report.scanned,
-            finding_count=len(findings),
-            findings_json=json.dumps(
-                [_finding_to_dict(i, f, base) for i, f in enumerate(findings)],
-                ensure_ascii=False),
-            sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
-            sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
-            triage_note=triage_note,
-            integrity_note=integrity_note,
-        )
-        # 이전 스캔 대비 신규/해결 — 지문 기준
-        prev = scan.previous()
-        if prev is not None:
-            diff = scan.compare_with(prev)
-            scan.new_count = len(diff["new"])
-            scan.resolved_count = len(diff["resolved"])
-            scan.save(update_fields=["new_count", "resolved_count"])
-        return redirect("detail", pk=scan.pk)
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+def scan_progress(request, job_id: str):
+    """스캔 진행 화면 — 상태를 폴링해 진행바를 갱신하고, 끝나면 작업대로 이동한다."""
+    job = _job_get(job_id)
+    if not job:
+        return redirect("index")
+    return render(request, "progress.html", {"job_id": job_id, "name": job.get("name", "")})
+
+
+def scan_status(request, job_id: str):
+    """진행 상태 JSON (진행 페이지가 폴링)."""
+    job = _job_get(job_id)
+    if not job:
+        return JsonResponse({"status": "unknown"}, status=404)
+    started = job.get("started")
+    return JsonResponse({
+        "status": job.get("status", "running"),
+        "phase": job.get("phase", ""),
+        "done": job.get("done", 0),
+        "total": job.get("total", 0),
+        "findings": job.get("findings", 0),
+        "pk": job.get("pk"),
+        "error": job.get("error"),
+        "elapsed": int(time.time() - started) if started else 0,
+    })
 
 
 def detail(request, pk: int):
