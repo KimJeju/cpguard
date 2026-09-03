@@ -105,6 +105,36 @@
   .varrow { color:var(--muted); padding:2px 0 2px 14px; font-size:11px }
   .log { padding:12px 14px; font-size:12px; font-family:Consolas,monospace; color:var(--muted); white-space:pre-wrap }
   .spin { color:var(--muted); font-size:12px; padding:14px }
+
+  /* ---- 문법 하이라이팅 (Ghidra/IDE 식) ---- */
+  .t-kw { color:#c792ea } .t-str { color:#a5d6a7 } .t-com { color:#5c6b7a; font-style:italic }
+  .t-num { color:#f78c6c } .t-fn { color:#82aaff }
+
+  /* ---- 코드 마커 hover 툴팁 ---- */
+  #tip { position:fixed; z-index:60; max-width:280px; background:#0b1017; border:1px solid var(--accent);
+         border-radius:7px; padding:8px 11px; font-size:11.5px; box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; display:none }
+  #tip .tt { font-weight:700; margin-bottom:3px } #tip .tm { color:var(--muted); font-size:11px }
+  #tip code { font-size:11px }
+
+  /* ---- 커맨드 팔레트 (Ctrl+P) ---- */
+  #palette { position:fixed; inset:0; z-index:80; background:rgba(4,8,13,.55); display:none; align-items:flex-start; justify-content:center }
+  #palette.on { display:flex } #pal-box { margin-top:9vh; width:min(680px,92vw); background:var(--panel); border:1px solid var(--accent);
+       border-radius:10px; box-shadow:0 18px 60px rgba(0,0,0,.6); overflow:hidden; display:flex; flex-direction:column; max-height:72vh }
+  #pal-in { border:0; border-bottom:1px solid var(--line); background:#0d1219; color:var(--fg); padding:13px 16px; font-size:14px; font-family:inherit; outline:none }
+  #pal-list { overflow:auto; min-height:0 }
+  .pal-grp { padding:5px 14px; font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); background:#10161e; position:sticky; top:0 }
+  .pal-row { padding:7px 14px; display:flex; gap:10px; align-items:center; cursor:pointer; font-size:12.5px; border-bottom:1px solid #1b222c }
+  .pal-row.cur { background:#1b2836; box-shadow:inset 3px 0 0 var(--accent) }
+  .pal-row .pr-main { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .pal-row .pr-loc { color:var(--muted); font-family:Consolas,monospace; font-size:11px; white-space:nowrap }
+  .pal-empty { padding:22px; text-align:center; color:var(--muted); font-size:12.5px }
+
+  /* ---- 우클릭 컨텍스트 메뉴 ---- */
+  #ctxm { position:fixed; z-index:70; min-width:190px; background:var(--panel); border:1px solid var(--line);
+          border-radius:7px; box-shadow:0 10px 30px rgba(0,0,0,.55); padding:4px; display:none }
+  #ctxm.on { display:block } #ctxm .ci { padding:6px 12px; font-size:12px; border-radius:4px; cursor:pointer; display:flex; gap:10px; justify-content:space-between; white-space:nowrap }
+  #ctxm .ci:hover { background:#1b2836; color:var(--fg) } #ctxm .ci .kx { color:var(--muted); font-size:10.5px }
+  #ctxm .sep { height:1px; background:var(--line); margin:4px 6px }
 </style>
 {% endblock %}
 
@@ -125,7 +155,7 @@
     <span class="badge v-false_positive">해결 −{{ scan.resolved_count }}</span>
   {% endif %}
   <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
-    <span class="muted" style="font-size:11px"><kbd>Ctrl</kbd>+<kbd>P</kbd> 검색 · <kbd>j</kbd>/<kbd>k</kbd> 이슈 · <kbd>n</kbd>/<kbd>p</kbd> 단계 · <kbd>Esc</kbd> 패널</span>
+    <span class="muted" style="font-size:11px"><kbd>Ctrl</kbd>+<kbd>P</kbd> 이동 · <kbd>j</kbd>/<kbd>k</kbd> 이슈 · <kbd>n</kbd>/<kbd>p</kbd> 단계 · <kbd>Esc</kbd> 패널</span>
     <button class="toolbtn" id="tgl-left" title="탐색기 접기/펼치기">◧</button>
     <button class="toolbtn" id="tgl-bottom" title="분석 패널">▭</button>
     <button class="toolbtn" id="tgl-right" title="인스펙터 접기/펼치기">◨</button>
@@ -150,7 +180,7 @@
         <button class="toolbtn" id="v-table" title="표 보기 (정렬 가능)">표</button>
       </span>
       <div class="filters">
-        <input id="q" type="search" placeholder="규칙·파일·메시지·CWE 검색   (Ctrl+P)">
+        <input id="q" type="search" placeholder="규칙·파일·메시지·CWE 필터">
         <div style="display:flex;gap:6px">
           <select id="fsev">
             <option value="">위험도 전체</option><option value="critical">critical</option><option value="high">high</option>
@@ -231,6 +261,14 @@
 </div>
 </div>
 
+<!-- 마커 hover 툴팁 · 커맨드 팔레트 · 컨텍스트 메뉴 -->
+<div id="tip"></div>
+<div id="palette"><div id="pal-box">
+  <input id="pal-in" placeholder="이동 — 규칙·파일·CWE 검색   (↑↓ 이동 · Enter 열기 · Esc 닫기)" autocomplete="off">
+  <div id="pal-list"></div>
+</div></div>
+<div id="ctxm"></div>
+
 {{ findings|json_script:"data-findings" }}
 {{ sources|json_script:"data-sources" }}
 <script>
@@ -242,6 +280,41 @@
   const CSRF = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
   const el = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+  // ---------- 문법 하이라이팅 (가벼운 정규식 토크나이저) ----------
+  // ponytail: 줄 단위 처리라 여러 줄에 걸친 주석/템플릿 문자열은 첫 줄만 색이 잡힌다.
+  //           라이브러리 없이 IDE 느낌을 내는 선. 정밀 렌더가 필요하면 Prism/highlight.js 로 승급.
+  const KW = {
+    js: 'await async break case catch class const continue default delete do else export extends finally for from function if import in instanceof let new null of return super switch this throw try typeof var void while yield true false undefined',
+    py: 'and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False self',
+    php: 'abstract and array as break case catch class clone const continue declare default do echo else elseif empty endfor endforeach endif endwhile extends final finally fn for foreach function global if implements include include_once instanceof interface isset list namespace new or print private protected public require require_once return static switch throw trait try unset use var while yield null true false',
+  };
+  const KWSET = Object.fromEntries(Object.entries(KW).map(([k, v]) => [k, new Set(v.split(' '))]));
+  function langFromFile(f) {
+    const e = (f.split('.').pop() || '').toLowerCase();
+    if (['py'].includes(e)) return 'py';
+    if (['php', 'phtml', 'inc'].includes(e)) return 'php';
+    return 'js';  // js/jsx/ts/tsx 및 기타
+  }
+  function hl(line, lang) {
+    const kw = KWSET[lang] || KWSET.js;
+    const lc = lang === 'js' ? '\\/\\/.*$|\\/\\*.*?\\*\\/' : '#.*$|\\/\\/.*$|\\/\\*.*?\\*\\/';
+    const re = new RegExp(`(${lc})|("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d[\\d._xXa-fA-F]*\\b)|([A-Za-z_$][\\w$]*)`, 'g');
+    let out = '', last = 0, m;
+    while ((m = re.exec(line))) {
+      out += esc(line.slice(last, m.index));
+      if (m[1]) out += `<span class="t-com">${esc(m[1])}</span>`;
+      else if (m[2]) out += `<span class="t-str">${esc(m[2])}</span>`;
+      else if (m[3]) out += `<span class="t-num">${esc(m[3])}</span>`;
+      else if (m[4]) {
+        const after = line[re.lastIndex] === '(';
+        out += kw.has(m[4]) ? `<span class="t-kw">${esc(m[4])}</span>`
+             : after ? `<span class="t-fn">${esc(m[4])}</span>` : esc(m[4]);
+      }
+      last = re.lastIndex;
+    }
+    return out + esc(line.slice(last));
+  }
 
   const AUDIT_LABEL = { '': '미확인', confirmed: '취약 확정', false_positive: '오탐', fixed: '조치완료', deferred: '보류' };
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
@@ -319,7 +392,10 @@
       html += '</div>';
     }
     el('tree').innerHTML = html;
-    el('tree').querySelectorAll('.issue').forEach(n => n.onclick = () => select(Number(n.dataset.id)));
+    el('tree').querySelectorAll('.issue').forEach(n => {
+      n.onclick = () => select(Number(n.dataset.id));
+      n.oncontextmenu = e => openCtx(e, FINDINGS.find(x => x.id === Number(n.dataset.id)));
+    });
     el('tree').querySelectorAll('.group-hd').forEach(n => n.onclick = () => n.parentElement.classList.toggle('closed'));
   }
   function issueHtml(f) {
@@ -338,7 +414,10 @@
     let html = '<table class="ft"><tr>' + COLS.map(([c, l]) => `<th data-col="${c}" class="${ws.sort === c ? 'sorted' + (ws.asc ? ' asc' : '') : ''}">${l}</th>`).join('') + '</tr>';
     for (const f of rows) html += `<tr data-id="${f.id}" class="${sel === f.id ? 'sel' : ''}"><td>${sevTag(f.severity)}</td><td><b>${esc(f.rule_id)}</b>${f.is_new ? '<span class="newtag">NEW</span>' : ''}</td><td class="mono" title="${esc(f.file)}">${esc(f.file)}</td><td class="mono">${f.line}</td><td class="mono">${esc(f.cwe || '')}</td><td>${esc(f.precision || 'high')}${f.fp_hint ? ' ?' : ''}</td><td>${esc(AUDIT_LABEL[f.audit || ''])}</td></tr>`;
     el('tree').innerHTML = html + '</table>';
-    el('tree').querySelectorAll('tr[data-id]').forEach(n => n.onclick = () => select(Number(n.dataset.id)));
+    el('tree').querySelectorAll('tr[data-id]').forEach(n => {
+      n.onclick = () => select(Number(n.dataset.id));
+      n.oncontextmenu = e => openCtx(e, FINDINGS.find(x => x.id === Number(n.dataset.id)));
+    });
     el('tree').querySelectorAll('th').forEach(h => h.onclick = () => { if (ws.sort === h.dataset.col) ws.asc = !ws.asc; else { ws.sort = h.dataset.col; ws.asc = true; } saveWS(); renderTree(); });
   }
 
@@ -365,16 +444,21 @@
     const others = new Map();
     for (const x of FINDINGS) if (findSource(x.file) === key && (!f || x.id !== f.id)) others.set(x.line, x);
     const lines = SOURCES[key].split('\n');
+    const lang = langFromFile(key);
     let html = '<table>';
     lines.forEach((ln, i) => {
       const no = i + 1, kind = marks.get(no), cls = [];
       if (kind === 'sink') cls.push('hl-sink'); else if (kind === 'source' || kind === 'param') cls.push('hl-source'); else if (kind) cls.push('hl-step');
       if (no === line) cls.push('cur');
       const o = others.get(no);
-      html += `<tr class="${cls.join(' ')}" id="L${no}"><td class="ln">${no}</td><td class="gut">${o ? `<span title="${esc(o.rule_id)} — 클릭하여 열기" data-jump="${o.id}" style="cursor:pointer">${SEV_ICON[o.severity]}</span>` : ''}</td><td class="src">${esc(ln)}${kind ? `<span class="badge-step">${esc(kind)}</span>` : ''}</td></tr>`;
+      html += `<tr class="${cls.join(' ')}" id="L${no}"><td class="ln">${no}</td><td class="gut">${o ? `<span data-jump="${o.id}" data-mark="${o.id}" style="cursor:pointer">${SEV_ICON[o.severity]}</span>` : ''}</td><td class="src">${hl(ln, lang)}${kind ? `<span class="badge-step">${esc(kind)}</span>` : ''}</td></tr>`;
     });
     el('code').innerHTML = html + '</table>';
     el('code').querySelectorAll('[data-jump]').forEach(n => n.onclick = () => select(Number(n.dataset.jump)));
+    el('code').querySelectorAll('[data-mark]').forEach(n => {
+      n.onmouseenter = e => showTip(e, FINDINGS.find(x => x.id === Number(n.dataset.mark)));
+      n.onmouseleave = hideTip;
+    });
     const target = document.getElementById('L' + line); if (target) target.scrollIntoView({ block: 'center' });
   }
   el('copy-path').onclick = () => { const f = FINDINGS.find(x => x.id === sel); if (f) navigator.clipboard?.writeText(`${f.file}:${f.line}`); };
@@ -444,6 +528,99 @@
   el('log').textContent = [`scan #${SCAN_PK} · ${FINDINGS.length}건 · 보관 소스 ${Object.keys(SOURCES).length}파일`,
     `{{ scan.integrity_note|default:"무결성: 이상 없음"|escapejs }}`, `{{ scan.triage_note|default:"트리아지: 미실행 또는 정상"|escapejs }}`].join('\n');
 
+  // ---------- 코드 마커 hover 툴팁 ----------
+  function showTip(e, f) {
+    if (!f) return;
+    const t = el('tip');
+    t.innerHTML = `<div class="tt">${sevTag(f.severity)} ${esc(f.rule_id)}</div>
+      <div class="tm">${esc(f.cwe || '')}${f.owasp ? ' · ' + esc(f.owasp) : ''} · 신뢰도 ${esc(f.precision || 'high')}</div>
+      <div style="margin-top:4px"><code>${esc(f.file)}:${f.line}</code></div>
+      <div class="tm" style="margin-top:4px">클릭하여 조사</div>`;
+    t.style.display = 'block';
+    const r = e.target.getBoundingClientRect();
+    t.style.left = Math.min(r.right + 8, innerWidth - t.offsetWidth - 8) + 'px';
+    t.style.top = Math.min(r.top, innerHeight - t.offsetHeight - 8) + 'px';
+  }
+  const hideTip = () => { el('tip').style.display = 'none'; };
+
+  // ---------- 커맨드 팔레트 (Ctrl+P) — 규칙·파일·CWE 로 즉시 이동 ----------
+  let palSel = 0, palRows = [];
+  function openPalette() {
+    el('palette').classList.add('on'); el('pal-in').value = ''; renderPalette(''); el('pal-in').focus();
+  }
+  function closePalette() { el('palette').classList.remove('on'); }
+  function renderPalette(q) {
+    q = q.trim().toLowerCase();
+    const scored = f => (f.rule_id + ' ' + f.file + ' ' + f.message + ' ' + (f.cwe || '')).toLowerCase();
+    const finds = FINDINGS.filter(f => !q || scored(f).includes(q)).slice(0, 40);
+    const files = [...new Set(Object.keys(SOURCES))].filter(p => !q || p.toLowerCase().includes(q)).slice(0, 15);
+    palRows = [];
+    let html = '';
+    if (finds.length) {
+      html += `<div class="pal-grp">이슈 ${finds.length}</div>`;
+      finds.forEach(f => { const i = palRows.length; palRows.push({ kind: 'finding', id: f.id });
+        html += `<div class="pal-row" data-i="${i}"><span>${SEV_ICON[f.severity]}</span><span class="pr-main"><b>${esc(f.rule_id)}</b> <span class="muted">${esc(f.cwe || '')}</span></span><span class="pr-loc">${esc(f.file)}:${f.line}</span></div>`; });
+    }
+    if (files.length) {
+      html += `<div class="pal-grp">파일 ${files.length}</div>`;
+      files.forEach(p => { const i = palRows.length; palRows.push({ kind: 'file', file: p });
+        html += `<div class="pal-row" data-i="${i}"><span>📄</span><span class="pr-main">${esc(p)}</span></div>`; });
+    }
+    el('pal-list').innerHTML = html || '<div class="pal-empty">일치하는 이슈·파일이 없습니다.</div>';
+    palSel = 0; markPal();
+    el('pal-list').querySelectorAll('.pal-row').forEach(n => {
+      n.onmouseenter = () => { palSel = Number(n.dataset.i); markPal(); };
+      n.onclick = () => choosePal();
+    });
+  }
+  function markPal() {
+    el('pal-list').querySelectorAll('.pal-row').forEach(n => n.classList.toggle('cur', Number(n.dataset.i) === palSel));
+    const cur = el('pal-list').querySelector('.pal-row.cur'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+  function choosePal() {
+    const r = palRows[palSel]; if (!r) return;
+    closePalette();
+    if (r.kind === 'finding') select(r.id);
+    else showFile(r.file, 1, FINDINGS.find(x => x.id === sel));
+  }
+  el('pal-in').addEventListener('input', () => renderPalette(el('pal-in').value));
+  el('pal-in').addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); palSel = Math.min(palSel + 1, palRows.length - 1); markPal(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); palSel = Math.max(palSel - 1, 0); markPal(); }
+    else if (e.key === 'Enter') { e.preventDefault(); choosePal(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+  });
+  el('palette').addEventListener('mousedown', e => { if (e.target.id === 'palette') closePalette(); });
+
+  // ---------- 우클릭 컨텍스트 메뉴 (Fortify 식 빠른 처리) ----------
+  function openCtx(e, f) {
+    e.preventDefault(); if (!f) return;
+    const items = [
+      { label: '조사 (열기)', kx: 'Enter', act: () => select(f.id) },
+      { label: '코드에서 열기', act: () => { select(f.id); ws.right = false; applyWS(); } },
+      { sep: true },
+      { label: '경로 복사', act: () => navigator.clipboard?.writeText(`${f.file}:${f.line}`) },
+      { label: '이슈 ID 복사', act: () => navigator.clipboard?.writeText(String(f.id)) },
+      { sep: true },
+      { label: '취약 확정', act: () => setAudit(f, 'confirmed') },
+      { label: '오탐 표시', act: () => setAudit(f, 'false_positive') },
+      { label: '보류', act: () => setAudit(f, 'deferred') },
+      { label: '감사 해제', act: () => setAudit(f, '') },
+      { sep: true },
+      { label: 'AI — 이 탐지 설명', act: () => { select(f.id); askAI('explain'); } },
+    ];
+    const m = el('ctxm');
+    m.innerHTML = items.map((it, i) => it.sep ? '<div class="sep"></div>'
+      : `<div class="ci" data-i="${i}">${esc(it.label)}${it.kx ? `<span class="kx">${it.kx}</span>` : ''}</div>`).join('');
+    m.classList.add('on');
+    m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + 'px';
+    m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + 'px';
+    m.querySelectorAll('.ci').forEach(n => n.onclick = () => { closeCtx(); items[Number(n.dataset.i)].act(); });
+  }
+  const closeCtx = () => el('ctxm').classList.remove('on');
+  document.addEventListener('click', closeCtx);
+  document.addEventListener('scroll', closeCtx, true);
+
   // ---------- 선택 ----------
   function select(id) {
     const f = FINDINGS.find(x => x.id === id); if (!f) return;
@@ -455,8 +632,10 @@
 
   // ---------- 키보드 (Ghidra/VS Code 식) ----------
   document.addEventListener('keydown', e => {
-    const inField = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName);
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); el('q').focus(); el('q').select(); return; }
+    const inField = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'pal-in';
+    // Ctrl+P / Ctrl+Shift+F — 커맨드 팔레트(전역 이동). 팔레트 입력은 자체 keydown 이 처리.
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'p' || (e.shiftKey && e.key.toLowerCase() === 'f'))) { e.preventDefault(); openPalette(); return; }
+    if (el('palette').classList.contains('on')) return;
     if (e.key === 'Escape') { if (inField) { e.target.blur(); return; } ws.bottom = !ws.bottom; applyWS(); saveWS(); return; }
     if (inField) { if (e.key === 'Enter' && e.target.id === 'q') { const v = visible(); if (v.length) select(v[0].id); } return; }
     const items = visible(); if (!items.length) return;
