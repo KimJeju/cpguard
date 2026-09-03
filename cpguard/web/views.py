@@ -332,10 +332,16 @@ def scan_summary_api(request, pk: int):
     sev = {r["severity"]: r["n"] for r in qs.values("severity").annotate(n=Count("id"))}
     rules = qs.values("rule_id").annotate(n=Count("id")).order_by("-n")[:15]
     files = qs.values("file").annotate(n=Count("id")).order_by("-n")[:15]
+    cats = qs.exclude(category="").values("category").annotate(n=Count("id")).order_by("-n")
+    cwes = qs.exclude(cwe="").values("cwe").annotate(n=Count("id")).order_by("-n")[:12]
+    verdicts = qs.exclude(verdict="").values("verdict").annotate(n=Count("id")).order_by("-n")
     return JsonResponse({
         "total": qs.count(), "severity": sev,
         "top_rules": [[r["rule_id"], r["n"]] for r in rules],
         "top_files": [[r["file"], r["n"]] for r in files],
+        "by_category": [[r["category"], r["n"]] for r in cats],
+        "top_cwe": [[r["cwe"], r["n"]] for r in cwes],
+        "by_verdict": [[r["verdict"], r["n"]] for r in verdicts],
     })
 
 

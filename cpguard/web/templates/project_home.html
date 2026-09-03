@@ -8,6 +8,8 @@
   .grid2 { display:grid; grid-template-columns: 1fr 340px; gap:16px; align-items:start }
   .status { display:flex; gap:10px; flex-wrap:wrap; align-items:center }
   .status .big { font-size:22px; font-weight:800; padding:8px 14px; border-radius:8px; border:1px solid var(--line) }
+  .sevbtn { cursor:pointer; border:1px solid transparent; transition:border-color .12s, transform .06s }
+  .sevbtn:hover { transform:translateY(-1px) } .sevbtn.on { border-color:currentColor }
   .delta-up { color: var(--crit) } .delta-down { color: var(--low) } .delta-flat { color: var(--muted) }
   .prio { border-bottom:1px solid var(--line-2); padding:9px 4px; display:flex; gap:10px; align-items:flex-start }
   .prio:last-child { border-bottom:0 }
@@ -17,15 +19,57 @@
   .sev-ico { display:inline-block; width:18px; text-align:center; margin-right:4px }
   .kv { display:grid; grid-template-columns: 90px 1fr; gap:5px 10px; font-size:13px }
   .kv dt { color: var(--muted) } .kv dd { margin:0 }
-  .trend { display:flex; align-items:flex-end; gap:6px; height:110px; padding:6px 2px 0; border-bottom:1px solid var(--line) }
+  /* 추세 */
+  .trend { display:flex; align-items:flex-end; gap:6px; height:120px; padding:6px 2px 0; border-bottom:1px solid var(--line) }
   .bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:22px }
-  .bar .col { width:100%; background:var(--elev); border-radius:3px 3px 0 0; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden }
+  .bar .col { width:100%; background:var(--elev); border-radius:3px 3px 0 0; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden; cursor:pointer }
+  .bar .col:hover { outline:2px solid var(--accent); outline-offset:1px }
   .bar .seg-critical { background: var(--crit) } .bar .seg-high { background: var(--high) }
-  .bar .seg-medium { background: var(--med) } .bar .seg-low { background: var(--low) }
+  .bar .seg-medium { background: var(--med) } .bar .seg-low { background: var(--low) } .bar .seg-info { background: var(--muted) }
   .bar .n { font-size:11px; color: var(--muted) }
   .bar.cur .n { color: var(--fg); font-weight:700 }
   .trend-x { display:flex; gap:6px; margin-top:4px } .trend-x div { flex:1; min-width:22px; text-align:center; font-size:10px; color: var(--muted) }
   table.scans td, table.scans th { font-size:12.5px }
+
+  /* ── 취약점 탐색 ── */
+  .charts { display:grid; grid-template-columns: 220px 1fr 1fr; gap:18px; align-items:start; margin-bottom:16px }
+  @media (max-width:1000px){ .charts{ grid-template-columns:1fr } }
+  .chart h3 { margin:0 0 10px; font-size:13px; color:var(--muted); font-weight:700 }
+  .donut-wrap { display:flex; align-items:center; gap:14px }
+  .legend { display:flex; flex-direction:column; gap:5px; font-size:12px }
+  .legend span.d { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle }
+  .legend .lrow { cursor:pointer; padding:2px 4px; border-radius:5px } .legend .lrow:hover{ background:var(--hover) }
+  .barrow { display:flex; align-items:center; gap:8px; margin:5px 0; cursor:pointer; padding:2px 4px; border-radius:6px }
+  .barrow:hover { background:var(--hover) } .barrow.on { background:color-mix(in srgb,var(--accent) 16%,transparent) }
+  .barrow .lbl { width:150px; flex:none; font:11.5px/1.3 Consolas,monospace; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .barrow .track { flex:1; height:14px; background:var(--sunken); border-radius:4px; overflow:hidden }
+  .barrow .fill { height:100%; background:var(--accent); border-radius:4px }
+  .barrow .cnt { width:34px; text-align:right; font-size:11.5px; color:var(--muted) }
+
+  .fbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
+  .chip { cursor:pointer; padding:4px 11px; border-radius:20px; font-size:12px; font-weight:700;
+    border:1px solid var(--line); background:var(--panel); color:var(--muted); user-select:none }
+  .chip.on { border-color:currentColor }
+  .chip.c-critical.on{ color:var(--crit); background:color-mix(in srgb,var(--crit) 15%,transparent) }
+  .chip.c-high.on{ color:var(--high); background:color-mix(in srgb,var(--high) 15%,transparent) }
+  .chip.c-medium.on{ color:var(--med); background:color-mix(in srgb,var(--med) 15%,transparent) }
+  .chip.c-low.on{ color:var(--low); background:color-mix(in srgb,var(--low) 15%,transparent) }
+  .chip.c-info.on{ color:var(--muted); background:color-mix(in srgb,var(--muted) 15%,transparent) }
+  .chip.c-all.on{ color:var(--accent); background:color-mix(in srgb,var(--accent) 15%,transparent) }
+  .fbar input, .fbar select { background:var(--sunken); color:var(--fg); border:1px solid var(--line);
+    border-radius:6px; padding:5px 9px; font-size:12px }
+  .fbar input.search { width:220px; font-family:Consolas,monospace }
+
+  table.ftable { width:100%; border-collapse:collapse; font-size:12.5px }
+  table.ftable th { text-align:left; color:var(--muted); font-weight:600; padding:7px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel); cursor:pointer; white-space:nowrap }
+  table.ftable td { padding:7px 8px; border-bottom:1px solid var(--line-2); vertical-align:top }
+  table.ftable tr.frow { cursor:pointer } table.ftable tr.frow:hover td { background:var(--hover) }
+  table.ftable .loc { font-family:Consolas,monospace; font-size:11.5px; color:var(--muted); word-break:break-all }
+  table.ftable .rid { font-family:Consolas,monospace; font-weight:700; color:var(--fg) }
+  .pager { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:12px; font-size:12.5px; color:var(--muted) }
+  .pager button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 11px; cursor:pointer }
+  .pager button:disabled { opacity:.4; cursor:default }
+  .muted-c { color:var(--muted) }
 </style>
 {% endblock %}
 
@@ -40,10 +84,10 @@
 </div>
 
 <div class="card">
-  <h2>보안 상태</h2>
+  <h2>보안 상태 <span class="muted" style="font-weight:400;font-size:12px">— 배지를 누르면 아래 탐색기에서 해당 위험도만 봅니다</span></h2>
   <div class="status">
     <span class="big">{{ latest.finding_count }} <span class="muted" style="font-size:13px;font-weight:400">건</span></span>
-    {% for sev, n in counts.items %}<span class="badge {{ sev }}" style="font-size:13px;padding:4px 10px">
+    {% for sev, n in counts.items %}<span class="badge {{ sev }} sevbtn" data-sev="{{ sev }}" style="font-size:13px;padding:4px 10px">
       {% if sev == "critical" %}🔴{% elif sev == "high" %}🟠{% elif sev == "medium" %}🟡{% elif sev == "low" %}🔵{% else %}⚪{% endif %}
       {{ sev|upper }} {{ n }}</span>{% endfor %}
     {% if prev %}
@@ -70,7 +114,6 @@
         <span class="sev-ico">{% if f.severity == "critical" %}🔴{% elif f.severity == "high" %}🟠{% elif f.severity == "medium" %}🟡{% elif f.severity == "low" %}🔵{% else %}⚪{% endif %}</span>
         <div style="flex:1;min-width:0">
           <a href="{% url 'detail' latest.pk %}#f{{ f.id }}">{{ f.rule_id }}</a>
-          {% if f.is_new or f.fp in new_fps %}{% endif %}
           {% if prev and f.fp in new_fps %}<span class="newtag">NEW</span>{% endif %}
           <span class="muted" style="font-size:12px"> · {{ f.cwe }}</span>
           <div class="loc">{{ f.file }}:{{ f.line }}</div>
@@ -100,19 +143,72 @@
     </div>
 
     <div class="card" style="margin-bottom:0">
-      <h2>추세</h2>
+      <h2>위험도 추세 <span class="muted" style="font-weight:400;font-size:12px">— 스캔별 누적</span></h2>
       <div class="trend">
         {% for t in trend %}
           <div class="bar {% if t.pk == latest.pk %}cur{% endif %}" title="{{ t.when|date:'m-d H:i' }} · {{ t.total }}건">
             <span class="n">{{ t.total }}</span>
-            <div class="col" style="height: {% widthratio t.total trend_max 100 %}px">
-              {% for sev, n in t.counts.items %}<div class="seg-{{ sev }}" style="height: {% widthratio n t.total 100 %}%"></div>{% endfor %}
+            <div class="col" style="height: {% widthratio t.total trend_max 100 %}px" onclick="location.href='{% url 'detail' t.pk %}'">
+              {% for sev, n in t.counts.items %}<div class="seg-{{ sev }}" style="height: {% widthratio n t.total 100 %}%" title="{{ sev|upper }} {{ n }}"></div>{% endfor %}
             </div>
           </div>
         {% endfor %}
       </div>
       <div class="trend-x">{% for t in trend %}<div>{{ t.when|date:"m/d" }}</div>{% endfor %}</div>
+      <div class="muted" style="font-size:11px;margin-top:8px">🔴 심각 🟠 높음 🟡 중간 🔵 낮음 ⚪ 정보 · 막대 클릭 시 해당 스캔으로</div>
     </div>
+  </div>
+</div>
+
+<!-- ── 취약점 탐색 ── -->
+<div class="card" id="explorer" style="margin-top:16px">
+  <h2>취약점 탐색 <span class="muted" style="font-weight:400;font-size:12px">— 위험도·규칙·CWE 분포와 전체 목록(필터·페이지네이션)</span></h2>
+
+  <div class="charts">
+    <div class="chart">
+      <h3>위험도 분포</h3>
+      <div class="donut-wrap">
+        <svg id="donut" width="120" height="120" viewBox="0 0 120 120" aria-label="위험도 도넛"></svg>
+        <div class="legend" id="donut-legend"></div>
+      </div>
+    </div>
+    <div class="chart">
+      <h3>상위 규칙 <span class="muted-c" style="font-weight:400">(클릭 = 필터)</span></h3>
+      <div id="chart-rules"></div>
+    </div>
+    <div class="chart">
+      <h3>상위 CWE</h3>
+      <div id="chart-cwe"></div>
+    </div>
+  </div>
+
+  <div class="fbar">
+    <span class="chip c-all on" data-sev="">전체</span>
+    <span class="chip c-critical" data-sev="critical">심각</span>
+    <span class="chip c-high" data-sev="high">높음</span>
+    <span class="chip c-medium" data-sev="medium">중간</span>
+    <span class="chip c-low" data-sev="low">낮음</span>
+    <span class="chip c-info" data-sev="info">정보</span>
+    <select id="f-rule"><option value="">규칙 전체</option></select>
+    <select id="f-cat"><option value="">종류 전체</option></select>
+    <input class="search" id="f-q" type="search" placeholder="파일·규칙·CWE 검색" autocomplete="off">
+    <span id="f-count" class="muted" style="margin-left:auto"></span>
+  </div>
+
+  <div style="overflow-x:auto">
+    <table class="ftable">
+      <thead><tr>
+        <th data-sort="severity">위험도</th><th data-sort="rule_id">규칙</th>
+        <th>CWE / OWASP</th><th data-sort="file">위치</th><th>종류</th><th>LLM</th>
+      </tr></thead>
+      <tbody id="f-rows"><tr><td colspan="6" class="muted" style="padding:16px">불러오는 중…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="pager">
+    <span id="pg-info"></span>
+    <select id="pg-size"><option>25</option><option selected>50</option><option>100</option><option>200</option></select>
+    <button id="pg-prev">◀ 이전</button>
+    <button id="pg-next">다음 ▶</button>
   </div>
 </div>
 
@@ -136,4 +232,162 @@
     {% endfor %}
   </table>
 </div>
+
+<script>
+(function () {
+  var PK = {{ latest.pk }};
+  var DETAIL = "{% url 'detail' latest.pk %}";        // .../scan/<pk>/
+  var cs = getComputedStyle(document.documentElement);
+  function col(v){ return cs.getPropertyValue(v).trim() || '#888'; }
+  var SEV = {
+    critical: {c: col('--crit'), ko:'심각'}, high: {c: col('--high'), ko:'높음'},
+    medium: {c: col('--med'), ko:'중간'}, low: {c: col('--low'), ko:'낮음'},
+    info: {c: col('--muted'), ko:'정보'}
+  };
+  var SEVORDER = ['critical','high','medium','low','info'];
+  var state = { severity:'', rule:'', category:'', q:'', page:1, size:50, sort:'severity' };
+
+  // ── 도넛 (SVG) ──
+  function renderDonut(sev) {
+    var total = SEVORDER.reduce(function(a,k){return a+(sev[k]||0);},0);
+    var svg = document.getElementById('donut'), leg = document.getElementById('donut-legend');
+    svg.innerHTML=''; leg.innerHTML='';
+    if (!total) { svg.innerHTML='<text x="60" y="64" text-anchor="middle" fill="'+col('--muted')+'" font-size="12">없음</text>'; return; }
+    var r=48, cx=60, cy=60, C=2*Math.PI*r, off=0;
+    var ns='http://www.w3.org/2000/svg';
+    SEVORDER.forEach(function(k){
+      var n = sev[k]||0; if(!n) return;
+      var frac = n/total, len = frac*C;
+      var c = document.createElementNS(ns,'circle');
+      c.setAttribute('cx',cx); c.setAttribute('cy',cy); c.setAttribute('r',r);
+      c.setAttribute('fill','none'); c.setAttribute('stroke',SEV[k].c);
+      c.setAttribute('stroke-width','16');
+      c.setAttribute('stroke-dasharray', len+' '+(C-len));
+      c.setAttribute('stroke-dashoffset', -off);
+      c.setAttribute('transform','rotate(-90 '+cx+' '+cy+')');
+      c.style.cursor='pointer';
+      c.addEventListener('click', function(){ setSeverity(state.severity===k?'':k); });
+      svg.appendChild(c); off += len;
+      var lr=document.createElement('div'); lr.className='lrow';
+      lr.innerHTML='<span class="d" style="background:'+SEV[k].c+'"></span>'+SEV[k].ko+' <b>'+n+'</b> <span class="muted-c">('+Math.round(frac*100)+'%)</span>';
+      lr.addEventListener('click', function(){ setSeverity(state.severity===k?'':k); });
+      leg.appendChild(lr);
+    });
+    var t=document.createElementNS(ns,'text');
+    t.setAttribute('x',cx); t.setAttribute('y',cy-2); t.setAttribute('text-anchor','middle');
+    t.setAttribute('fill',col('--fg')); t.setAttribute('font-size','20'); t.setAttribute('font-weight','800');
+    t.textContent=total; svg.appendChild(t);
+    var t2=document.createElementNS(ns,'text');
+    t2.setAttribute('x',cx); t2.setAttribute('y',cy+15); t2.setAttribute('text-anchor','middle');
+    t2.setAttribute('fill',col('--muted')); t2.setAttribute('font-size','10'); t2.textContent='건';
+    svg.appendChild(t2);
+  }
+
+  // ── 가로 막대 ──
+  function renderBars(elId, rows, opt) {
+    opt = opt||{}; var el=document.getElementById(elId); el.innerHTML='';
+    if(!rows.length){ el.innerHTML='<div class="muted-c" style="font-size:12px">없음</div>'; return; }
+    var max = rows[0][1] || 1;
+    rows.forEach(function(r){
+      var label=r[0], n=r[1];
+      var row=document.createElement('div'); row.className='barrow';
+      if(opt.filterKey && state[opt.filterKey]===label) row.className+=' on';
+      row.innerHTML='<span class="lbl" title="'+label+'">'+label+'</span>'+
+        '<span class="track"><span class="fill" style="width:'+Math.max(4,Math.round(n/max*100))+'%'+
+        (opt.color?';background:'+opt.color:'')+'"></span></span><span class="cnt">'+n+'</span>';
+      if(opt.filterKey){ row.addEventListener('click', function(){
+        state[opt.filterKey] = (state[opt.filterKey]===label)?'':label;
+        if(opt.filterKey==='rule'){ document.getElementById('f-rule').value = state.rule; }
+        state.page=1; loadFindings(); loadSummaryHighlight();
+      }); }
+      el.appendChild(row);
+    });
+  }
+
+  var _summary = null;
+  function loadSummary() {
+    fetch(DETAIL+'api/summary').then(function(r){return r.json();}).then(function(d){
+      _summary = d;
+      renderDonut(d.severity||{});
+      renderBars('chart-rules', d.top_rules||[], {filterKey:'rule'});
+      renderBars('chart-cwe', d.top_cwe||[], {color:col('--high')});
+      // 규칙·종류 셀렉트 채우기
+      var rs=document.getElementById('f-rule');
+      (d.top_rules||[]).forEach(function(r){ var o=document.createElement('option'); o.value=r[0]; o.textContent=r[0]+' ('+r[1]+')'; rs.appendChild(o); });
+      var cs2=document.getElementById('f-cat');
+      (d.by_category||[]).forEach(function(r){ var o=document.createElement('option'); o.value=r[0]; o.textContent=r[0]+' ('+r[1]+')'; cs2.appendChild(o); });
+    });
+  }
+  function loadSummaryHighlight(){ if(_summary){ renderBars('chart-rules', _summary.top_rules||[], {filterKey:'rule'}); } }
+
+  // ── 목록 ──
+  function badge(sev){ return '<span class="badge '+sev+'">'+sev.toUpperCase()+'</span>'; }
+  function loadFindings() {
+    var p = new URLSearchParams();
+    if(state.severity) p.set('severity', state.severity);
+    if(state.rule) p.set('rule', state.rule);
+    if(state.q) p.set('q', state.q);
+    p.set('page', state.page); p.set('size', state.size);
+    var tb=document.getElementById('f-rows');
+    fetch(DETAIL+'api/findings?'+p.toString()).then(function(r){return r.json();}).then(function(d){
+      var rows = d.rows||[];
+      if(state.category) rows = rows.filter(function(r){ return r.category===state.category; });
+      if(!rows.length){ tb.innerHTML='<tr><td colspan="6" class="muted" style="padding:16px">조건에 맞는 취약점이 없습니다.</td></tr>'; }
+      else {
+        tb.innerHTML = rows.map(function(r){
+          var owasp = r.owasp? ' <span class="muted-c">· '+r.owasp+'</span>':'';
+          var vd = r.verdict? '<span class="badge v-'+r.verdict+'">'+r.verdict+'</span>':'<span class="muted-c">—</span>';
+          return '<tr class="frow" data-idx="'+r.idx+'">'+
+            '<td>'+badge(r.severity)+'</td>'+
+            '<td class="rid">'+r.rule_id+'</td>'+
+            '<td>'+(r.cwe||'')+owasp+'</td>'+
+            '<td class="loc">'+r.file+':'+r.line+'</td>'+
+            '<td class="muted-c">'+(r.category||'')+'</td>'+
+            '<td>'+vd+'</td></tr>';
+        }).join('');
+        [].forEach.call(tb.querySelectorAll('tr.frow'), function(tr){
+          tr.addEventListener('click', function(){ location.href = DETAIL+'#f'+tr.dataset.idx; });
+        });
+      }
+      // 페이지 정보 (category 필터는 클라이언트측이라 total 근사)
+      var total = d.total, from=(d.page-1)*d.size+1, to=Math.min(d.page*d.size, total);
+      document.getElementById('pg-info').textContent = total? (from+'–'+to+' / '+total+'건') : '0건';
+      document.getElementById('f-count').textContent = total+'건'+(state.category?' (종류 필터 적용)':'');
+      document.getElementById('pg-prev').disabled = d.page<=1;
+      document.getElementById('pg-next').disabled = d.page*d.size >= total;
+    });
+  }
+
+  // ── 필터 UI ──
+  function setSeverity(sev){
+    state.severity=sev; state.page=1;
+    [].forEach.call(document.querySelectorAll('.chip[data-sev]'), function(c){
+      c.classList.toggle('on', c.dataset.sev===sev);
+    });
+    loadFindings();
+  }
+  [].forEach.call(document.querySelectorAll('.chip[data-sev]'), function(c){
+    c.addEventListener('click', function(){ setSeverity(c.dataset.sev); });
+  });
+  [].forEach.call(document.querySelectorAll('.sevbtn[data-sev]'), function(b){
+    b.addEventListener('click', function(){
+      setSeverity(b.dataset.sev);
+      document.getElementById('explorer').scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+  document.getElementById('f-rule').addEventListener('change', function(){ state.rule=this.value; state.page=1; loadFindings(); loadSummaryHighlight(); });
+  document.getElementById('f-cat').addEventListener('change', function(){ state.category=this.value; state.page=1; loadFindings(); });
+  var qt;
+  document.getElementById('f-q').addEventListener('input', function(){ var v=this.value; clearTimeout(qt); qt=setTimeout(function(){ state.q=v.trim(); state.page=1; loadFindings(); }, 250); });
+  document.getElementById('pg-size').addEventListener('change', function(){ state.size=parseInt(this.value,10); state.page=1; loadFindings(); });
+  document.getElementById('pg-prev').addEventListener('click', function(){ if(state.page>1){ state.page--; loadFindings(); window.scrollTo({top:document.getElementById('explorer').offsetTop-10}); } });
+  document.getElementById('pg-next').addEventListener('click', function(){ state.page++; loadFindings(); window.scrollTo({top:document.getElementById('explorer').offsetTop-10}); });
+  [].forEach.call(document.querySelectorAll('th[data-sort]'), function(th){
+    th.addEventListener('click', function(){ /* 정렬은 서버가 위험도순 고정 — 표시만 */ });
+  });
+
+  loadSummary();
+  loadFindings();
+})();
+</script>
 {% endblock %}

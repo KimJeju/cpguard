@@ -314,6 +314,8 @@ def test_finding_rows_and_scale_apis():
 
     s = c.get(f"/scan/{pk}/api/summary").json()
     assert s["total"] > 0 and s["severity"] and s["top_rules"]
+    # 프로젝트 홈 차트가 쓰는 확장 집계 필드
+    assert "by_category" in s and "top_cwe" in s and "by_verdict" in s
 
     d = c.get(f"/scan/{pk}/api/findings?size=1&page=1").json()
     assert d["size"] == 1 and len(d["rows"]) <= 1 and d["total"] >= 1
