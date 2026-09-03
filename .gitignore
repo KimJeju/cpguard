@@ -8,3 +8,4 @@ build/
 *.sarif
 .DS_Store
 packaging/output/
+packaging/redist/
