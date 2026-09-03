@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 import webbrowser
+from pathlib import Path
 
 TITLE = "CPGuard — 정적 보안 분석"
 WIDTH, HEIGHT = 1280, 860
@@ -23,6 +25,25 @@ STARTUP_TIMEOUT = 25.0
 
 class DesktopUnavailable(RuntimeError):
     """pywebview 미설치 등으로 데스크톱 창을 띄울 수 없음."""
+
+
+def _ensure_std_streams() -> None:
+    """windowed(console=False) frozen 앱에선 sys.stdout/stderr 가 None 이다.
+    Django runserver 는 시작 배너를 verbosity 와 무관하게 self.stdout 에 쓰므로,
+    스트림이 None 이면 배너를 쓰다 죽어 서버가 포트를 못 연다(창도 안 뜬다).
+    None 이면 로그 파일로 돌려 크래시를 막고 진단 로그도 남긴다."""
+    if sys.stdout is not None and sys.stderr is not None:
+        return
+    data = Path(os.environ.get("CPGUARD_HOME", Path.home() / ".cpguard"))
+    try:
+        data.mkdir(parents=True, exist_ok=True)
+        fh = open(data / "desktop.log", "a", encoding="utf-8", buffering=1)
+    except Exception:
+        fh = open(os.devnull, "w", encoding="utf-8")
+    if sys.stdout is None:
+        sys.stdout = fh
+    if sys.stderr is None:
+        sys.stderr = fh
 
 
 def free_port() -> int:
@@ -80,6 +101,7 @@ def launch(port: int | None = None, debug: bool = False) -> None:
     WebView2 런타임 부재 등으로 창을 못 띄우면 기본 브라우저로 폴백한다
     (클린 머신 배포 대비).
     """
+    _ensure_std_streams()
     host = "127.0.0.1"
     port = port or free_port()
     url = f"http://{host}:{port}/"
