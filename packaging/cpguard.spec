@@ -83,15 +83,20 @@ for optional in ("anthropic", "openai", "google.genai"):
 import pathlib as _pl
 import sys as _sys
 
-_libbin = _pl.Path(_sys.prefix) / "Library" / "bin"
 # conda 채널마다 이름이 달라(ffi-8.dll vs libffi-8.dll) 두 형태를 모두 본다
 _NEEDED = ("libssl-3*.dll", "libcrypto-3*.dll", "ffi*.dll", "libffi*.dll",
            "sqlite3.dll", "liblzma*.dll", "libbz2*.dll", "zlib*.dll",
-           "libexpat*.dll", "libcrypto*.dll", "libssl*.dll")
-if _libbin.is_dir():
-    for _pat in _NEEDED:
-        for _p in _libbin.glob(_pat):
-            binaries.append((str(_p), "."))
+           "libexpat*.dll", "libcrypto*.dll", "libssl*.dll",
+           # VC++ 런타임 — 클린 머신엔 재배포판이 없다. 빌드머신엔 시스템에 깔려 있어
+           # PyInstaller 가 일부만 담기 쉬우므로(특히 msvcp140.dll, vcruntime140_1.dll)
+           # 전부 명시 동봉한다. 빠지면 클린 VM 에서 로더 단계에 조용히 죽는다.
+           "vcruntime140*.dll", "msvcp140*.dll", "concrt140*.dll", "vccorlib140*.dll")
+# 환경 루트와 Library/bin 양쪽을 뒤진다(conda 는 두 곳에 흩어 둔다)
+for _dir in (_pl.Path(_sys.prefix), _pl.Path(_sys.prefix) / "Library" / "bin"):
+    if _dir.is_dir():
+        for _pat in _NEEDED:
+            for _p in _dir.glob(_pat):
+                binaries.append((str(_p), "."))
 
 a = Analysis(
     ["../cpguard/desktop.py"],
