@@ -15,6 +15,9 @@
     width: 100%; background: var(--sunken); color: var(--fg); border: 1px solid var(--line);
     border-radius: 7px; padding: 9px 11px; font-size: 13px; font-family: Consolas, monospace; }
   .keyrow .clr { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .modelrow { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+  .modelrow label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+  .modelrow input { flex: 1; background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12.5px; font-family: Consolas, monospace; }
   .note { color: var(--muted); font-size: 12.5px; line-height: 1.7; margin-top: 4px; }
 </style>
 {% endblock %}
@@ -42,6 +45,12 @@
       {% if r.set %}
       <label class="clr"><input type="checkbox" name="clear_{{ r.env }}"> 이 키 삭제</label>
       {% endif %}
+      <div class="modelrow">
+        <label>모델</label>
+        <input list="ml_{{ r.pname }}" name="model_{{ r.pname }}" value="{{ r.model }}" autocomplete="off" spellcheck="false"
+               placeholder="기본: {{ r.model_default }} (비우면 기본 사용)">
+        <datalist id="ml_{{ r.pname }}">{% for m in r.model_options %}<option value="{{ m }}"></option>{% endfor %}</datalist>
+      </div>
     </div>
     {% endfor %}
 

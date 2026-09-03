@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}리포트 — CPGuard{% endblock %}
+
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 6px">리포트 · 내보내기</h1>
+<p class="muted" style="margin-bottom:16px">스캔별로 SARIF·CSV·고객 제출용 분석목록표(xlsx)를 내려받습니다.</p>
+
+<div class="card">
+  {% if scans %}
+  <table>
+    <tr><th>스캔</th><th>일시</th><th>탐지</th><th>내보내기</th><th></th></tr>
+    {% for s in scans %}
+    <tr>
+      <td><a href="{% url 'detail' s.pk %}"><b>{{ s.name }}</b></a>{% if s.project %} <span class="muted">· {{ s.project }}</span>{% endif %}</td>
+      <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
+      <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td>
+        <a class="btn ghost" href="{% url 'sarif' s.pk %}">SARIF</a>
+        <a class="btn ghost" href="{% url 'export_csv' s.pk %}">CSV</a>
+        <a class="btn ghost" href="{% url 'export_xlsx' s.pk %}">분석목록표</a>
+      </td>
+      <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">조사</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <p class="muted">아직 스캔 기록이 없습니다.</p>
+  {% endif %}
+</div>
+{% endblock %}

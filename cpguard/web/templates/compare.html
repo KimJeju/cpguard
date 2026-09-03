@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}스냅샷 비교 — CPGuard{% endblock %}
+
+{% block head %}
+<style>
+  .cmp-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; }
+  .cmp-tiles .t { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .cmp-tiles .t .n { font-size: 28px; font-weight: 800; }
+  .cmp-tiles .t .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .t.new .n { color: var(--crit); } .t.res .n { color: var(--low); }
+  .pick { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .pick select { background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font-size: 13px; min-width: 240px; }
+  td.mono { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 style="font-size:20px;margin:0 0 14px">스냅샷 비교</h1>
+
+{% if scans %}
+<div class="card">
+  <form method="get" class="pick">
+    <label class="muted" style="font-size:12px">기준(이전)</label>
+    <select name="a">
+      {% for s in scans %}<option value="{{ s.pk }}" {% if a and s.pk == a.pk %}selected{% endif %}>{{ s.name }} · {{ s.created_at|date:"m-d H:i" }} · {{ s.finding_count }}건</option>{% endfor %}
+    </select>
+    <label class="muted" style="font-size:12px">대상(최신)</label>
+    <select name="b">
+      {% for s in scans %}<option value="{{ s.pk }}" {% if b and s.pk == b.pk %}selected{% endif %}>{{ s.name }} · {{ s.created_at|date:"m-d H:i" }} · {{ s.finding_count }}건</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">비교</button>
+  </form>
+</div>
+{% else %}
+<p class="muted">비교할 스캔이 없습니다.</p>
+{% endif %}
+
+{% if a and b %}
+<div class="cmp-tiles">
+  <div class="t new"><div class="n">+{{ new|length }}</div><div class="l">신규 (대상에만)</div></div>
+  <div class="t res"><div class="n">−{{ resolved|length }}</div><div class="l">해결 (기준에만)</div></div>
+  <div class="t"><div class="n">{{ persistent|length }}</div><div class="l">유지 (양쪽)</div></div>
+</div>
+
+<div class="card">
+  <h2>🔴 신규 — <span class="muted">{{ a.name }} → {{ b.name }}</span></h2>
+  {% if new %}
+  <table>
+    <tr><th>위험도</th><th>규칙</th><th>파일</th><th>CWE</th></tr>
+    {% for f in new %}<tr><td><span class="badge {{ f.severity }}">{{ f.severity|upper }}</span></td><td><b>{{ f.rule_id }}</b></td><td class="mono">{{ f.file }}:{{ f.line }}</td><td class="mono">{{ f.cwe }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="muted">신규 없음.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>🟢 해결 — <span class="muted">기준에 있었으나 대상에서 사라짐</span></h2>
+  {% if resolved %}
+  <table>
+    <tr><th>위험도</th><th>규칙</th><th>파일</th><th>CWE</th></tr>
+    {% for f in resolved %}<tr><td><span class="badge {{ f.severity }}">{{ f.severity|upper }}</span></td><td><b>{{ f.rule_id }}</b></td><td class="mono">{{ f.file }}:{{ f.line }}</td><td class="mono">{{ f.cwe }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="muted">해결 없음.</p>{% endif %}
+</div>
+
+<div style="margin-top:8px"><a class="btn ghost" href="{% url 'detail' b.pk %}">대상 스캔 작업대 열기</a></div>
+{% endif %}
+{% endblock %}

@@ -10,12 +10,31 @@ import json
 import os
 from pathlib import Path
 
-# (id, 환경변수명, 표시이름)
+# (id, 환경변수명, 표시이름, 프로바이더명)  — 프로바이더명은 triage.ask(provider=) 와 일치
 KEYS = [
-    ("anthropic", "ANTHROPIC_API_KEY", "Claude (Anthropic)"),
-    ("openai", "OPENAI_API_KEY", "ChatGPT (OpenAI)"),
-    ("gemini", "GEMINI_API_KEY", "Gemini (Google)"),
+    ("anthropic", "ANTHROPIC_API_KEY", "Claude (Anthropic)", "claude"),
+    ("openai", "OPENAI_API_KEY", "ChatGPT (OpenAI)", "openai"),
+    ("gemini", "GEMINI_API_KEY", "Gemini (Google)", "gemini"),
 ]
+
+# 설정 화면 모델 선택 후보(자유 입력도 허용). 빈 값 = 프로바이더 기본 모델.
+MODEL_OPTIONS = {
+    "claude": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
+    "openai": ["gpt-4o", "gpt-4o-mini"],
+    "gemini": ["gemini-3.6-flash", "gemini-3.6-pro"],
+}
+
+
+def models() -> dict:
+    """프로바이더명 -> 모델 오버라이드. 없으면 빈 dict."""
+    return load().get("models") or {}
+
+
+def model_for(provider_name: str | None) -> str | None:
+    """설정된 모델 오버라이드(없으면 None → 프로바이더 기본)."""
+    if not provider_name:
+        return None
+    return (models().get(provider_name) or "").strip() or None
 
 
 def _path() -> Path:
@@ -42,7 +61,7 @@ def save(cfg: dict) -> None:
 def apply_to_env() -> None:
     """저장된 키를 환경변수로 적용. 이미 환경에 있으면 덮어쓰지 않는다."""
     cfg = load()
-    for _cid, env, _label in KEYS:
+    for _cid, env, _label, _pname in KEYS:
         val = cfg.get(env)
         if val and not os.environ.get(env):
             os.environ[env] = val

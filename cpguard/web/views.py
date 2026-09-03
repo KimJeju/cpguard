@@ -125,9 +125,12 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         if do_triage and findings:
             _job_set(job_id, status="running", phase="triage", done=0, total=0, findings=len(findings))
             _job_log(job_id, "LLM 트리아지 실행…")
-            from ..triage import TriageUnavailable, triage_findings
+            from ..triage import TriageUnavailable, available, triage_findings
+            from . import config as appcfg
+            avail = available()
+            eff = (provider or None) or (avail[0] if avail else None)
             try:
-                triage_findings(findings, provider=provider or None)
+                triage_findings(findings, provider=provider or None, model=appcfg.model_for(eff))
                 _job_log(job_id, "트리아지 완료")
             except TriageUnavailable as e:
                 triage_note = f"LLM 트리아지를 건너뛰었습니다 — {e}"
@@ -214,26 +217,62 @@ def settings_page(request):
     from ..triage import available
     if request.method == "POST":
         cfg = appcfg.load()
-        for _cid, env, _label in appcfg.KEYS:
+        mdls = dict(cfg.get("models") or {})
+        for _cid, env, _label, pname in appcfg.KEYS:
             if request.POST.get(f"clear_{env}"):
                 cfg.pop(env, None)
                 os.environ.pop(env, None)
-                continue
-            v = (request.POST.get(env) or "").strip()
-            if v and "•" not in v:   # 마스킹된 표시값 그대로면 변경 안 함
-                cfg[env] = v
-                os.environ[env] = v   # 재시작 없이 즉시 적용
+            else:
+                v = (request.POST.get(env) or "").strip()
+                if v and "•" not in v:   # 마스킹된 표시값 그대로면 변경 안 함
+                    cfg[env] = v
+                    os.environ[env] = v   # 재시작 없이 즉시 적용
+            # 모델 오버라이드 (빈 값이면 프로바이더 기본으로 되돌림)
+            m = (request.POST.get(f"model_{pname}") or "").strip()
+            if m:
+                mdls[pname] = m
+            else:
+                mdls.pop(pname, None)
+        cfg["models"] = mdls
         appcfg.save(cfg)
         return redirect("settings")
 
+    from ..triage.providers import PROVIDERS
+    defaults = {name: cls.default_model for name, cls in PROVIDERS.items()}
     cfg = appcfg.load()
+    mdls = cfg.get("models") or {}
     rows = []
-    for _cid, env, label in appcfg.KEYS:
+    for _cid, env, label, pname in appcfg.KEYS:
         stored = cfg.get(env) or os.environ.get(env, "")
-        rows.append({"env": env, "label": label,
+        rows.append({"env": env, "label": label, "pname": pname,
                      "masked": appcfg.mask_key(stored) if stored else "",
-                     "set": bool(stored)})
+                     "set": bool(stored),
+                     "model": mdls.get(pname, ""),
+                     "model_options": appcfg.MODEL_OPTIONS.get(pname, []),
+                     "model_default": defaults.get(pname, "")})
     return render(request, "settings.html", {"rows": rows, "providers": available()})
+
+
+def compare(request):
+    """스냅샷 비교 — 두 스캔을 골라 신규/해결/유지를 지문 기준으로 대조한다."""
+    scans = list(Scan.objects.all()[:80])
+    a, b = request.GET.get("a"), request.GET.get("b")
+    ctx: dict = {"scans": scans}
+    if a and b:
+        try:
+            sa = Scan.objects.get(pk=int(a))
+            sb = Scan.objects.get(pk=int(b))
+        except (Scan.DoesNotExist, ValueError):
+            return redirect("compare")
+        diff = sb.compare_with(sa)   # sb(대상) 이 sa(기준) 대비
+        ctx.update({"a": sa, "b": sb, "new": diff["new"],
+                    "resolved": diff["resolved"], "persistent": diff["persistent"]})
+    return render(request, "compare.html", ctx)
+
+
+def reports(request):
+    """리포트 — 스캔별 내보내기(SARIF/CSV/분석목록표) 바로가기."""
+    return render(request, "reports.html", {"scans": list(Scan.objects.all()[:100])})
 
 
 def _fingerprint(f: Finding, rel_file: str) -> str:
@@ -483,7 +522,8 @@ def ai_ask(request, pk: int):
 
     키가 없으면 실패가 아니라 안내를 돌려준다(트리아지와 같은 원칙: 부가 기능).
     """
-    from ..triage import PRESETS, TriageUnavailable, ask
+    from ..triage import PRESETS, TriageUnavailable, ask, available
+    from . import config as appcfg
     scan = get_object_or_404(Scan, pk=pk)
     try:
         idx = int(request.POST.get("index", ""))
@@ -497,11 +537,14 @@ def ai_ask(request, pk: int):
     preset = request.POST.get("preset", "explain")
     if preset not in PRESETS and not request.POST.get("question"):
         return JsonResponse({"ok": False, "error": "알 수 없는 프리셋"}, status=400)
+    prov = request.POST.get("provider") or None
+    avail = available()
+    eff_prov = prov or (avail[0] if avail else None)   # 자동일 때 실제 선택될 프로바이더
     try:
         answer, provider = ask(
             finding, scan.sources, preset=preset,
             question=request.POST.get("question") or None,
-            provider=request.POST.get("provider") or None,
+            provider=prov, model=appcfg.model_for(eff_prov),
         )
     except TriageUnavailable as e:
         return JsonResponse({"ok": False, "unavailable": True, "error": str(e)})

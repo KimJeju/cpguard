@@ -107,8 +107,18 @@
         color:var(--muted);font-size:15px;text-decoration:none;cursor:pointer;border:1px solid transparent;-webkit-app-region:no-drag}
   .tbtn:hover{background:var(--hover);color:var(--fg);border-color:var(--line);text-decoration:none}
   .tsep{width:1px;height:20px;background:var(--line);margin:0 8px}
-  .tsep2{width:1px;height:16px;background:var(--line);margin:0 4px}
   .tbtn:disabled,.tbtn[aria-disabled=true]{opacity:.35;cursor:default;pointer-events:none}
+  /* ---- 드롭다운 앱 메뉴 ---- */
+  .menu{position:relative}
+  .menu-btn{font-size:17px}
+  .menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:210px;background:var(--panel);
+            border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px var(--shadow);padding:5px;-webkit-app-region:no-drag}
+  .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 11px;border-radius:6px;font-size:13px;
+      color:var(--fg);text-decoration:none;background:transparent;border:0;cursor:pointer;text-align:left;font-family:inherit;white-space:nowrap}
+  .mi:hover{background:var(--hover);text-decoration:none}
+  .mi-ic{width:18px;text-align:center;font-size:13px;flex:0 0 18px}
+  .mi kbd{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+  .mi-sep{height:1px;background:var(--line);margin:5px 6px}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -117,14 +127,19 @@
   <div class="logo pywebview-drag-region">CP<span>Guard</span></div>
   <div class="tag pywebview-drag-region">CPG 기반 taint 분석 정적 보안 스캐너</div>
   <div class="drag-spacer pywebview-drag-region"></div>
-  <nav class="apptools">
-    <button class="tbtn" id="nav-back" title="뒤로 (Alt+←)">◀</button>
-    <button class="tbtn" id="nav-fwd" title="앞으로 (Alt+→)">▶</button>
-    <span class="tsep2"></span>
-    <a class="tbtn" href="/" title="홈 · 새 스캔">🏠</a>
-    <a class="tbtn" href="/?mode=secrets" title="시크릿·설정 빠른 점검">🔑</a>
-    <a class="tbtn" href="/settings/" title="설정 · LLM API 키">⚙️</a>
-  </nav>
+  <div class="menu" id="appmenu">
+    <button class="tbtn menu-btn" id="menu-btn" title="메뉴" aria-haspopup="true" aria-expanded="false">☰</button>
+    <div class="menu-pop" id="menu-pop" hidden>
+      <a class="mi" href="/"><span class="mi-ic">🏠</span>홈 · 새 스캔</a>
+      <a class="mi" href="/?mode=secrets"><span class="mi-ic">🔑</span>시크릿 빠른 점검</a>
+      <a class="mi" href="/compare/"><span class="mi-ic">🔀</span>스냅샷 비교</a>
+      <a class="mi" href="/reports/"><span class="mi-ic">📄</span>리포트</a>
+      <a class="mi" href="/settings/"><span class="mi-ic">⚙️</span>설정 · LLM</a>
+      <div class="mi-sep"></div>
+      <button class="mi" id="mi-back"><span class="mi-ic">◀</span>뒤로 <kbd>Alt+←</kbd></button>
+      <button class="mi" id="mi-fwd"><span class="mi-ic">▶</span>앞으로 <kbd>Alt+→</kbd></button>
+    </div>
+  </div>
   <span class="tsep"></span>
   <select id="theme-sel" title="테마">
     <option value="dark">다크</option>
@@ -132,7 +147,6 @@
     <option value="vscode">VS Code</option>
     <option value="ghidra">Ghidra (회색)</option>
   </select>
-  <a href="/">스캔 목록</a>
   <div id="winctl" hidden>
     <button class="winbtn" id="win-min" title="최소화" aria-label="최소화">&#8211;</button>
     <button class="winbtn" id="win-max" title="최대화" aria-label="최대화">&#9633;</button>
@@ -174,11 +188,19 @@
     window.addEventListener('pywebviewready', initWinCtl);
   })();
 
-  // 툴바 뒤로/앞으로 (Ghidra 식 네비게이션) + Alt+←/→
+  // 드롭다운 앱 메뉴 + 뒤로/앞으로(Alt+←/→)
   (function () {
-    var back = document.getElementById('nav-back'), fwd = document.getElementById('nav-fwd');
-    if (back) back.onclick = function () { history.back(); };
-    if (fwd) fwd.onclick = function () { history.forward(); };
+    var btn = document.getElementById('menu-btn'), pop = document.getElementById('menu-pop');
+    function close() { if (pop) { pop.hidden = true; if (btn) btn.setAttribute('aria-expanded', 'false'); } }
+    if (btn && pop) {
+      btn.onclick = function (e) { e.stopPropagation(); pop.hidden = !pop.hidden; btn.setAttribute('aria-expanded', String(!pop.hidden)); };
+      pop.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', close);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+    }
+    var back = document.getElementById('mi-back'), fwd = document.getElementById('mi-fwd');
+    if (back) back.onclick = function () { close(); history.back(); };
+    if (fwd) fwd.onclick = function () { close(); history.forward(); };
     document.addEventListener('keydown', function (e) {
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); history.back(); }
       else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); history.forward(); }

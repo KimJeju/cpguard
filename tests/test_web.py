@@ -236,3 +236,25 @@ def test_dashboard_shows_stats():
     body = c.get("/").content.decode("utf-8")
     assert "위험도 분포" in body and "상위 탐지 규칙" in body   # 대시보드 위젯
     assert "총 탐지" in body                                    # 상태 타일
+
+
+def test_compare_and_reports_pages():
+    c = Client()
+    assert c.get("/compare/").status_code == 200
+    assert c.get("/reports/").status_code == 200
+
+
+def test_settings_saves_model_override():
+    import os as _os
+
+    from cpguard.web import config as appcfg
+    c = Client()
+    try:
+        c.post("/settings/", {"model_gemini": "gemini-3.6-pro"})
+        assert appcfg.model_for("gemini") == "gemini-3.6-pro"
+        # 비우면 기본으로 복귀
+        c.post("/settings/", {"model_gemini": ""})
+        assert appcfg.model_for("gemini") is None
+    finally:
+        appcfg.save({})
+        _os.environ.pop("GEMINI_API_KEY", None)
