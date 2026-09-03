@@ -155,7 +155,7 @@
           {% if not s.new_count and not s.resolved_count %}<span class="muted">—</span>{% endif %}
         </td>
         <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
-        <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">조사</a></td>
+        <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">자세히</a></td>
       </tr>
       {% endfor %}
     </table>

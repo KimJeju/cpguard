@@ -54,6 +54,24 @@
     </div>
     {% endfor %}
 
+    {% for e in extras %}
+    <div class="keyrow">
+      <div class="top">
+        <span class="name">{{ e.label }}</span>
+        {% if e.set %}<span class="pill on">설정됨</span>{% else %}<span class="pill off">선택</span>{% endif %}
+      </div>
+      <input type="text" name="{{ e.env }}" value="{{ e.value }}" autocomplete="off" spellcheck="false"
+             placeholder="예: wrkspc_… (신원 연동 키가 아니면 비워 두세요)">
+      {% if e.set %}
+      <label class="clr"><input type="checkbox" name="clear_{{ e.env }}"> 삭제</label>
+      {% endif %}
+      <div class="note" style="margin-top:6px">
+        Claude 키 사용 시 <code>anthropic-workspace-id is required</code> 오류가 나면 이 값을 채우세요.
+        워크스페이스 ID 는 <code>console.anthropic.com</code> → Settings → Workspaces 에서 확인합니다.
+      </div>
+    </div>
+    {% endfor %}
+
     <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
       <button class="btn" type="submit">저장</button>
       <a class="btn ghost" href="/">홈으로</a>

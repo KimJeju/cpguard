@@ -17,6 +17,12 @@ KEYS = [
     ("gemini", "GEMINI_API_KEY", "Gemini (Google)", "gemini"),
 ]
 
+# 키는 아니지만 프로바이더가 환경변수로 읽는 선택 설정.
+# ANTHROPIC_WORKSPACE_ID: identity-linked(신원 연동) Claude 키에 필요한 워크스페이스 ID.
+EXTRA_ENV = [
+    ("anthropic_workspace", "ANTHROPIC_WORKSPACE_ID", "Claude 워크스페이스 ID (신원 연동 키만)"),
+]
+
 # 설정 화면 모델 선택 후보(자유 입력도 허용). 빈 값 = 프로바이더 기본 모델.
 MODEL_OPTIONS = {
     "claude": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],
@@ -62,6 +68,10 @@ def apply_to_env() -> None:
     """저장된 키를 환경변수로 적용. 이미 환경에 있으면 덮어쓰지 않는다."""
     cfg = load()
     for _cid, env, _label, _pname in KEYS:
+        val = cfg.get(env)
+        if val and not os.environ.get(env):
+            os.environ[env] = val
+    for _cid, env, _label in EXTRA_ENV:
         val = cfg.get(env)
         if val and not os.environ.get(env):
             os.environ[env] = val

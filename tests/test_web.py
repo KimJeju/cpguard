@@ -254,6 +254,23 @@ def test_settings_save_mask_and_clear():
         _os.environ.pop("ANTHROPIC_API_KEY", None)
 
 
+def test_settings_saves_workspace_id():
+    """워크스페이스 ID(신원 연동 Claude 키용) 저장·적용·삭제."""
+    import os as _os
+
+    from cpguard.web import config as appcfg
+    c = Client()
+    try:
+        c.post("/settings/", {"ANTHROPIC_WORKSPACE_ID": "wrkspc_test123"})
+        assert appcfg.load().get("ANTHROPIC_WORKSPACE_ID") == "wrkspc_test123"
+        assert _os.environ.get("ANTHROPIC_WORKSPACE_ID") == "wrkspc_test123"
+        c.post("/settings/", {"clear_ANTHROPIC_WORKSPACE_ID": "1"})
+        assert "ANTHROPIC_WORKSPACE_ID" not in appcfg.load()
+    finally:
+        appcfg.save({})
+        _os.environ.pop("ANTHROPIC_WORKSPACE_ID", None)
+
+
 def test_secrets_only_skips_dataflow():
     """secrets_only 스캔은 데이터 흐름 축을 건너뛰고 패턴만 탐지한다."""
     from cpguard.scanner import scan_path

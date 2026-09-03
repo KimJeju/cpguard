@@ -249,6 +249,15 @@ def settings_page(request):
                 mdls[pname] = m
             else:
                 mdls.pop(pname, None)
+        for _cid, env, _label in appcfg.EXTRA_ENV:
+            if request.POST.get(f"clear_{env}"):
+                cfg.pop(env, None)
+                os.environ.pop(env, None)
+            else:
+                v = (request.POST.get(env) or "").strip()
+                if v and "•" not in v:
+                    cfg[env] = v
+                    os.environ[env] = v
         cfg["models"] = mdls
         appcfg.save(cfg)
         return redirect("settings")
@@ -266,7 +275,13 @@ def settings_page(request):
                      "model": mdls.get(pname, ""),
                      "model_options": appcfg.MODEL_OPTIONS.get(pname, []),
                      "model_default": defaults.get(pname, "")})
-    return render(request, "settings.html", {"rows": rows, "providers": available()})
+    extras = []
+    for _cid, env, label in appcfg.EXTRA_ENV:
+        stored = cfg.get(env) or os.environ.get(env, "")
+        extras.append({"env": env, "label": label,
+                       "value": stored, "set": bool(stored)})
+    return render(request, "settings.html",
+                  {"rows": rows, "extras": extras, "providers": available()})
 
 
 def compare(request):

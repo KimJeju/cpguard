@@ -39,7 +39,7 @@
 
   /* ---- 탐색기 ---- */
   .filters { display:flex; flex-direction:column; gap:6px; width:100% }
-  .filters input, .filters select { width:100%; background:var(--sunken); color:var(--fg); border:1px solid var(--line);
+  .filters input:not([type=checkbox]), .filters select { width:100%; background:var(--sunken); color:var(--fg); border:1px solid var(--line);
        border-radius:5px; padding:5px 8px; font-size:12px; font-family:inherit }
   .group { border-bottom:1px solid var(--line) }
   .group-hd { padding:5px 12px; font-size:11px; font-weight:700; color:var(--muted); background:var(--panel-2); cursor:pointer;
@@ -227,8 +227,8 @@
             <option value="">전체</option><option value="new">신규만</option><option value="fp">오탐힌트만</option>
           </select>
         </div>
-        <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px">
-          <input type="checkbox" id="hideAudited"> 감사 완료 숨기기
+        <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px;white-space:nowrap;cursor:pointer">
+          <input type="checkbox" id="hideAudited" style="flex:0 0 auto;width:auto;margin:0"> <span>감사 완료 숨기기</span>
         </label>
       </div>
     </div>
@@ -687,7 +687,7 @@
     t.innerHTML = `<div class="tt">${sevTag(f.severity)} ${esc(f.rule_id)}</div>
       <div class="tm">${esc(f.cwe || '')}${f.owasp ? ' · ' + esc(f.owasp) : ''} · 신뢰도 ${esc(f.precision || 'high')}</div>
       <div style="margin-top:4px"><code>${esc(f.file)}:${f.line}</code></div>
-      <div class="tm" style="margin-top:4px">클릭하여 조사</div>`;
+      <div class="tm" style="margin-top:4px">클릭하여 자세히</div>`;
     t.style.display = 'block';
     const r = e.target.getBoundingClientRect();
     t.style.left = Math.min(r.right + 8, innerWidth - t.offsetWidth - 8) + 'px';

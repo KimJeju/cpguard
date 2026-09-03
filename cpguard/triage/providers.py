@@ -78,7 +78,14 @@ class ClaudeProvider(Provider):
         except ImportError as e:
             raise ProviderUnavailable(
                 "claude: anthropic SDK 가 없습니다. pip install anthropic") from e
-        return anthropic.Anthropic(api_key=self.api_key)
+        # identity-linked(신원 연동) API 키는 요청이 어느 워크스페이스에서 동작하는지
+        # anthropic-workspace-id 헤더를 요구한다. 설정돼 있으면 함께 보낸다.
+        headers = {}
+        ws = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+        if ws:
+            headers["anthropic-workspace-id"] = ws
+        return anthropic.Anthropic(api_key=self.api_key,
+                                   default_headers=headers or None)
 
     def complete_json(self, system: str, prompt: str) -> dict:
         resp = self._client.messages.create(

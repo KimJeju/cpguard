@@ -21,7 +21,7 @@
         <a class="btn ghost" download href="{% url 'export_csv' s.pk %}">CSV</a>
         <a class="btn ghost" download href="{% url 'export_xlsx' s.pk %}">분석목록표</a>
       </td>
-      <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">조사</a></td>
+      <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">자세히</a></td>
     </tr>
     {% endfor %}
   </table>

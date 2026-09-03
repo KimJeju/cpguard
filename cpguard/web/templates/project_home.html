@@ -18,7 +18,8 @@
   .newtag { font-size:10px; font-weight:800; background: var(--accent); color:var(--on-accent); border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:middle }
   .sev-ico { display:inline-block; width:18px; text-align:center; margin-right:4px }
   .kv { display:grid; grid-template-columns: 90px 1fr; gap:5px 10px; font-size:13px }
-  .kv dt { color: var(--muted) } .kv dd { margin:0 }
+  .kv dt { color: var(--muted) } .kv dd { margin:0; min-width:0 }
+  .kv dd code { display:inline-block; max-width:100%; word-break:break-all; box-sizing:border-box }
   /* 추세 */
   .trend { display:flex; align-items:flex-end; gap:6px; height:120px; padding:6px 2px 0; border-bottom:1px solid var(--line) }
   .bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:22px }
@@ -78,7 +79,7 @@
   <h1>{{ project }}</h1>
   <span class="muted">프로젝트 · 스캔 {{ scans|length }}회 · 최근 {{ latest.created_at|date:"Y-m-d H:i" }}</span>
   <span style="margin-left:auto;display:flex;gap:8px">
-    <a class="btn" href="{% url 'detail' latest.pk %}">최신 스캔 조사</a>
+    <a class="btn" href="{% url 'detail' latest.pk %}">최신 스캔 자세히</a>
     <a class="btn ghost" href="/">새 스캔 업로드</a>
   </span>
 </div>
@@ -136,7 +137,7 @@
         <dt>업로드</dt><dd><code>{{ latest.name }}</code></dd>
       </dl>
       <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
-        <a class="btn ghost" href="{% url 'detail' latest.pk %}">조사</a>
+        <a class="btn ghost" href="{% url 'detail' latest.pk %}">자세히</a>
         <a class="btn ghost" download href="{% url 'export_xlsx' latest.pk %}">분석목록표</a>
         <a class="btn ghost" download href="{% url 'sarif' latest.pk %}">SARIF</a>
       </div>
@@ -238,7 +239,11 @@
   var PK = {{ latest.pk }};
   var DETAIL = "{% url 'detail' latest.pk %}";        // .../scan/<pk>/
   var cs = getComputedStyle(document.documentElement);
-  function col(v){ return cs.getPropertyValue(v).trim() || '#888'; }
+  // 일부 WebView 는 getComputedStyle 로 CSS 커스텀 속성을 빈 문자열로 돌려준다.
+  // 그 경우 SVG 도넛 색이 무효화돼 안 보이므로 폴백 색을 둔다(막대는 CSS var 라 무관).
+  var FALLBACK = { '--crit':'#ff5c5c','--high':'#ff9f43','--med':'#ffd166','--low':'#6fcf97',
+                   '--muted':'#8b98a8','--fg':'#e6edf3','--accent':'#4da3ff' };
+  function col(v){ return (cs.getPropertyValue(v).trim()) || FALLBACK[v] || '#888'; }
   var SEV = {
     critical: {c: col('--crit'), ko:'심각'}, high: {c: col('--high'), ko:'높음'},
     medium: {c: col('--med'), ko:'중간'}, low: {c: col('--low'), ko:'낮음'},
