@@ -144,19 +144,27 @@ def _styles():
 
 
 def _sev_chart(counts, sevmap):
-    """위험도 분포 가로 막대(간단 Drawing)."""
+    """위험도 분포 가로 막대 — 회색·검정 톤, 옅은 회색 테두리.
+
+    주의: reportlab HexColor 는 3자리(#eee)를 6자리로 펼치지 않는다(0x000EEE=파랑).
+    반드시 6자리로 쓴다."""
     order = SEV_ORDER
     mx = max([counts.get(s, 0) for s in order] + [1])
-    row_h, bar_w = 20, 300
-    d = Drawing(460, row_h * len(order) + 6)
-    y = row_h * (len(order) - 1) + 3
+    row_h, bar_w, pad = 20, 300, 8
+    W, H = 460, row_h * len(order) + pad * 2
+    d = Drawing(W, H)
+    # 겉 테두리(옅은 회색, 얇게)
+    d.add(Rect(0.5, 0.5, W - 1, H - 1, fillColor=colors.white,
+               strokeColor=colors.HexColor("#d9d9d9"), strokeWidth=0.6))
+    y = H - pad - row_h + 4
     for s in order:
         n = counts.get(s, 0)
-        w = max(1.0, (n / mx) * bar_w)
-        d.add(String(2, y + 3, sevmap[s], fontName=_FONT, fontSize=9, fillColor=colors.HexColor("#333")))
-        d.add(Rect(78, y, bar_w, 12, fillColor=colors.HexColor("#eee"), strokeColor=None))
-        d.add(Rect(78, y, w, 12, fillColor=SEV_COLOR[s], strokeColor=None))
-        d.add(String(78 + bar_w + 8, y + 3, str(n), fontName=_FONT_B, fontSize=9, fillColor=colors.HexColor("#333")))
+        w = (n / mx) * bar_w if n else 0
+        d.add(String(pad + 2, y + 3, sevmap[s], fontName=_FONT, fontSize=9, fillColor=colors.HexColor("#222222")))
+        d.add(Rect(78, y, bar_w, 12, fillColor=colors.HexColor("#eeeeee"), strokeColor=None))
+        if w:
+            d.add(Rect(78, y, w, 12, fillColor=colors.HexColor("#3a3a3a"), strokeColor=None))
+        d.add(String(78 + bar_w + 8, y + 3, str(n), fontName=_FONT_B, fontSize=9, fillColor=colors.HexColor("#222222")))
         y -= row_h
     return d
 
@@ -234,7 +242,7 @@ _CRITERIA = {
     "critical": "인증우회·원격코드실행·중요정보 유출 등 즉각적 피해가 가능",
     "high": "권한상승·주입 등 공격 성공 시 영향이 큼",
     "medium": "제한된 조건에서 악용 가능하거나 정보 노출 소지",
-    "low": "직접 피해는 낮으나 보안 위생상 개선 권고",
+    "low": "직접 피해는 낮으나 보안 품질상 개선 권고",
     "info": "취약점은 아니나 참고할 정보",
 }
 _CRITERIA_EN = {
@@ -338,7 +346,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
            T("SAST 진단 · CPGuard"), cover_rows)
 
     # ── 문서 개정 이력 ──
-    story.append(Paragraph(T("문서 개정 이력"), st["h2sec"]))
+    story.append(Paragraph(T("문서 개정 이력"), st["h2"]))   # h2(목차 미등록) — 목차엔 안 넣는다
     rev = [[T("버전"), T("일자"), T("내용"), T("작성")],
            [version, today, T("최초 작성"), author]]
     rt = Table(rev, colWidths=[20 * mm, 30 * mm, 96 * mm, 28 * mm])
@@ -417,6 +425,57 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
                             ("ALIGN", (2, 0), (2, -1), "CENTER"),
                             ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
     story.append(ct)
+
+    # ── 진단 이력 — 같은 프로젝트를 N 회 돌린 경우 최근→과거 표. 각 회차의 신규/해결로
+    #    이전 대비 증감을 보여준다(해결된 취약점은 최신 회차 건수에서 이미 빠져 있다).
+    Scan = scan.__class__
+    runs = list(Scan.objects.filter(project=scan.project).order_by("-created_at")) if scan.project else [scan]
+    total_runs = len(runs)
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(T("진단 이력"), st["h2sec"]))
+    cur_idx = next((i for i, r in enumerate(runs) if r.pk == scan.pk), 0)
+    if en:
+        lead = (f"This project has been assessed {total_runs} time(s). Runs are listed latest first; "
+                f"'New'/'Resolved' are relative to the immediately preceding run.")
+    else:
+        lead = (f"이 프로젝트는 총 {total_runs}회 진단되었다. 최근 회차부터 나열하며, "
+                f"신규/해결은 직전 회차 대비 증감이다(해결된 취약점은 해당 회차 건수에서 이미 제외됨).")
+    story.append(Paragraph(lead, st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    hrows = [[T("회차"), T("일시"), T("탐지"), T("신규"), T("해결")] + [SEV.get(s, s) for s in SEV_ORDER]]
+    for i, r in enumerate(runs):
+        no = total_runs - i
+        mark = " ◀" if r.pk == scan.pk else ""
+        hrows.append([f"{no}{mark}", r.created_at.strftime("%Y-%m-%d %H:%M"), str(r.finding_count),
+                      f"+{r.new_count}" if r.new_count else "0",
+                      f"-{r.resolved_count}" if r.resolved_count else "0",
+                      str(r.sev_critical), str(r.sev_high), str(r.sev_medium), str(r.sev_low), str(r.sev_info)])
+    ht = Table(hrows, colWidths=[14 * mm, 30 * mm, 16 * mm, 16 * mm, 16 * mm] + [16.4 * mm] * 5, repeatRows=1)
+    hstyle = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+              ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+              ("ALIGN", (2, 0), (-1, -1), "CENTER"), ("ALIGN", (0, 0), (0, -1), "CENTER"),
+              ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+              ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+    # 현재 보고서 회차 행 강조
+    hstyle.append(("BACKGROUND", (0, cur_idx + 1), (-1, cur_idx + 1), colors.HexColor("#f7f7f7")))
+    hstyle.append(("FONTNAME", (0, cur_idx + 1), (-1, cur_idx + 1), _FONT_B))
+    for j, s in enumerate(SEV_ORDER, 5):
+        hstyle.append(("TEXTCOLOR", (j, 1), (j, -1), SEV_COLOR[s]))
+    ht.setStyle(TableStyle(hstyle))
+    story.append(ht)
+    prev = scan.previous()
+    if prev is not None:
+        delta = scan.finding_count - prev.finding_count
+        if en:
+            note = (f"vs previous run: {'+' if delta > 0 else ''}{delta} findings "
+                    f"(new +{scan.new_count}, resolved -{scan.resolved_count}).")
+        else:
+            note = (f"이전 대비: 탐지 {'+' if delta > 0 else ''}{delta}건 "
+                    f"(신규 +{scan.new_count} · 해결 -{scan.resolved_count}).")
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(note, st["small"]))
     story.append(PageBreak())
 
     # ── 3. 진단 항목 ──

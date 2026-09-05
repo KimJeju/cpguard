@@ -145,6 +145,8 @@ PDF_UI: dict[str, str] = {
     "취약점": "Vulnerability", "데이터 흐름": "Data Flow", "영향": "Impact",
     "조치 방안": "Remediation", "안전한 코드 예시": "Safe Code Example", "참고": "References",
     "판정": "Rating", "기준": "Criteria", "조치 우선순위": "Priority",
+    "진단 이력": "Assessment History", "회차": "Run", "일시": "Date", "신규": "New", "해결": "Resolved",
+    "총 진단 횟수": "Total runs", "이전 대비": "vs previous",
     "발주처/고객": "Client", "수행 기관/회사": "Assessed by", "진단 담당자": "Assessor",
     "진단 수행 기간": "Assessment period", "보고서 버전": "Report version",
     "CPGuard (CPG 기반 taint 분석 + 패턴)": "CPGuard (CPG-based taint analysis + patterns)",

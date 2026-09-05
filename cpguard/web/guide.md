@@ -14,7 +14,7 @@ CPG 기반 taint 분석 + LLM 트리아지를 결합한 정적 보안 분석(SAS
   LDAP/XPath 주입(90/643) · WebView XSS · Intent 리다이렉션(926).
   지원 언어: JavaScript · TypeScript · PHP · Python · **Java · Kotlin · Go · Ruby · C/C++ · Swift · C#**.
 - **패턴(단일 지점)** — 전 언어 대상. 하드코딩 비밀정보·API 키 · 개인정보(PII) ·
-  TLS 검증 비활성 · 취약 암호/해시 · 디버그 코드 · 설정 위생.
+  TLS 검증 비활성 · 취약 암호/해시 · 디버그 코드 · 설정 점검.
 
 ## 2. 첫 진단 (3단계)
 

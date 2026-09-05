@@ -220,7 +220,7 @@
           </select>
           <select id="fcat">
             <option value="">유형 전체</option><option value="flow">데이터 흐름</option><option value="secret">비밀정보</option>
-            <option value="pii">개인정보</option><option value="config">설정</option><option value="infra">인프라</option><option value="hygiene">위생</option>
+            <option value="pii">개인정보</option><option value="config">설정</option><option value="infra">인프라</option><option value="hygiene">코드 정리</option>
           </select>
         </div>
         <div style="display:flex;gap:6px">
@@ -353,7 +353,7 @@
   const AUDIT_LABEL = { '': '미확인', confirmed: '취약 확정', false_positive: '오탐', fixed: '조치완료', deferred: '보류' };
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
   const SEV_ICON  = { critical: '<i class="sd sd-critical"></i>', high: '<i class="sd sd-high"></i>', medium: '<i class="sd sd-medium"></i>', low: '<i class="sd sd-low"></i>', info: '<i class="sd sd-info"></i>' };
-  const CAT_LABEL = { flow: '데이터 흐름', secret: '비밀정보', pii: '개인정보', config: '설정', infra: '인프라', hygiene: '위생' };
+  const CAT_LABEL = { flow: '데이터 흐름', secret: '비밀정보', pii: '개인정보', config: '설정', infra: '인프라', hygiene: '코드 정리' };
   const sevTag = s => `<span class="sev sev-${s}">${SEV_ICON[s] || ''} ${String(s).toUpperCase()}</span>`;
 
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
