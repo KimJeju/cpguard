@@ -86,7 +86,7 @@
   .logo svg{color:var(--accent)}
   .tag{color:var(--muted);font-size:var(--fs-caption)}
   main{max-width:1120px;margin:0 auto;padding:var(--sp-6) var(--sp-5) 60px}
-  /* 작업대처럼 화면을 꽉 채우는 페이지를 위해 body 를 세로 flex 로 둔다 */
+  /* 분석 화면처럼 화면을 꽉 채우는 페이지를 위해 body 를 세로 flex 로 둔다 */
   body.app{height:100vh;display:flex;flex-direction:column;overflow:hidden}
   body.app main{max-width:none;margin:0;padding:0;flex:1;min-height:0}
   /* ---- 카드 = 콘텐츠 레이어: 표준 머티리얼(엘리베이션·헤어라인), 글래스 아님 ---- */
@@ -373,7 +373,7 @@
 
   // ── 한국어 ↔ English 토글 ──────────────────────────────────────────────
   // UI 는 한국어가 원본. EN 은 사전으로 텍스트 노드를 치환하고, MutationObserver 로
-  // 동적으로 그려지는 내용(작업대 등)도 자동 번역한다. KO 로 돌아갈 때는 원본이므로 reload.
+  // 동적으로 그려지는 내용(분석 화면 등)도 자동 번역한다. KO 로 돌아갈 때는 원본이므로 reload.
   (function () {
     var DICT = {
       // 헤더/네비
@@ -394,8 +394,8 @@
       "Critical": "Critical", "High": "High", "Medium": "Medium", "Low": "Low", "Info": "Info",
       // 업로드 옵션
       "자유 입력": "Custom entry",
-      // 작업대
-      "감사 작업대": "Audit workbench", "이슈": "Issues", "목록": "List", "표": "Table", "소스": "Source",
+      // 분석 화면
+      "취약점 분석": "Vulnerability analysis", "이슈": "Issues", "목록": "List", "표": "Table", "소스": "Source",
       "위험도 전체": "All severities", "유형 전체": "All types", "위험도별": "By severity", "규칙별": "By rule",
       "파일별": "By file", "유형별": "By type", "전체": "All", "신규만": "New only", "오탐힌트만": "FP hints only",
       "감사 완료 숨기기": "Hide audited", "감사 전체": "All audit states", "감사 상태": "Audit state",
@@ -427,13 +427,13 @@
       "리포트 · 내보내기": "Reports · Export", "진단보고서": "Report", "조치가이드": "Remediation guide",
       "설정": "Settings", "저장됨": "Set", "미설정": "Not set", "선택": "Optional", "발급 가이드": "Get key",
       "모델": "Model", "이 키 삭제": "Delete this key",
-      // 작업대 툴바·기타
+      // 분석 화면 툴바·기타
       "보고서": "Report", "조치": "Remediation", "패널": "Panel", "단계": "Step", "이동": "Move",
       "규칙·파일·메시지·CWE 필터": "Filter: rule / file / message / CWE", "집계 API": "aggregation API",
       "모델 · 설정/기본값": "Model · default", "LLM 사용 가능:": "LLM available:",
       "시크릿·설정만 빠르게": "Secrets & config only", "(데이터 흐름 분석 생략)": "(skip data-flow)",
       "소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다. 지원:": "Upload a source project as zip; it is extracted and scanned automatically. Supported:",
-      // ── 작업대 추가 ──
+      // ── 분석 화면 추가 ──
       "언어 / Language": "Language", "Language": "Language",
       "이동 ·": "Go ·", "이슈 ·": "Issue ·", "단계 ·": "Step ·",
       "비밀정보": "Secret", "개인정보": "PII", "인프라": "Infra", "코드 정리": "Code cleanup",
@@ -467,7 +467,7 @@
       "보고서 PDF + 분석목록표": "Report PDF + analysis sheet", "보고서 PDF만": "Report PDF only",
       "분석목록표(xlsx)만": "Analysis sheet (xlsx) only", "선택 산출물 ZIP 배부": "Export selected as ZIP",
       "최근 스캔": "Last scan", "위험도 (심/높/중/낮)": "Severity (C/H/M/L)", "액션": "Actions",
-      "작업대": "Workbench", "조건에 맞는 프로젝트가 없습니다.": "No projects match.",
+      "조건에 맞는 프로젝트가 없습니다.": "No projects match.",
       "새 스캔을 올려보세요.": "Upload a new scan.",
       "개 프로젝트 · 프로젝트별 최신 스캔": "projects · latest scan each",
       // ── 배치 진단 ──
@@ -612,7 +612,7 @@
 
     if (LANG === "en") {
       applyEN(document.body);
-      // 동적 렌더(작업대 목록·상세 등)도 계속 번역
+      // 동적 렌더(분석 화면 목록·상세 등)도 계속 번역
       new MutationObserver(function (muts) {
         muts.forEach(function (m) {
           [].forEach.call(m.addedNodes, function (nd) {

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}{{ scan.name }} — CPGuard 감사 작업대{% endblock %}
+{% block title %}{{ scan.name }} — CPGuard 취약점 분석{% endblock %}
 
 {% block bodyclass %}app{% endblock %}
 
 {% block head %}
 <style>
-  /* ---- 작업대: 좌 탐색기 / 중앙 코드+하단 분석패널 / 우 인스펙터. 폭·높이는 CSS 변수로, 사용자가 끌어 조절하고 기억한다 ---- */
+  /* ---- 분석 화면: 좌 탐색기 / 중앙 코드+하단 분석패널 / 우 인스펙터. 폭·높이는 CSS 변수로, 사용자가 끌어 조절하고 기억한다 ---- */
   .wrap { --lw: 320px; --rw: 380px; --bh: 260px; display:flex; flex-direction:column; flex:1; min-height:0 }
   .wb { display:grid; grid-template-columns: var(--lw) 6px 1fr 6px var(--rw); flex:1; min-height:0 }
   .wb.no-left { grid-template-columns: 0 0 1fr 6px var(--rw) }

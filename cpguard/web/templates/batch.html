@@ -63,7 +63,7 @@
     var html = '';
     (d.jobs || []).forEach(function (j) {
       var st = j.status || 'queued';
-      var open = j.pk ? '<a href="/scan/' + j.pk + '/">작업대</a>'
+      var open = j.pk ? '<a href="/scan/' + j.pk + '/">자세히</a>'
                       : (st === 'error' ? '<span class="muted" title="' + esc(j.error) + '">오류</span>' : '<span class="muted">—</span>');
       html += '<tr><td>' + esc(j.name) + '</td>'
             + '<td><span class="st ' + st + '">' + (STLABEL[st] || st)

@@ -1,4 +1,4 @@
-"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 감사 작업대."""
+"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 취약점 분석."""
 from __future__ import annotations
 
 import csv
@@ -574,7 +574,7 @@ def scan_summary_api(request, pk: int):
 
 
 def scan_findings_api(request, pk: int):
-    """필터·정렬·페이지네이션된 finding 목록(JSON). 작업대 가상 스크롤용."""
+    """필터·정렬·페이지네이션된 finding 목록(JSON). 분석 화면 가상 스크롤용."""
     from django.db.models import Case, IntegerField, Q, When
     from .models import FindingRow
     scan = get_object_or_404(Scan, pk=pk)
@@ -880,7 +880,7 @@ def upload(request):
 
 
 def scan_progress(request, job_id: str):
-    """스캔 진행 화면 — 상태를 폴링해 진행바를 갱신하고, 끝나면 작업대로 이동한다."""
+    """스캔 진행 화면 — 상태를 폴링해 진행바를 갱신하고, 끝나면 분석 화면로 이동한다."""
     job = _job_get(job_id)
     if not job:
         return redirect("index")
@@ -944,7 +944,7 @@ def batch_status(request, batch_id: str):
 
 
 def detail(request, pk: int):
-    """감사 작업대 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
+    """취약점 분석 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
     scan = get_object_or_404(Scan, pk=pk)
     lang = _lang(request)
     findings = scan.findings

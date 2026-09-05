@@ -114,7 +114,7 @@
       </td>
       <td>{% if s.new_count %}<span class="newtag">+{{ s.new_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="rowact">
-        <a href="{% url 'detail' s.pk %}">작업대</a>
+        <a href="{% url 'detail' s.pk %}">자세히</a>
         <a download href="{% url 'export_pdf_report' s.pk %}">보고서</a>
         <a download href="{% url 'export_xlsx' s.pk %}">xlsx</a>
       </td>
