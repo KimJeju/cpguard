@@ -821,16 +821,23 @@ def _tbl(rows, widths, *, sizes=8.5, aligns=None, head=True, wrap_cols=(), st=No
 
 
 def _scale_table(rows, total, SEV, T):
-    """3.1 / 3.3 의 프로젝트별 규모·검출 표."""
-    data = [[T("프로젝트"), T("파일 수"), T("빌드 라인"), T("검출")] + [SEV[s] for s in SEV_ORDER]]
+    """3.1 / 3.3 의 프로젝트별 규모·검출 표.
+
+    빌드 라인은 값이 있을 때만 싣는다 — 이 컬럼이 생기기 전 스캔은 0 이라, 그대로 내면
+    0 만 늘어선 열이 산출물에 남는다."""
+    show_lines = any(r.lines for r in rows)
+    head = [T("프로젝트"), T("파일 수")] + ([T("빌드 라인")] if show_lines else []) + [T("검출")]
+    data = [head + [SEV[s] for s in SEV_ORDER]]
     for r in rows:
-        data.append([r.name, f"{r.files:,}", f"{r.lines:,}", str(r.total)]
-                    + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
-    data.append([(T("총 계"), True), (f"{total['files']:,}", True), (f"{total['lines']:,}", True),
-                 (str(total["total"]), True)]
+        data.append([r.name, f"{r.files:,}"] + ([f"{r.lines:,}"] if show_lines else [])
+                    + [str(r.total)] + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
+    data.append([(T("총 계"), True), (f"{total['files']:,}", True)]
+                + ([(f"{total['lines']:,}", True)] if show_lines else [])
+                + [(str(total["total"]), True)]
                 + [(str(total["sev"][s]), True) for s in SEV_ORDER])
-    return _tbl(data, [40 * mm, 17 * mm, 20 * mm, 15 * mm] + [16.4 * mm] * 5,
-                aligns=dict.fromkeys(range(1, 9), "CENTER"))
+    widths = ([40 * mm, 17 * mm] + ([20 * mm] if show_lines else [])
+              + [15 * mm] + [(16.4 if show_lines else 20.4) * mm] * 5)
+    return _tbl(data, widths, aligns=dict.fromkeys(range(1, len(data[0])), "CENTER"))
 
 
 def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
@@ -841,7 +848,6 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     정적 분석 결과를 그대로 내면 발주처가 받지 않는다. 진단원이 오탐·제외로 판정한 근거를
     3.2 에 함께 실어야 산출물이 된다.
     """
-    from .. import standards as _sm
     from . import consolidated as C
 
     _register_font()
@@ -851,7 +857,6 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     SEV = SEV_EN if en else SEV_KR
     REM = REMEDIATION_EN if en else REMEDIATION
     DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
-    CRIT = _CRITERIA_EN if en else _CRITERIA
     meta = meta or {}
     scans = list(scans)
     D = C.build(scans, standards, lang)
@@ -947,14 +952,15 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
              if en else
              f"{std.source_for(lang)}에 근거한 진단 항목을 적용한다. 점검 항목은 다음과 같다."),
             st["body"]))
-        story.append(Spacer(1, 2 * mm))
-        rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
         gs = [g for g in D["groups"] if g["standard"] == (std.name_en if en else std.name)]
-        for i, g in enumerate(gs, 1):
-            rows.append([str(i), g["group"], g["desc"], str(g["n"])])
-        rows.append([("", True), (T("합계"), True), "", (str(sum(g["n"] for g in gs)), True)])
-        story.append(_tbl(rows, [13 * mm, 38 * mm, 105 * mm, 18 * mm],
-                          aligns={0: "CENTER", 3: "CENTER"}, wrap_cols=(1, 2), st=st))
+        if len(gs) > 1:
+            story.append(Spacer(1, 2 * mm))
+            rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
+            for i, g in enumerate(gs, 1):
+                rows.append([str(i), g["group"], g["desc"], str(g["n"])])
+            rows.append([("", True), (T("합계"), True), "", (str(sum(g["n"] for g in gs)), True)])
+            story.append(_tbl(rows, [13 * mm, 38 * mm, 105 * mm, 18 * mm],
+                              aligns={0: "CENTER", 3: "CENTER"}, wrap_cols=(1, 2), st=st))
         story.append(Spacer(1, 4 * mm))
     story.append(PageBreak())
 
@@ -1030,17 +1036,17 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
                                 ("빌드 라인 수", f"{r.lines:,}")],
                                T, col0=34 * mm, col1=140 * mm))
         story.append(Spacer(1, 2 * mm))
-        rows = [[T("순번"), T("분류"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
+        rows = [[T("순번"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
         if r.weaknesses:
             for j, w in enumerate(r.weaknesses, 1):
-                rows.append([str(j), w["cls"], w["group"], w["name"],
+                rows.append([str(j), w["group"], w["name"],
                              SEV.get(w["severity"], w["severity"]), str(w["n"]), "-"])
         else:
-            rows.append(["1", "-", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
-        rows.append([("", True), (T("총 계"), True), "", "", "", (str(r.total), True), ""])
-        story.append(_tbl(rows, [12 * mm, 30 * mm, 30 * mm, 52 * mm, 18 * mm, 14 * mm, 18 * mm],
-                          aligns={0: "CENTER", 4: "CENTER", 5: "CENTER", 6: "CENTER"},
-                          wrap_cols=(1, 2, 3), st=st))
+            rows.append(["1", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
+        rows.append([("", True), (T("총 계"), True), "", "", (str(r.total), True), ""])
+        story.append(_tbl(rows, [12 * mm, 40 * mm, 66 * mm, 20 * mm, 16 * mm, 20 * mm],
+                          aligns={0: "CENTER", 3: "CENTER", 4: "CENTER", 5: "CENTER"},
+                          wrap_cols=(1, 2), st=st))
         story.append(Spacer(1, 4 * mm))
     story.append(PageBreak())
 
@@ -1080,30 +1086,5 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
          f"조치대상으로 확정되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 등급이 {ch}건이다. "
          f"매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 입력 검증·출력 인코딩·"
          f"비밀정보 분리·안전한 알고리즘 적용을 권고한다."), st["body"]))
-
-    # ── 부록 ──
-    story.append(PageBreak())
-    story.append(Paragraph(T("부록 A. 위험도 판정 기준"), st["h1"]))
-    rows = [[T("판정"), T("기준"), T("조치 우선순위")]]
-    for s in SEV_ORDER:
-        rows.append([(SEV.get(s, s), True), CRIT[s], T(_PRIORITY[s])])
-    story.append(_tbl(rows, [28 * mm, 118 * mm, 28 * mm], sizes=9, wrap_cols=(1,), st=st))
-
-    if stds:
-        story.append(Spacer(1, 6 * mm))
-        story.append(Paragraph(T("부록 B. 점검항목별 진단 결과"), st["h1"]))
-        story.append(Paragraph(
-            ("Every check item of the applied standards with its verdict. Items with no rule "
-             "behind them are marked 'Not assessed' rather than passing."
-             if en else
-             "적용 기준의 전체 점검항목과 판정이다. 이 도구가 볼 수 있는 규칙이 없는 항목은 "
-             "양호가 아니라 '진단 대상 아님'으로 표기한다."), st["body"]))
-        story.append(Spacer(1, 2 * mm))
-        avail = _sm.rule_cwes()
-        V = _sm.VERDICT_EN if en else _sm.VERDICT_KO
-        for std in stds:
-            story.append(Paragraph(std.name_en if en else std.name, st["h2sec"]))
-            story.append(_item_table(_sm.coverage(std, D["cwe_counts"], avail), std, V, T, st, en))
-            story.append(Spacer(1, 4 * mm))
 
     _build_report(story, path, title + " " + T("진단 결과 보고서"))

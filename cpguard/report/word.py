@@ -436,7 +436,6 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     Word 본이 담당자가 고쳐 쓰는 원본이다 — 발주처 양식·기관 표지·현장 의견을 얹어
     최종 산출물로 만드는 일이 실제 진단의 대부분이다.
     """
-    from .. import standards as _sm
     from . import consolidated as C
     from .pdf import _tool_version
 
@@ -445,7 +444,6 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     SEV = SEV_EN if en else SEV_KR
     REM = REMEDIATION_EN if en else REMEDIATION
     DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
-    CRIT = _CRITERIA_EN if en else _CRITERIA
     meta = meta or {}
     scans = list(scans)
     D = C.build(scans, standards, lang)
@@ -540,13 +538,14 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
                     f"{std.source_for(lang)}에 근거한 진단 항목을 적용한다. 점검 항목은 다음과 같다."),
               size=9.5, space_after=6)
         gs = [g for g in D["groups"] if g["standard"] == (std.name_en if en else std.name)]
-        rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
-        for i, g in enumerate(gs, 1):
-            rows.append([str(i), g["group"], g["desc"], str(g["n"])])
-        rows.append([("", S.INK, True), (T("합계"), S.INK, True), "",
-                     (str(sum(g["n"] for g in gs)), S.INK, True)])
-        _table(doc, rows, [1.3, 3.8, 10.5, 1.8], sizes=8.5,
-               aligns=[CENTER, None, None, CENTER])
+        if len(gs) > 1:
+            rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
+            for i, g in enumerate(gs, 1):
+                rows.append([str(i), g["group"], g["desc"], str(g["n"])])
+            rows.append([("", S.INK, True), (T("합계"), S.INK, True), "",
+                         (str(sum(g["n"] for g in gs)), S.INK, True)])
+            _table(doc, rows, [1.3, 3.8, 10.5, 1.8], sizes=8.5,
+                   aligns=[CENTER, None, None, CENTER])
         _para(doc, "", space_after=8)
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -555,15 +554,21 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     it, ft = D["initial_total"], D["final_total"]
 
     def scale_table(rows, total):
-        data = [[T("프로젝트"), T("파일 수"), T("빌드 라인"), T("검출")] + [SEV[s] for s in SEV_ORDER]]
+        # 빌드 라인은 값이 있을 때만 — 이 컬럼이 생기기 전 스캔은 0 이라 빈 열이 된다.
+        show = any(r.lines for r in rows)
+        head = ([T("프로젝트"), T("파일 수")] + ([T("빌드 라인")] if show else [])
+                + [T("검출")] + [SEV[s] for s in SEV_ORDER])
+        data = [head]
         for r in rows:
-            data.append([r.name, f"{r.files:,}", f"{r.lines:,}", str(r.total)]
-                        + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
-        data.append([(T("총 계"), S.INK, True), (f"{total['files']:,}", S.INK, True),
-                     (f"{total['lines']:,}", S.INK, True), (str(total["total"]), S.INK, True)]
+            data.append([r.name, f"{r.files:,}"] + ([f"{r.lines:,}"] if show else [])
+                        + [str(r.total)] + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
+        data.append([(T("총 계"), S.INK, True), (f"{total['files']:,}", S.INK, True)]
+                    + ([(f"{total['lines']:,}", S.INK, True)] if show else [])
+                    + [(str(total["total"]), S.INK, True)]
                     + [(str(total["sev"][s]), S.INK, True) for s in SEV_ORDER])
-        _table(doc, data, [4.0, 1.7, 2.0, 1.5] + [1.64] * 5, sizes=8,
-               aligns=[None] + [CENTER] * 8)
+        widths = ([4.0, 1.7] + ([2.0] if show else []) + [1.5]
+                  + [(1.64 if show else 2.04)] * 5)
+        _table(doc, data, widths, sizes=8, aligns=[None] + [CENTER] * (len(head) - 1))
 
     _heading(doc, T("3.1 최초 보안약점 진단 결과"), 2)
     _para(doc, (f"The initial assessment across {D['projects']} project(s) detected "
@@ -622,17 +627,17 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
                   (T("개발언어"), r.languages), (T("파일 수"), f"{r.files:,}"),
                   (T("빌드 라인 수"), f"{r.lines:,}")], w0=3.4, w1=13.6)
         _para(doc, "", space_after=4)
-        rows = [[T("순번"), T("분류"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
+        rows = [[T("순번"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
         if r.weaknesses:
             for j, w in enumerate(r.weaknesses, 1):
-                rows.append([str(j), w["cls"], w["group"], w["name"],
+                rows.append([str(j), w["group"], w["name"],
                              SEV.get(w["severity"], w["severity"]), str(w["n"]), "-"])
         else:
-            rows.append(["1", "-", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
-        rows.append([("", S.INK, True), (T("총 계"), S.INK, True), "", "", "",
+            rows.append(["1", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
+        rows.append([("", S.INK, True), (T("총 계"), S.INK, True), "", "",
                      (str(r.total), S.INK, True), ""])
-        _table(doc, rows, [1.2, 3.0, 3.0, 5.2, 1.8, 1.4, 1.8], sizes=8,
-               aligns=[CENTER, None, None, None, CENTER, CENTER, CENTER])
+        _table(doc, rows, [1.2, 4.0, 6.6, 2.0, 1.6, 2.0], sizes=8,
+               aligns=[CENTER, None, None, CENTER, CENTER, CENTER])
         _para(doc, "", space_after=8)
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -668,45 +673,6 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
                 f"조치대상으로 확정되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 등급이 "
                 f"{ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 "
                 f"입력 검증·출력 인코딩·비밀정보 분리·안전한 알고리즘 적용을 권고한다."))
-
-    # ── 부록 ──
-    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
-    _heading(doc, T("부록 A. 위험도 판정 기준"), 1)
-    rows = [[T("판정"), T("기준"), T("조치 우선순위")]]
-    for s in SEV_ORDER:
-        rows.append([(SEV.get(s, s), S.SEV_INK[s], True), CRIT[s], T(_PRIORITY[s])])
-    _table(doc, rows, [2.8, 11.8, 2.8], sizes=9)
-
-    if stds:
-        _para(doc, "", space_after=10)
-        _heading(doc, T("부록 B. 점검항목별 진단 결과"), 1)
-        _para(doc, ("Every check item of the applied standards with its verdict. Items with no "
-                    "rule behind them are marked 'Not assessed' rather than passing."
-                    if en else
-                    "적용 기준의 전체 점검항목과 판정이다. 이 도구가 볼 수 있는 규칙이 없는 "
-                    "항목은 양호가 아니라 '진단 대상 아님'으로 표기한다."), size=9.5, space_after=6)
-        avail = _sm.rule_cwes()
-        V = _sm.VERDICT_EN if en else _sm.VERDICT_KO
-        for std in stds:
-            _heading(doc, std.name_en if en else std.name, 2)
-            code = std.show_code
-            head = ([T("유형")] + ([T("코드")] if code else [])
-                    + [T("보안약점"), "CWE", T("판정"), T("탐지")])
-            rows = [head]
-            for r in _sm.coverage(std, D["cwe_counts"], avail):
-                cw = (", ".join(r["cwes"][:3]) + ("…" if len(r["cwes"]) > 3 else "")) or "-"
-                dim = S.MUTED if r["verdict"] == _sm.NOT_COVERED else S.INK
-                rows.append([(r["group_en"] if en else r["group"], dim, False)]
-                            + ([(r["code"], dim, False)] if code else [])
-                            + [(r["name_en"] if en else r["name"], dim, False),
-                               (cw, dim, False),
-                               (V[r["verdict"]], dim, r["verdict"] == _sm.VIOLATED),
-                               (str(r["n"]) if r["n"] else "-", dim, False)])
-            widths = ([2.9] + ([1.5] if code else [])
-                      + [(5.6 if code else 7.0), 3.0, 2.4, 1.4])
-            _table(doc, rows, widths, sizes=8,
-                   aligns=[None] * (len(head) - 3) + [CENTER, CENTER, CENTER])
-            _para(doc, "", space_after=8)
 
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)

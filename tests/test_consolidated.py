@@ -88,10 +88,11 @@ def test_consolidated_pdf_has_the_submission_structure(two_projects):
     txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(r.content)).pages)
     for section in ("1. 취약점 진단 개요", "1.3 점검 도구", "1.4 점검 수행 인원", "2. 진단 항목",
                     "3.1 최초 보안약점 진단 결과", "3.2 진단 결과 점검", "3.3 최종 점검 결과",
-                    "4. 유형별 조치 권고", "부록 A. 위험도 판정 기준", "부록 B. 점검항목별 진단 결과"):
+                    "4. 유형별 조치 권고", "5. 종합 의견"):
         assert section in txt, f"빠진 절: {section}"
     assert "svc-alpha" in txt and "svc-beta" in txt      # 프로젝트별 상세
-    assert "빌드 라인" in txt and "진단원 의견" in txt
+    assert "진단원 의견" in txt
+    assert "부록" not in txt                              # 제출본에서 뺀 절
     m = re.search(r"최초 (\d+)건에서 최종 (\d+)건", txt)
     assert m and int(m.group(1)) - int(m.group(2)) == 2
 
