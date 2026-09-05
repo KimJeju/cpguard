@@ -19,8 +19,8 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
-  <img src="https://img.shields.io/badge/tests-220%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.595-2e7d32" alt="OWASP Benchmark">
+  <img src="https://img.shields.io/badge/tests-231%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -191,11 +191,13 @@ Measured against **OWASP Benchmark v1.2** (Java, labelled vulnerable/safe pairs)
 
 | Recall | Precision | F1 | False-positive rate | Benchmark score |
 |---:|---:|---:|---:|---:|
-| 56.0% | 63.5% | 0.595 | 35.1% | **0.210** |
+| 65.1% | 73.2% | 0.689 | 25.9% | **0.392** |
 
 Score = recall − false-positive rate (the official OWASP metric; random guessing = 0.000). Config-only categories (`weakrand`, `crypto`, `hash`, `securecookie`, `trustbound` — 1,168 cases) are not data-flow problems and are excluded rather than counted as free wins.
 
-**Where the false positives come from, measured:** 347 of the 753 safe cases (46%) kill the vulnerable path with a condition that is constant at compile time (`if ((7 * 42) - num > 200) bar = "constant"; else bar = param;`). CPGuard is path-insensitive by design, so it reports both branches. **Constant propagation is the single biggest lever** on the false-positive rate, and it is the next planned engine change.
+**The benchmark drove real engine work.** The first run scored 0.137; every point since came from a defect the numbers exposed — taint dying inside `try` blocks, for-each variables losing the collection's taint, constructors not matching as sinks, no path sensitivity at all, and container mutations (`list.add`, `map.put`) not propagating. Each fix is a general analysis technique, not a tweak aimed at the test cases. The full before/after ledger is in [`bench/README.md`](bench/README.md).
+
+**What still trips it:** most remaining false positives need element-level index tracking (`list.add(param); list.remove(0); list.get(1)`), which is effectively symbolic execution and defeats most static analyzers. Most false negatives are inputs arriving through framework annotations or helper classes that are not yet modelled as sources.
 
 A second measurement on a real application (DVWA, PHP) is also published. Full methodology, per-category tables and limitations: [`bench/README.md`](bench/README.md).
 
@@ -210,11 +212,11 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] Finding DB table + server-side pagination · virtual scrolling for large results
 - [x] Sink pre-filtering · multiprocessing · parse/summary caches · triage clustering
 - [x] CI/CD — GitHub Action · SARIF → Code Scanning · severity gate
-- [x] Accuracy benchmark published — OWASP Benchmark v1.2, N=1,572, F1 0.595 ([details](bench/README.md))
+- [x] Accuracy benchmark published — OWASP Benchmark v1.2, N=1,572, F1 0.689 ([details](bench/README.md))
 - [x] 11 languages — Java, Kotlin, Go, Ruby, C/C++, Swift, C# added
 - [x] Batch scanning, project portfolio and bulk deliverables for hundreds of projects
-- [ ] Constant propagation (path sensitivity) to cut the false-positive rate
-- [ ] Stronger sanitizer recognition · framework-aware entry points (Spring, JPA)
+- [x] Constant propagation · container taint · key-sensitive map tracking
+- [ ] Framework-aware entry points (Spring, JPA) · stronger sanitizer recognition
 
 ## 📄 License
 

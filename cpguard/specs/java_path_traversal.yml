@@ -33,7 +33,6 @@ sources:
 - pattern: name
   name:
   - System.getenv
-  - args
 sinks:
 - pattern: call
   callee:

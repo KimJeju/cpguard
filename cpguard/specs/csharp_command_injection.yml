@@ -196,7 +196,6 @@ sources:
   - Environment.GetEnvironmentVariable
   - Console.ReadLine
   - Console.In.ReadLine
-  - args
   - HttpContext.Current.Request
 sinks:
 - pattern: call

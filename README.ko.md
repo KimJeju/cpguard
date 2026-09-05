@@ -19,8 +19,8 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
-  <img src="https://img.shields.io/badge/tests-220%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.595-2e7d32" alt="OWASP Benchmark">
+  <img src="https://img.shields.io/badge/tests-231%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -194,17 +194,21 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 | 재현율 | 정밀도 | F1 | 오탐률 | 점수 |
 |---:|---:|---:|---:|---:|
-| 56.0% | 63.5% | 0.595 | 35.1% | **0.210** |
+| 65.1% | 73.2% | 0.689 | 25.9% | **0.392** |
 
 점수 = 재현율 − 오탐률 (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000).
 설정 점검 성격의 유형(`weakrand`·`crypto`·`hash`·`securecookie`·`trustbound`, 1,168건)은
 데이터 흐름 문제가 아니므로 공짜 점수로 넣지 않고 지표에서 제외했습니다.
 
-**오탐의 원인을 측정했습니다.** 안전 케이스 753건 중 **347건(46%)** 이
-`if ((7 * 42) - num > 200) bar = "상수"; else bar = param;` 처럼 컴파일 시점에 결과가
-정해지는 조건으로 취약 경로를 죽입니다. CPGuard 는 설계상 경로 민감도가 없어 양쪽 분기를
-모두 가능하다고 보므로 이런 케이스를 오탐으로 냅니다. **상수 전파(constant propagation)가
-오탐률을 낮출 가장 큰 단일 지렛대**이며, 다음 엔진 과제로 잡았습니다.
+**벤치마크가 실제 엔진 개선을 이끌었습니다.** 첫 측정은 0.137 이었고, 이후의 모든 상승은
+수치가 드러낸 결함을 고친 결과입니다 — `try` 블록 안에서 오염이 끊기던 문제, for-each 반복
+변수가 컬렉션의 오염을 잃던 문제, 생성자가 위험 지점으로 매칭되지 않던 문제, 경로 민감도 부재,
+컨테이너 변경(`list.add`·`map.put`) 미전파. 각 수정은 테스트케이스에 맞춘 것이 아니라
+일반적인 분석 기법입니다. 단계별 전후 기록은 [`bench/README.md`](bench/README.md) 에 있습니다.
+
+**남은 한계:** 오탐의 주류는 `list.add(param); list.remove(0); list.get(1)` 같은 원소 인덱스
+추적이 필요한 형태로, 사실상 기호 실행의 영역이라 대부분의 정적 분석기가 함께 놓칩니다.
+미탐의 주류는 프레임워크 어노테이션이나 헬퍼 클래스를 경유해 들어오는 입력입니다.
 
 실제 앱(DVWA, PHP) 기준 보조 측정도 함께 공개합니다. 전체 방법론·유형별 표·한계는
 [`bench/README.md`](bench/README.md) 참조.
@@ -222,11 +226,11 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 - [x] Finding DB 테이블화 + 서버측 페이지네이션 · 가상 스크롤(대량 탐지)
 - [x] 싱크 사전 필터링 · 멀티프로세스 · 파싱/요약 캐시 · 트리아지 클러스터링
 - [x] CI/CD 통합 — GitHub Action · SARIF → Code Scanning · 등급 게이트
-- [x] 정확도 벤치마크 공개 — OWASP Benchmark v1.2, 표본 1,572건, F1 0.595 ([상세](bench/README.md))
+- [x] 정확도 벤치마크 공개 — OWASP Benchmark v1.2, 표본 1,572건, F1 0.689 ([상세](bench/README.md))
 - [x] 11개 언어 — Java · Kotlin · Go · Ruby · C/C++ · Swift · C# 추가
 - [x] 다건 배치 진단 · 프로젝트 포트폴리오 · 대량 산출물 배부
-- [ ] 상수 전파(경로 민감도) 도입으로 오탐률 감소
-- [ ] sanitizer 인식 강화 · 프레임워크 인지 진입점(Spring·JPA)
+- [x] 상수 전파 · 컨테이너 오염 전파 · 리터럴 키 단위 맵 추적
+- [ ] 프레임워크 인지 진입점(Spring·JPA) · sanitizer 인식 강화
 
 ## 📄 라이선스
 

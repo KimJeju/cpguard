@@ -109,3 +109,91 @@ def test_parse_cache_version_tracks_normalizer(tmp_path):
     from cpguard import scanner
     assert scanner._PARSE_CACHE_VER == scanner._normalizer_version()
     assert len(scanner._PARSE_CACHE_VER) >= 8
+
+
+# ---- 상수 전파 ----
+# 경로 민감도가 없어 죽은 가지의 오염까지 보고하던 오탐을 줄이는 축.
+# OWASP Benchmark 안전 케이스의 46%가 이 형태라 회귀하면 오탐률이 바로 튄다.
+
+def test_constfold_kills_dead_branch(tmp_path):
+    """컴파일 시점에 거짓인 else 가지는 오염 경로로 세지 않는다."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("q");'
+           ' int num = 86;'
+           ' String bar;'
+           ' if ((7 * 42) - num > 200) bar = "safe"; else bar = p;'
+           ' Runtime.getRuntime().exec(bar); } }')
+    assert "java.command-injection" not in _scan(tmp_path, "C1.java", src)
+
+
+def test_constfold_keeps_live_branch(tmp_path):
+    """반대로 상수 조건이 참이면 그 가지의 오염은 그대로 살아 있어야 한다(미탐 금지)."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("q");'
+           ' int num = 86;'
+           ' String bar;'
+           ' if ((7 * 42) - num > 200) bar = p; else bar = "safe";'
+           ' Runtime.getRuntime().exec(bar); } }')
+    assert "java.command-injection" in _scan(tmp_path, "C2.java", src)
+
+
+def test_constfold_ternary(tmp_path):
+    """삼항도 같은 함정 형태로 쓰인다."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("q");'
+           ' int num = 106;'
+           ' String bar = (7 * 18) + num > 200 ? "safe" : p;'
+           ' Runtime.getRuntime().exec(bar); } }')
+    assert "java.command-injection" not in _scan(tmp_path, "C3.java", src)
+
+
+def test_constfold_gives_up_on_reassigned_name(tmp_path):
+    """두 번 이상 대입된 이름은 값을 특정할 수 없으므로 접지 않는다(건전성)."""
+    src = ('class A { void f(HttpServletRequest request, boolean flag) {'
+           ' String p = request.getParameter("q");'
+           ' int num = 86;'
+           ' if (flag) num = 1000;'
+           ' String bar;'
+           ' if ((7 * 42) - num > 200) bar = "safe"; else bar = p;'
+           ' Runtime.getRuntime().exec(bar); } }')
+    assert "java.command-injection" in _scan(tmp_path, "C4.java", src)
+
+
+def test_constfold_never_folds_a_parameter(tmp_path):
+    """파라미터 값은 호출자가 정한다 — 상수로 접으면 안 된다."""
+    from cpguard.parse.constfold import _eval, _UNK
+    from cpguard import ir
+    loc = ir.Loc("<t>", 1, 0, 1, 1, 0, 1)
+    assert _eval(ir.Ident(loc=loc, name="x"), {}) is _UNK
+    assert _eval(ir.Binary(loc=loc, op="*",
+                           children=[ir.Literal(loc=loc, value=None, raw="7"),
+                                     ir.Literal(loc=loc, value=None, raw="42")]), {}) == 294
+    assert _eval(ir.Binary(loc=loc, op="/",
+                           children=[ir.Literal(loc=loc, value=None, raw="1"),
+                                     ir.Literal(loc=loc, value=None, raw="0")]), {}) is _UNK
+
+
+# ---- 컨테이너 오염 전파 ----
+
+def test_container_mutation_taints_receiver(tmp_path):
+    """list.add(오염) 은 리스트를 오염시킨다 — 수신자 변경을 모델링하지 않으면 미탐."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("q");'
+           ' java.util.List<String> a = new java.util.ArrayList<String>();'
+           ' a.add("sh"); a.add(p);'
+           ' ProcessBuilder pb = new ProcessBuilder(); pb.command(a); } }')
+    assert "java.command-injection" in _scan(tmp_path, "M1.java", src)
+
+
+def test_map_taint_is_key_sensitive(tmp_path):
+    """리터럴 키로 넣고 다른 키로 꺼내면 오염이 아니다(맵 통째 오염은 오탐)."""
+    safe = ('class A { void f(HttpServletRequest request) {'
+            ' String p = request.getParameter("q");'
+            ' java.util.HashMap<String,Object> m = new java.util.HashMap<String,Object>();'
+            ' m.put("bad", p); m.put("ok", "safe");'
+            ' String bar = (String) m.get("ok");'
+            ' Runtime.getRuntime().exec(bar); } }')
+    assert "java.command-injection" not in _scan(tmp_path, "M2.java", safe)
+
+    tainted = safe.replace('m.get("ok")', 'm.get("bad")')
+    assert "java.command-injection" in _scan(tmp_path, "M3.java", tainted)
