@@ -4,36 +4,36 @@
 {% block head %}
 <style>
   .set-wrap { max-width: 720px; }
-  .keyrow { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin-bottom: 14px; }
+  .keyrow { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
   .keyrow .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .keyrow .name { font-weight: 700; }
-  .pill { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+  .keyrow .name { font-weight: 650; }
+  .pill { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius:0; }
   .pill.on { background: color-mix(in srgb, var(--low) 18%, transparent); color: var(--low); }
   .pill.off { background: color-mix(in srgb, var(--muted) 18%, transparent); color: var(--muted); }
   .keyrow .cur { color: var(--muted); font-family: Consolas, monospace; font-size: 12px; margin-left: auto; }
   .keyrow input[type=password], .keyrow input[type=text] {
     width: 100%; background: var(--sunken); color: var(--fg); border: 1px solid var(--line);
-    border-radius: 7px; padding: 9px 11px; font-size: 13px; font-family: Consolas, monospace; }
+    border-radius:0; padding: 9px 11px; font-size: 13px; font-family: Consolas, monospace; }
   .keyrow .clr { display: flex; align-items: center; gap: 7px; margin-top: 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
   .modelrow { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
   .modelrow label { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
-  .modelrow input { flex: 1; background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12.5px; font-family: Consolas, monospace; }
+  .modelrow input { flex: 1; background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius:0; padding: 7px 10px; font-size: 12.5px; font-family: Consolas, monospace; }
   .note { color: var(--muted); font-size: 12.5px; line-height: 1.7; margin-top: 4px; }
-  .gbtn { margin-left: 6px; padding: 3px 10px; font-size: 11.5px; border-radius: 20px; cursor: pointer;
-    border: 1px solid var(--accent); background: transparent; color: var(--accent); font-weight: 700; }
+  .gbtn { margin-left: 6px; padding: 3px 10px; font-size: 11.5px; border-radius:0; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--accent); font-weight: 600; }
   .gbtn:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
   .modal-ov { position: fixed; inset: 0; z-index: 300; display: none; align-items: center; justify-content: center;
-    background: var(--overlay); backdrop-filter: blur(3px); padding: 20px; }
+    background: var(--overlay); padding: 20px; }
   .modal-ov.on { display: flex; }
-  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--elev-2);
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--elev-2);
     max-width: 480px; width: 100%; max-height: 86vh; overflow: auto; padding: 22px 26px; }
   .modal h3 { margin: 0 0 4px; font-size: 17px; }
   .modal .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
   .modal ol { padding-left: 20px; margin: 0 0 14px; line-height: 1.85; font-size: 13.5px; }
   .modal ol code { font-family: Consolas, monospace; font-size: 12px; background: var(--sunken);
-    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+    border: 1px solid var(--line); border-radius:0; padding: 1px 5px; }
   .modal .tip { font-size: 12.5px; color: var(--muted); background: var(--sunken); border: 1px solid var(--line);
-    border-radius: 8px; padding: 10px 12px; line-height: 1.6; }
+    border-left: 2px solid var(--accent); border-radius:0; padding: 10px 12px; line-height: 1.6; }
   .modal .m-actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; }
 </style>
 {% endblock %}
@@ -54,7 +54,7 @@
       <div class="top">
         <span class="name">{{ r.label }}</span>
         {% if r.set %}<span class="pill on">설정됨</span>{% else %}<span class="pill off">미설정</span>{% endif %}
-        <button type="button" class="gbtn" data-guide="{{ r.pname }}">🔑 발급 가이드</button>
+        <button type="button" class="gbtn" data-guide="{{ r.pname }}">발급 가이드</button>
         <span class="cur">{% if r.masked %}{{ r.masked }}{% else %}—{% endif %}</span>
       </div>
       <input type="password" name="{{ r.env }}" autocomplete="off" spellcheck="false"
@@ -119,7 +119,7 @@
       <li>우상단 <b>Create Key</b> → 키 이름 입력 → 생성</li>
       <li>키를 <b>복사</b>(한 번만 표시됨) → 위 <b>Claude</b> 칸에 붙여넣고 저장</li>
     </ol>
-    <div class="tip">💡 결제/크레딧을 등록해야 실제 호출이 됩니다(Billing).
+    <div class="tip">결제/크레딧을 등록해야 실제 호출이 됩니다(Billing).
       <br><b>가장 쉬운 해결:</b> 키 생성 시 <b>특정 워크스페이스로 제한(Default 등)</b>해서 발급하면
       워크스페이스 ID 가 필요 없습니다.
       <br><code>anthropic-workspace-id is required</code> 오류(신원 연동 키)면, 아래 칸에
@@ -130,14 +130,14 @@
 
   <div class="modal" id="guide-gemini" hidden>
     <h3>Gemini (Google) API 키 발급</h3>
-    <div class="sub">무료 티어로 바로 사용 가능 — 처음 테스트에 추천 ⭐</div>
+    <div class="sub">무료 티어로 바로 사용 가능 — 처음 테스트에 추천</div>
     <ol>
       <li><code>aistudio.google.com/apikey</code> 접속 → Google 계정 로그인</li>
       <li>최초 접속 시 <b>약관 동의</b> · 지역 확인</li>
       <li><b>Create API key</b> → 새 프로젝트(권장) 또는 기존 프로젝트 선택</li>
       <li>생성된 키 <b>복사</b> → 위 <b>Gemini</b> 칸에 붙여넣고 저장</li>
     </ol>
-    <div class="tip">💡 결제 등록 없이 무료 티어로 즉시 동작합니다. 트리아지 첫 테스트에 가장 편합니다.</div>
+    <div class="tip">결제 등록 없이 무료 티어로 즉시 동작합니다. 트리아지 첫 테스트에 가장 편합니다.</div>
     <div class="m-actions"><a class="btn" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">AI Studio 열기 ↗</a><button class="btn ghost" data-close type="button">닫기</button></div>
   </div>
 
@@ -150,7 +150,7 @@
       <li>키 <b>복사</b>(한 번만 표시됨) → 위 <b>ChatGPT</b> 칸에 붙여넣고 저장</li>
       <li><b>Settings → Billing</b> 에서 카드 등록 + 선불 크레딧 충전(<code>$5</code> 이상)</li>
     </ol>
-    <div class="tip">💡 크레딧을 넣지 않으면 rate limit 이 매우 낮거나 호출이 막힙니다. $5 충전 시 Tier 1 로 올라갑니다.</div>
+    <div class="tip">크레딧을 넣지 않으면 rate limit 이 매우 낮거나 호출이 막힙니다. $5 충전 시 Tier 1 로 올라갑니다.</div>
     <div class="m-actions"><a class="btn" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">플랫폼 열기 ↗</a><button class="btn ghost" data-close type="button">닫기</button></div>
   </div>
 </div>

@@ -18,6 +18,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
+from ..i18n import DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, tr
+
 # ---- 폰트 등록 (한글) ----
 _FONT = "Helvetica"
 _FONT_B = "Helvetica-Bold"
@@ -148,10 +150,10 @@ def _cover(story, st, title, subtitle, meta_rows):
     story.append(PageBreak())
 
 
-def _severity_table(story, st, counts):
+def _severity_table(story, st, counts, sevmap, T):
     total = sum(counts.get(s, 0) for s in SEV_ORDER)
-    head = ["위험도"] + [SEV_KR[s] for s in SEV_ORDER] + ["합계"]
-    row = ["개수"] + [str(counts.get(s, 0)) for s in SEV_ORDER] + [str(total)]
+    head = [T("위험도")] + [sevmap[s] for s in SEV_ORDER] + [T("합계")]
+    row = [T("개수")] + [str(counts.get(s, 0)) for s in SEV_ORDER] + [str(total)]
     t = Table([head, row], colWidths=[24 * mm] + [22 * mm] * 5 + [22 * mm])
     style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ccc")),
@@ -164,39 +166,44 @@ def _severity_table(story, st, counts):
     story.append(t)
 
 
-def combined_report(scan, path, author: str = "CPGuard") -> None:
+def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko") -> None:
     """합본 진단 결과 보고서."""
     _register_font()
     st = _styles()
+    en = lang == "en"
+    T = lambda s: tr(s, lang)                       # noqa: E731
+    SEV = SEV_EN if en else SEV_KR
+    REM = REMEDIATION_EN if en else REMEDIATION
+    DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
     findings = scan.findings
     counts = scan.severity_counts
     project = scan.project or Path(scan.name).stem
     story = []
 
-    _cover(story, st, f"{project}\n소스코드 취약점 진단 결과 보고서",
-           "SAST 진단 · CPGuard",
-           [("프로젝트", project), ("대상", scan.name),
-            ("분석 도구", "CPGuard (CPG 기반 taint 분석)"),
-            ("분석 일시", scan.created_at.strftime("%Y-%m-%d %H:%M")),
-            ("소스 파일 수", str(scan.file_count)), ("총 이슈", str(len(findings))),
-            ("작성일", _dt.date.today().strftime("%Y-%m-%d")), ("작성자", author)])
+    _cover(story, st, f"{project}\n" + T("소스코드 취약점 진단 결과 보고서"),
+           T("SAST 진단 · CPGuard"),
+           [(T("프로젝트"), project), (T("대상"), scan.name),
+            (T("분석 도구"), T("CPGuard (CPG 기반 taint 분석)")),
+            (T("분석 일시"), scan.created_at.strftime("%Y-%m-%d %H:%M")),
+            (T("소스 파일 수"), str(scan.file_count)), (T("총 이슈"), str(len(findings))),
+            (T("작성일"), _dt.date.today().strftime("%Y-%m-%d")), (T("작성자"), author)])
 
-    story.append(Paragraph("1. 진단 개요", st["h1"]))
-    story.append(Paragraph(
+    story.append(Paragraph(T("1. 진단 개요"), st["h1"]))
+    story.append(Paragraph(T(
         "본 보고서는 CPGuard 정적 분석(데이터 흐름 taint + 패턴)을 통해 대상 소스코드의 "
         "보안약점을 도출한 결과이다. 각 이슈는 CWE·OWASP 로 분류되며, 유형별 조치 방법은 "
-        "별도의 조치 가이드를 참조한다.", st["body"]))
+        "별도의 조치 가이드를 참조한다."), st["body"]))
     story.append(Spacer(1, 4 * mm))
 
-    story.append(Paragraph("2. 위험도별 진단 결과", st["h1"]))
-    _severity_table(story, st, counts)
+    story.append(Paragraph(T("2. 위험도별 진단 결과"), st["h1"]))
+    _severity_table(story, st, counts, SEV, T)
     story.append(Spacer(1, 5 * mm))
 
-    story.append(Paragraph("3. 레퍼런스별(CWE) 집계", st["h1"]))
+    story.append(Paragraph(T("3. 레퍼런스별(CWE) 집계"), st["h1"]))
     cwe_c: dict = {}
     for f in findings:
         cwe_c[f.get("cwe") or "-"] = cwe_c.get(f.get("cwe") or "-", 0) + 1
-    rows = [["CWE", "규칙 예", "개수"]]
+    rows = [["CWE", T("규칙 예"), T("개수")]]
     seen: dict = {}
     for f in findings:
         seen.setdefault(f.get("cwe") or "-", f.get("rule_id"))
@@ -211,36 +218,46 @@ def combined_report(scan, path, author: str = "CPGuard") -> None:
     story.append(t)
     story.append(PageBreak())
 
-    story.append(Paragraph("4. 상세 결과", st["h1"]))
+    story.append(Paragraph(T("4. 상세 결과"), st["h1"]))
     order = {s: i for i, s in enumerate(SEV_ORDER)}
     for i, f in enumerate(sorted(findings, key=lambda x: order.get(x["severity"], 9)), 1):
         sev = f["severity"]
         story.append(Paragraph(
-            f'<font color="{SEV_COLOR.get(sev, colors.black)}"><b>[{SEV_KR.get(sev, sev)}]</b></font> '
+            f'<font color="{SEV_COLOR.get(sev, colors.black)}"><b>[{SEV.get(sev, sev)}]</b></font> '
             f'{i}. {f["rule_id"]} <font size=8 color="#888">({f.get("cwe","")}{" · " + f["owasp"] if f.get("owasp") else ""})</font>',
             st["h2"]))
-        story.append(Paragraph(f'위치: <font face="Courier">{f["file"]}:{f["line"]}</font>', st["small"]))
-        story.append(Paragraph(f.get("message", ""), st["body"]))
+        story.append(Paragraph(f'{T("위치")}: <font face="Courier">{f["file"]}:{f["line"]}</font>', st["small"]))
+        story.append(Paragraph(T(f.get("message", "")), st["body"]))
         rk = _rule_key(f["rule_id"])
-        rem = REMEDIATION.get(rk, _DEFAULT_REM)
-        story.append(Paragraph(f'<b>조치:</b> {rem[2]}', st["body"]))
+        rem = REM.get(rk, DFT)
+        story.append(Paragraph(f'<b>{T("조치")}:</b> {rem[2]}', st["body"]))
         story.append(Spacer(1, 3 * mm))
 
     story.append(PageBreak())
-    story.append(Paragraph("5. 총평", st["h1"]))
+    story.append(Paragraph(T("5. 총평"), st["h1"]))
     ch = counts.get("critical", 0) + counts.get("high", 0)
-    story.append(Paragraph(
-        f"총 {len(findings)}건의 보안약점이 도출되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 "
-        f"등급이 {ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 가이드에 따라 "
-        f"입력 검증·출력 인코딩·비밀정보 분리·안전한 알고리즘 적용을 권고한다.", st["body"]))
+    if en:
+        summary = (f"A total of {len(findings)} security weaknesses were identified, of which "
+                   f"{ch} are Critical/High severity requiring immediate action. Prioritize "
+                   f"Critical/High items, and per the remediation guide apply input validation, "
+                   f"output encoding, secret separation, and safe algorithms.")
+    else:
+        summary = (f"총 {len(findings)}건의 보안약점이 도출되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 "
+                   f"등급이 {ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 가이드에 따라 "
+                   f"입력 검증·출력 인코딩·비밀정보 분리·안전한 알고리즘 적용을 권고한다.")
+    story.append(Paragraph(summary, st["body"]))
 
-    _build(story, path, f"{project} 진단 결과 보고서")
+    _build(story, path, f"{project} " + T("진단 결과 보고서"))
 
 
-def remediation_guide(scan, path) -> None:
+def remediation_guide(scan, path, lang: str = "ko") -> None:
     """유형별 조치 가이드 — 스캔에 등장한 규칙 유형별 설명·조치·예시."""
     _register_font()
     st = _styles()
+    en = lang == "en"
+    T = lambda s: tr(s, lang)                       # noqa: E731
+    REM = REMEDIATION_EN if en else REMEDIATION
+    DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
     findings = scan.findings
     project = scan.project or Path(scan.name).stem
 
@@ -252,26 +269,29 @@ def remediation_guide(scan, path) -> None:
         by_rule[f["rule_id"]]["files"].append(f'{f["file"]}:{f["line"]}')
 
     story = []
-    _cover(story, st, f"{project}\n보안약점 조치 가이드", "유형별 설명 · 조치 방법 · 안전 예시",
-           [("프로젝트", project), ("대상", scan.name), ("작성일", _dt.date.today().strftime("%Y-%m-%d")),
-            ("탐지 유형", f"{len(by_rule)}종"), ("총 이슈", str(len(findings)))])
+    _cover(story, st, f"{project}\n" + T("보안약점 조치 가이드"), T("유형별 설명 · 조치 방법 · 안전 예시"),
+           [(T("프로젝트"), project), (T("대상"), scan.name), (T("작성일"), _dt.date.today().strftime("%Y-%m-%d")),
+            (T("탐지 유형"), f"{len(by_rule)} types" if en else f"{len(by_rule)}종"), (T("총 이슈"), str(len(findings)))])
 
     for idx, (rid, info) in enumerate(sorted(by_rule.items(), key=lambda x: -len(x[1]["files"])), 1):
         rk = _rule_key(rid)
-        rem = REMEDIATION.get(rk, _DEFAULT_REM)
-        story.append(Paragraph(f"{idx}. {rem[0]} <font size=9 color='#888'>({rid} · {len(info['files'])}건)</font>", st["h1"]))
+        rem = REM.get(rk, DFT)
+        cnt = len(info["files"])
+        cnt_lbl = f"{cnt}" if en else f"{cnt}건"
+        story.append(Paragraph(f"{idx}. {rem[0]} <font size=9 color='#888'>({rid} · {cnt_lbl})</font>", st["h1"]))
         story.append(Paragraph(f'<b>CWE:</b> {info["cwe"] or "-"} &nbsp;&nbsp; <b>OWASP:</b> {info["owasp"] or "-"}', st["small"]))
-        story.append(Paragraph(f'<b>설명.</b> {rem[1]}', st["body"]))
-        story.append(Paragraph(f'<b>조치 방법.</b> {rem[2]}', st["body"]))
+        story.append(Paragraph(f'<b>{T("설명")}.</b> {rem[1]}', st["body"]))
+        story.append(Paragraph(f'<b>{T("조치 방법")}.</b> {rem[2]}', st["body"]))
         if rem[3]:
-            story.append(Paragraph("안전 예시:", st["small"]))
+            story.append(Paragraph(T("안전 예시:"), st["small"]))
             story.append(Paragraph(rem[3].replace("<", "&lt;"), st["code"]))
         # 해당 위치(최대 8개)
-        locs = ", ".join(info["files"][:8]) + (f" 외 {len(info['files']) - 8}건" if len(info["files"]) > 8 else "")
-        story.append(Paragraph(f'<b>해당 위치.</b> <font face="Courier" size=8>{locs}</font>', st["small"]))
+        more = (f" +{cnt - 8} more" if en else f" 외 {cnt - 8}건") if cnt > 8 else ""
+        locs = ", ".join(info["files"][:8]) + more
+        story.append(Paragraph(f'<b>{T("해당 위치")}.</b> <font face="Courier" size=8>{locs}</font>', st["small"]))
         story.append(Spacer(1, 5 * mm))
 
-    _build(story, path, f"{project} 조치 가이드")
+    _build(story, path, f"{project} " + T("조치 가이드"))
 
 
 def _footer(canvas, doc):

@@ -10,35 +10,36 @@
 <style>
   /* ---- 테마: 모든 색은 변수로. 배지·하이라이트 틴트는 color-mix 로 accent/severity 에서 파생 ----
        테마를 추가하려면 [data-theme="x"] 블록에서 이 변수들만 재정의하면 된다. ---- */
-  :root{  /* dark (기본) */
+  :root{  /* dark (기본) — 모던 IDE: near-black, 헤어라인, 인디고 단일 액센트 */
     color-scheme:dark;
-    --bg:#0f1419; --panel:#171d26; --panel-2:#131922; --sunken:#0d1219;
-    --line:#242c38; --line-2:#1b222c; --hover:#161d27; --sel:#1b2836; --elev:#22303f;
-    --fg:#e6edf3; --muted:#8b98a8; --ln:#4a5666; --accent:#4da3ff; --on-accent:#06121f;
-    --crit:#ff5c5c; --high:#ff9f43; --med:#ffd166; --low:#6fcf97;
-    --t-kw:#c792ea; --t-str:#a5d6a7; --t-com:#5c6b7a; --t-num:#f78c6c; --t-fn:#82aaff;
-    --overlay:rgba(4,8,13,.55); --shadow:rgba(0,0,0,.5);
-    --scroll:rgba(255,255,255,.16); --scroll-hover:rgba(255,255,255,.32);
+    --bg:#0a0a0b; --panel:#111214; --panel-2:#0e0f11; --sunken:#070708;
+    --line:#1f2024; --line-2:#161719; --hover:#161719; --sel:#181a2b; --elev:#1c1d21;
+    --fg:#eceef1; --muted:#8a8f98; --ln:#484d57; --accent:#7c86ff; --on-accent:#0a0a12;
+    --crit:#ff6b6b; --high:#ffa657; --med:#e3c04a; --low:#5fd39a;
+    --t-kw:#b3a0ff; --t-str:#8fd6a8; --t-com:#5a616e; --t-num:#f0956a; --t-fn:#7f9fff;
+    --overlay:rgba(0,0,0,.6); --shadow:rgba(0,0,0,.6);
+    --scroll:rgba(255,255,255,.13); --scroll-hover:rgba(255,255,255,.26);
   }
   /* ---- HIG: 타입 스케일 · 간격(8pt) · 반경 · 엘리베이션 (테마 무관) ---- */
   :root{
-    --fs-display:30px; --fs-title:20px; --fs-headline:15px; --fs-body:13.5px; --fs-caption:12px;
+    --fs-display:28px; --fs-title:19px; --fs-headline:14.5px; --fs-body:13.5px; --fs-caption:12px;
     --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
-    --radius:14px; --radius-sm:9px;
-    --elev-1:0 1px 2px var(--shadow), 0 1px 3px var(--shadow);
-    --elev-2:0 4px 12px var(--shadow), 0 2px 4px var(--shadow);
-    /* 리퀴드 글래스(기능 레이어): panel 에서 파생한 반투명 + 블러 */
-    --glass:color-mix(in srgb, var(--panel) 74%, transparent);
+    --radius:0px; --radius-sm:0px;
+    /* 플랫: 카드는 그림자 없이 헤어라인. 그림자는 팝오버/메뉴 등 뜨는 레이어에만. */
+    --elev-1:none;
+    --elev-2:0 8px 24px var(--shadow), 0 2px 6px var(--shadow);
+    /* 뜨는 레이어 배경 — 블러 글래스 대신 불투명 패널(모던 플랫) */
+    --glass:var(--panel);
   }
   :root[data-theme="light"]{
     color-scheme:light;
-    --bg:#ffffff; --panel:#f3f3f3; --panel-2:#ececec; --sunken:#ffffff;
-    --line:#d4d4d4; --line-2:#e6e6e6; --hover:#eaeaea; --sel:#d6e6fb; --elev:#e0e0e0;
-    --fg:#1f2328; --muted:#6a737d; --ln:#b0b6bd; --accent:#0969da; --on-accent:#ffffff;
-    --crit:#cf222e; --high:#bc4c00; --med:#9a6700; --low:#1a7f37;
-    --t-kw:#a626a4; --t-str:#50a14f; --t-com:#a0a1a7; --t-num:#b76b01; --t-fn:#4078f2;
-    --overlay:rgba(60,60,60,.35); --shadow:rgba(0,0,0,.22);
-    --scroll:rgba(0,0,0,.20); --scroll-hover:rgba(0,0,0,.36);
+    --bg:#ffffff; --panel:#ffffff; --panel-2:#fafafa; --sunken:#f6f6f7;
+    --line:#e6e6e8; --line-2:#efeff1; --hover:#f4f4f5; --sel:#edeeff; --elev:#f0f0f2;
+    --fg:#0e0e10; --muted:#6b7280; --ln:#c2c6cd; --accent:#5b45d6; --on-accent:#ffffff;
+    --crit:#dc2626; --high:#c2410c; --med:#a16207; --low:#15803d;
+    --t-kw:#8250df; --t-str:#0a7a3f; --t-com:#9ca3af; --t-num:#b45309; --t-fn:#2563eb;
+    --overlay:rgba(20,20,22,.28); --shadow:rgba(17,17,20,.08);
+    --scroll:rgba(0,0,0,.18); --scroll-hover:rgba(0,0,0,.32);
   }
   :root[data-theme="vscode"]{
     color-scheme:dark;
@@ -63,13 +64,13 @@
 
   *{box-sizing:border-box}
   /* HIG 접근성: 키보드 포커스 인디케이터 (마우스 클릭엔 안 뜨고 키보드 탐색에만) */
-  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:0}
   a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* ---- 스크롤바: VSCode 식 얇은 오버레이 (테마 변수로 색) ---- */
   *{scrollbar-width:thin; scrollbar-color:var(--scroll) transparent}
   ::-webkit-scrollbar{width:14px;height:14px}
   ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:var(--scroll);border:4px solid transparent;background-clip:padding-box;border-radius:8px}
+  ::-webkit-scrollbar-thumb{background:var(--scroll);border:4px solid transparent;background-clip:padding-box;border-radius:0}
   ::-webkit-scrollbar-thumb:hover{background:var(--scroll-hover);border:3px solid transparent;background-clip:padding-box}
   ::-webkit-scrollbar-corner{background:transparent}
 
@@ -77,12 +78,12 @@
        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;
        font-size:var(--fs-body);line-height:1.55;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
   a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-  /* ---- 헤더 = 기능 레이어: 리퀴드 글래스(반투명+블러), 스크롤 시 콘텐츠가 비쳐 지나간다 ---- */
-  header{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);padding:12px 24px;
-         display:flex;align-items:center;gap:12px;flex:0 0 auto;
-         background:var(--glass);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5)}
-  .logo{font-weight:700;font-size:17px;letter-spacing:.2px}
+  /* ---- 헤더 = 솔리드 헤어라인(모던 플랫). 블러 글래스 아님 ---- */
+  header{position:sticky;top:0;z-index:50;border-bottom:1px solid var(--line);padding:11px 20px;
+         display:flex;align-items:center;gap:12px;flex:0 0 auto;background:var(--bg)}
+  .logo{font-weight:650;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:7px}
   .logo span{color:var(--accent)}
+  .logo svg{color:var(--accent)}
   .tag{color:var(--muted);font-size:var(--fs-caption)}
   main{max-width:1120px;margin:0 auto;padding:var(--sp-6) var(--sp-5) 60px}
   /* 작업대처럼 화면을 꽉 채우는 페이지를 위해 body 를 세로 flex 로 둔다 */
@@ -96,7 +97,7 @@
   table{width:100%;border-collapse:collapse}
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
   th{color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
-  .badge{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .badge{display:inline-block;padding:2px 7px;border-radius:0;font-size:11px;font-weight:600;letter-spacing:.1px}
   .critical{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit)}
   .high{background:color-mix(in srgb,var(--high) 15%,transparent);color:var(--high)}
   .medium{background:color-mix(in srgb,var(--med) 15%,transparent);color:var(--med)}
@@ -105,27 +106,29 @@
   .v-true_positive{background:color-mix(in srgb,var(--crit) 15%,transparent);color:var(--crit)}
   .v-false_positive{background:color-mix(in srgb,var(--low) 15%,transparent);color:var(--low)}
   .v-uncertain{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
-  .btn{display:inline-block;background:var(--accent);color:var(--on-accent);border:0;border-radius:7px;
-       padding:9px 16px;font-weight:700;cursor:pointer;font-size:13px}
-  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .btn{display:inline-block;background:var(--accent);color:var(--on-accent);border:0;border-radius:0;
+       padding:8px 15px;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-.005em;transition:filter .12s,background .12s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+  .btn.ghost:hover{background:var(--hover);filter:none}
   .muted{color:var(--muted)}
   .err{background:color-mix(in srgb,var(--crit) 12%,transparent);border:1px solid color-mix(in srgb,var(--crit) 35%,transparent);
-       color:color-mix(in srgb,var(--crit) 65%,var(--fg));padding:10px 14px;border-radius:8px;margin-bottom:16px}
-  code{font-family:Consolas,monospace;background:var(--sunken);border:1px solid var(--line-2);padding:1px 6px;border-radius:4px;font-size:12.5px}
+       color:color-mix(in srgb,var(--crit) 65%,var(--fg));padding:10px 14px;border-radius:0;margin-bottom:16px}
+  code{font-family:Consolas,monospace;background:var(--sunken);border:1px solid var(--line-2);padding:1px 6px;border-radius:0;font-size:12.5px}
   /* ---- 테마 셀렉터 ---- */
-  #theme-sel{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+  #theme-sel{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:0;
              padding:4px 8px;font-size:12px;font-family:inherit;cursor:pointer}
   /* ---- 커스텀 상단바 (프레임리스 데스크톱 창) ---- */
   header{-webkit-user-select:none;user-select:none}
   .drag-spacer{flex:1;align-self:stretch;min-width:20px}
   #winctl{display:flex;gap:2px;margin-left:6px}
   .winbtn{width:40px;height:30px;display:flex;align-items:center;justify-content:center;background:transparent;
-          border:0;color:var(--muted);cursor:pointer;font-size:13px;border-radius:5px;line-height:1;-webkit-app-region:no-drag}
+          border:0;color:var(--muted);cursor:pointer;font-size:13px;border-radius:0;line-height:1;-webkit-app-region:no-drag}
   .winbtn:hover{background:var(--hover);color:var(--fg)}
   .winbtn.winclose:hover{background:#e81123;color:#fff}
   /* ---- 앱 툴바 (Ghidra 식 아이콘 툴 스트립) ---- */
   .apptools{display:flex;align-items:center;gap:2px}
-  .tbtn{width:32px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:6px;
+  .tbtn{width:32px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:0;
         color:var(--muted);font-size:15px;text-decoration:none;cursor:pointer;border:1px solid transparent;-webkit-app-region:no-drag}
   .tbtn:hover{background:var(--hover);color:var(--fg);border-color:var(--line);text-decoration:none}
   .tsep{width:1px;height:20px;background:var(--line);margin:0 8px}
@@ -135,18 +138,18 @@
   .menu-btn{font-size:17px}
   /* 커스텀 콤보박스 — 네이티브 datalist 팝업(테마 무시·세리프) 대체 */
   .cb-menu{position:absolute;z-index:80;max-height:260px;overflow:auto;
-    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm,9px);
+    background:var(--panel);border:1px solid var(--line);border-radius:0;
     box-shadow:var(--elev-2,0 8px 24px rgba(0,0,0,.4));padding:5px;
     scrollbar-width:thin;scrollbar-color:var(--ln) transparent}
   .cb-menu::-webkit-scrollbar{width:10px}
-  .cb-menu::-webkit-scrollbar-thumb{background:var(--ln);border:3px solid var(--panel);border-radius:6px}
-  .cb-opt{padding:7px 11px;border-radius:6px;font:12px/1.4 Consolas,'Cascadia Code',monospace;
+  .cb-menu::-webkit-scrollbar-thumb{background:var(--ln);border:3px solid var(--panel);border-radius:0}
+  .cb-opt{padding:7px 11px;border-radius:0;font:12px/1.4 Consolas,'Cascadia Code',monospace;
     color:var(--fg);cursor:pointer;white-space:nowrap}
   .cb-opt:hover,.cb-opt.active{background:color-mix(in srgb,var(--accent) 22%,transparent)}
   .cb-empty{padding:7px 11px;color:var(--muted);font-size:12px}
   /* 커스텀 셀렉트 트리거 — 네이티브 select 팝업(테마 무시) 대체 */
   .cb-select{display:inline-flex;align-items:center;gap:10px;justify-content:space-between;
-    background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:6px;
+    background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:0;
     padding:5px 10px;font-size:12px;cursor:pointer;user-select:none;vertical-align:middle}
   .cb-select[data-mono]{font-family:Consolas,'Cascadia Code',monospace}
   .cb-select .cb-ph{color:var(--muted)}
@@ -155,35 +158,37 @@
   .cb-select.open .cb-chev{transform:rotate(180deg)}
   .cb-select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .cb-opt.sel{color:var(--accent)}
-  .menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:210px;
-            background:var(--glass);backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);
-            border:1px solid var(--line);border-radius:var(--radius-sm);box-shadow:var(--elev-2);padding:5px;-webkit-app-region:no-drag}
-  .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 11px;border-radius:6px;font-size:13px;
+  .menu-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:214px;
+            background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-sm);
+            box-shadow:var(--elev-2);padding:5px;-webkit-app-region:no-drag}
+  .mi{display:flex;align-items:center;gap:10px;width:100%;padding:8px 11px;border-radius:0;font-size:13px;
       color:var(--fg);text-decoration:none;background:transparent;border:0;cursor:pointer;text-align:left;font-family:inherit;white-space:nowrap}
   .mi:hover{background:var(--hover);text-decoration:none}
-  .mi-ic{width:18px;text-align:center;font-size:13px;flex:0 0 18px}
-  .mi kbd{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+  .mi-ic{width:18px;flex:0 0 18px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .mi-ic svg{width:16px;height:16px}
+  .mi:hover .mi-ic{color:var(--accent)}
+  .mi kbd{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:0;padding:0 4px}
   .mi-sep{height:1px;background:var(--line);margin:5px 6px}
 </style>
 {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <header>
-  <div class="logo pywebview-drag-region"><svg width="20" height="20" viewBox="0 0 256 256" style="vertical-align:-3px;margin-right:6px" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6db8ff"/><stop offset="1" stop-color="#2b6fd0"/></linearGradient></defs><path d="M128 30 L210 54 Q216 56 216 62 V126 C216 180 178 210 128 228 C78 210 40 180 40 126 V62 Q40 56 46 54 Z" fill="url(#lg)" stroke="#1f4f8f" stroke-width="6"/><g stroke="#eaf3ff" stroke-width="12" stroke-linecap="round"><path d="M92 132 L128 132"/><path d="M128 132 L164 132"/></g><g fill="#fff"><circle cx="92" cy="132" r="20"/><circle cx="128" cy="132" r="15"/><circle cx="164" cy="132" r="20"/></g><circle cx="92" cy="132" r="9" fill="#2b6fd0"/><circle cx="164" cy="132" r="9" fill="#ff5d5d"/></svg>CP<span>Guard</span></div>
+  <div class="logo pywebview-drag-region"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 7.5H17.5M6.5 7.5 12 17M17.5 7.5 12 17"/><circle cx="6.5" cy="7.5" r="2.3" fill="currentColor" stroke="none"/><circle cx="17.5" cy="7.5" r="2.3" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="2.3" fill="currentColor" stroke="none"/></svg>CP<span>Guard</span></div>
   <div class="tag pywebview-drag-region">CPG 기반 taint 분석 정적 보안 스캐너</div>
   <div class="drag-spacer pywebview-drag-region"></div>
   <div class="menu" id="appmenu">
-    <button class="tbtn menu-btn" id="menu-btn" title="메뉴" aria-haspopup="true" aria-expanded="false">☰</button>
+    <button class="tbtn menu-btn" id="menu-btn" title="메뉴" aria-haspopup="true" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="menu-pop" id="menu-pop" hidden>
-      <a class="mi" href="/"><span class="mi-ic">🏠</span>홈 · 새 스캔</a>
-      <a class="mi" href="/?mode=secrets"><span class="mi-ic">🔑</span>시크릿 빠른 점검</a>
-      <a class="mi" href="/compare/"><span class="mi-ic">🔀</span>스냅샷 비교</a>
-      <a class="mi" href="/reports/"><span class="mi-ic">📄</span>리포트</a>
-      <a class="mi" href="/settings/"><span class="mi-ic">⚙️</span>설정 · LLM</a>
-      <a class="mi" href="/guide/"><span class="mi-ic">📖</span>사용 가이드</a>
+      <a class="mi" href="/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/></svg></span>홈 · 새 스캔</a>
+      <a class="mi" href="/?mode=secrets"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8.5" r="4"/><path d="M11.5 11.5 20 20M17 17l2-2"/></svg></span>시크릿 빠른 점검</a>
+      <a class="mi" href="/compare/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4 4 8l4 4M4 8h11a4 4 0 0 1 4 4M16 20l4-4-4-4M20 16H9a4 4 0 0 1-4-4"/></svg></span>스냅샷 비교</a>
+      <a class="mi" href="/reports/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v4h4M9 13h6M9 16.5h6"/></svg></span>리포트</a>
+      <a class="mi" href="/settings/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></svg></span>설정 · LLM</a>
+      <a class="mi" href="/guide/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9a1 1 0 0 1 1 1v15a1 1 0 0 0-1-1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v14"/></svg></span>사용 가이드</a>
       <div class="mi-sep"></div>
-      <button class="mi" id="mi-back"><span class="mi-ic">◀</span>뒤로 <kbd>Alt+←</kbd></button>
-      <button class="mi" id="mi-fwd"><span class="mi-ic">▶</span>앞으로 <kbd>Alt+→</kbd></button>
+      <button class="mi" id="mi-back"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"/></svg></span>뒤로 <kbd>Alt+←</kbd></button>
+      <button class="mi" id="mi-fwd"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l6 6-6 6"/></svg></span>앞으로 <kbd>Alt+→</kbd></button>
     </div>
   </div>
   <span class="tsep"></span>
@@ -425,7 +430,80 @@
       "규칙·파일·메시지·CWE 필터": "Filter: rule / file / message / CWE", "집계 API": "aggregation API",
       "모델 · 설정/기본값": "Model · default", "LLM 사용 가능:": "LLM available:",
       "시크릿·설정만 빠르게": "Secrets & config only", "(데이터 흐름 분석 생략)": "(skip data-flow)",
-      "소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다. 지원:": "Upload a source project as zip; it is extracted and scanned automatically. Supported:"
+      "소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다. 지원:": "Upload a source project as zip; it is extracted and scanned automatically. Supported:",
+      // ── 작업대 추가 ──
+      "언어 / Language": "Language", "Language": "Language",
+      "이동 ·": "Go ·", "이슈 ·": "Issue ·", "단계 ·": "Step ·",
+      "비밀정보": "Secret", "개인정보": "PII", "인프라": "Infra", "위생": "Hygiene",
+      "더 불러오는 중…": "Loading more…", "질문": "Ask",
+      "프리셋을 누르거나 아래에 질문하세요. 현재 이슈의 규칙·데이터 흐름·주변 코드가 자동으로 붙습니다.": "Pick a preset or ask below. The current issue's rule, data flow and surrounding code are attached automatically.",
+      "탐색기 접기/펼치기": "Toggle explorer", "분석 패널": "Analysis panel", "인스펙터 접기/펼치기": "Toggle inspector",
+      "합본 진단 결과 보고서 PDF": "Combined report PDF", "유형별 조치 가이드 PDF": "Remediation guide PDF (by type)",
+      "고객 제출용 14컬럼 분석목록표": "14-column analysis sheet (client deliverable)",
+      "그룹 목록": "Grouped list", "표 보기 (정렬 가능)": "Table view (sortable)", "소스 트리": "Source tree",
+      "자유 질문 — 예: 이 정제가 우회 가능한가?": "Free question — e.g. can this sanitizer be bypassed?",
+      "이동 — 규칙·파일·CWE 검색 (↑↓ 이동 · Enter 열기 · Esc 닫기)": "Jump — search rule/file/CWE (↑↓ move · Enter open · Esc close)",
+      "대량 탐지": "Large result set",
+      "건 — 브라우저 부하를 막기 위해 위험도 상위": "findings — showing only the top severities to avoid browser load,",
+      "건만 표시합니다. 전체 필터·집계는": "shown. For full filtering/aggregation see the",
+      "참조.": "for reference.",
+      // ── 프로젝트 홈 추가 ──
+      "— 배지를 누르면 아래 탐색기에서 해당 위험도만 봅니다": "— click a badge to filter the explorer to that severity",
+      "건": "findings", "이전 스캔 대비": "vs previous scan", "— 변화 없음": "— no change",
+      "— 신규 → 위험도 순, 감사 안 된 것만": "— new → by severity, un-audited only",
+      "상태": "Status", "⚠ 부분 완료": "⚠ Partial", "✔ 완료": "✔ Complete",
+      "— 스캔별 누적": "— cumulative per scan", "· 막대 클릭 시 해당 스캔으로": "· click a bar to open that scan",
+      "— 위험도·규칙·CWE 분포와 전체 목록(필터·페이지네이션)": "— severity/rule/CWE distribution and full list (filter · pagination)",
+      "상위 규칙": "Top rules", "(클릭 = 필터)": "(click to filter)", "종류": "Type", "흐름": "Flow",
+      "◀ 이전": "◀ Prev", "다음 ▶": "Next ▶", "위험도 도넛": "Severity donut",
+      // ── 대시보드/업로드 추가 ──
+      "심각 Critical": "Critical", "높음 High": "High", "중간 Medium": "Medium", "낮음 Low": "Low", "정보 Info": "Info",
+      "(데이터 흐름 + 패턴 두 축)": "(data-flow + pattern axes)", "신규 / 해결": "New / Resolved",
+      "이름": "Name", "탐지 범위": "Detection scope", "축": "Axis", "대상 언어": "Languages", "점검 항목": "Checks",
+      "CPG · 프로시저간": "CPG · interprocedural", "패턴": "Pattern", "단일 지점 · 빠른 점검": "Single point · quick scan", "전 언어": "All languages",
+      "SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)": "SQL injection (CWE-89) · command injection (78) · code injection (94) · XSS (79) · path traversal (22) · file inclusion (98) · SSRF (918) · open redirect (601)",
+      "하드코딩 비밀정보(798)·벤더키 · 개인정보(PII) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 예측 가능 난수(338) · 쿠키 플래그(1004) · 디버그 코드(489)": "Hardcoded secrets (798) · vendor keys · PII · TLS verification disabled (295) · weak hash/cipher (327) · predictable RNG (338) · cookie flags (1004) · debug code (489)",
+      "파일이 많으면 잠시 걸립니다. 곧 진행 화면으로 이동합니다.": "Large projects take a moment. Moving to the progress screen shortly.",
+      // ── 설정 · API 키 가이드 ──
+      "LLM 트리아지·AI 분석에 쓸 API 키를 넣습니다. 키는 이 PC의": "Enter API keys for LLM triage / AI analysis. Keys are stored only on this PC's",
+      "에만 저장되고(권한 축소), 외부로 전송되지 않습니다. 저장 즉시 적용되며 재시작이 필요 없습니다.": ", never sent externally. Applied immediately — no restart needed.",
+      "설정됨": "Set", "Claude 워크스페이스 ID (신원 연동 키만)": "Claude workspace ID (identity-linked keys only)",
+      "이름이 아니라 ID": "the ID, not the name", "입니다 —": "—", "형식.": "format.",
+      "ID 열": "the ID column", "의": "→", "에서 복사하세요 (": "— copy it from (", "는 이름이라 안 됩니다).": "is a name and won't work).",
+      "더 쉬운 방법: 키를": "Easier: issue the key", "특정 워크스페이스로 제한": "restricted to a specific workspace",
+      "해 새로 발급하면 이 값이 아예 필요 없습니다.": "and this value isn't needed at all.",
+      "사용 가능:": "Available:", "키 발급 위치 — Claude:": "Where to get keys — Claude:",
+      ". 환경변수(": ". Environment variables (", "등)가 이미 설정돼 있으면 그쪽이 우선합니다.": "etc.) take precedence if already set.",
+      "Claude (Anthropic) API 키 발급": "Get a Claude (Anthropic) API key",
+      "유료(선불) · 가입 시 초기 무료 크레딧 제공": "Paid (prepaid) · initial free credit on signup",
+      "접속 → 로그인/가입(이메일 또는 Google)": "open → sign in/up (email or Google)",
+      "좌측": "left", "(바로가기:": "(shortcut:", "우상단": "top right", "→ 키 이름 입력 → 생성": "→ enter a key name → create",
+      "키를": "the key", "복사": "Copy", "(한 번만 표시됨) → 위": "(shown once) → into the", "칸에 붙여넣고 저장": "field above, paste and save",
+      "결제/크레딧을 등록해야 실제 호출이 됩니다(Billing).": "You must add billing/credit for real calls (Billing).",
+      "가장 쉬운 해결:": "Easiest fix:", "키 생성 시": "when creating the key,",
+      "특정 워크스페이스로 제한(Default 등)": "restrict to a specific workspace (Default, etc.)",
+      "해서 발급하면 워크스페이스 ID 가 필요 없습니다.": "so no workspace ID is needed.",
+      "오류(신원 연동 키)면, 아래 칸에": "error (identity-linked key), enter in the field below",
+      "워크스페이스 ID": "the workspace ID", "를 넣으세요 —": "—", "이름(Default)이 아니라": "not the name (Default) but the",
+      "형식 ID. Settings → Workspaces 의": "-format ID. In Settings → Workspaces,",
+      "에서 복사합니다.": "copy it there.", "콘솔 열기 ↗": "Open console ↗",
+      "Gemini (Google) API 키 발급": "Get a Gemini (Google) API key",
+      "무료 티어로 바로 사용 가능 — 처음 테스트에 추천": "Works on the free tier — recommended for first tests",
+      "접속 → Google 계정 로그인": "open → sign in with Google", "최초 접속 시": "on first visit,", "약관 동의": "accept terms", "· 지역 확인": "· confirm region",
+      "→ 새 프로젝트(권장) 또는 기존 프로젝트 선택": "→ new project (recommended) or pick an existing one",
+      "생성된 키": "the generated key", "→ 위": "→ into the",
+      "결제 등록 없이 무료 티어로 즉시 동작합니다. 트리아지 첫 테스트에 가장 편합니다.": "Works instantly on the free tier without billing. Best for a first triage test.",
+      "AI Studio 열기 ↗": "Open AI Studio ↗", "ChatGPT (OpenAI) API 키 발급": "Get a ChatGPT (OpenAI) API key",
+      "선불 결제 필요 — 크레딧 없으면 호출이 실패합니다": "Prepaid billing required — calls fail without credit",
+      "접속 → 로그인": "open → sign in", "→ 이름·권한 선택 → 생성": "→ pick name/permissions → create",
+      "키": "the key", "에서 카드 등록 + 선불 크레딧 충전(": "— add a card + prepaid credit (", "이상)": "or more)",
+      "크레딧을 넣지 않으면 rate limit 이 매우 낮거나 호출이 막힙니다. $5 충전 시 Tier 1 로 올라갑니다.": "Without credit the rate limit is very low or calls are blocked. Adding $5 moves you to Tier 1.",
+      "플랫폼 열기 ↗": "Open platform ↗",
+      "변경하려면 새 키 입력 (비우면 유지)": "Enter a new key to change (blank keeps current)",
+      "기본: claude-opus-5 (비우면 기본 사용)": "Default: claude-opus-5 (blank uses default)",
+      "OPENAI_API_KEY 값 입력": "Enter OPENAI_API_KEY value", "기본: gpt-4o (비우면 기본 사용)": "Default: gpt-4o (blank uses default)",
+      "GEMINI_API_KEY 값 입력": "Enter GEMINI_API_KEY value", "기본: gemini-3.6-flash (비우면 기본 사용)": "Default: gemini-3.6-flash (blank uses default)",
+      "wrkspc_ 로 시작하는 ID (이름 'Default' 아님)": "ID starting with wrkspc_ (not the name 'Default')"
     };
     var PAT = [
       [/^탐지\s+(\d+)건$/, "$1 findings"],
@@ -441,11 +519,28 @@
       [/^해결 [−-](\d+)$/, "Resolved -$1"],
       [/^파일\s+(\d+)$/, "Files $1"],
       [/^데이터 흐름 \((\d+)단계\)$/, "Data flow ($1 steps)"],
-      [/^감사 완료\s+(\d+)\/(\d+)$/, "Audited $1/$2"]
+      [/^(\d+)단계$/, "$1 steps"],
+      [/^감사 완료\s+(\d+)\/(\d+)$/, "Audited $1/$2"],
+      [/^LLM 사용 가능: (.+)$/, "LLM available: $1"],
+      [/^(.+) 홈$/, "$1 home"],
+      [/^이전 스캔\((.+)\) 대비$/, "vs previous scan ($1)"],
+      [/^(\d{2}-\d{2} \d{2}:\d{2}) · (\d+)건$/, "$1 · $2 findings"],
+      [/^스캔 무결성: 소스 (\d+)개 · 텍스트 (\d+)개 · 분석 실패 (\d+)개 · 구문오류로 부분분석 (\d+)개 · 크기 초과 제외 (\d+)개 — 결과가 전체를 대표하지 않을 수 있습니다\.$/,
+        "Scan integrity: $1 sources · $2 texts · $3 parse failures · $4 partial (syntax errors) · $5 skipped (oversize) — results may not represent the whole."],
+      [/^소스 (\d+)개 · 텍스트 (\d+)개 · 분석 실패 (\d+)개 · 구문오류로 부분분석 (\d+)개 · 크기 초과 제외 (\d+)개$/,
+        "$1 sources · $2 texts · $3 parse failures · $4 partial (syntax) · $5 skipped (oversize)"],
+      [/^스캔 무결성: 소스 (\d+)개 · 텍스트 (\d+)개 · 분석 실패 (\d+)개 · 구문오류로 부분분석 (\d+)개 · 크기 초과 제외 (\d+)개$/,
+        "Scan integrity: $1 sources · $2 texts · $3 parse failures · $4 partial (syntax) · $5 skipped (oversize)"],
+      // 소스 패널 진단 메타(합본 단일 노드) — 흔한 형태(트리아지: 미실행 또는 정상)
+      [/^scan #(\d+) · (\d+)건 · 보관 소스 (\d+)파일 소스 (\d+)개 · 텍스트 (\d+)개 · 분석 실패 (\d+)개 · 구문오류로 부분분석 (\d+)개 · 크기 초과 제외 (\d+)개 트리아지: 미실행 또는 정상$/,
+        "scan #$1 · $2 findings · $3 stored source files · $4 sources · $5 texts · $6 parse failures · $7 partial (syntax) · $8 skipped (oversize) · triage: not run or clean"],
+      [/^scan #(\d+) · (\d+)건 · 보관 소스 (\d+)파일 트리아지: 미실행 또는 정상$/,
+        "scan #$1 · $2 findings · $3 stored source files · triage: not run or clean"],
+      [/^미실행 또는 정상$/, "not run or clean"]
     ];
     var ATTRS = ["title", "placeholder", "aria-label"];
     function tr(s) {
-      var k = s.trim(); if (!k) return null;
+      var k = s.trim().replace(/\s+/g, ' '); if (!k) return null;   // 개행·연속공백 정규화 → 멀티라인 노드도 매칭
       if (DICT[k] !== undefined) return DICT[k];
       for (var i = 0; i < PAT.length; i++) {
         var m = k.match(PAT[i][0]);
@@ -475,8 +570,17 @@
 
     var LANG = (function () { try { return localStorage.getItem("cpguard.lang") || "ko"; } catch (e) { return "ko"; } })();
     var btn = document.getElementById("lang-toggle");
-    function setBtn() { if (btn) btn.textContent = (LANG === "en") ? "한글" : "EN"; }
+    function setBtn() { if (btn) btn.textContent = (LANG === "en") ? "KO" : "EN"; }
     setBtn();
+
+    // 서버측 렌더(룰 메시지·PDF·CSV)도 같은 언어를 쓰도록 쿠키 동기화.
+    // 쿠키가 UI 언어와 어긋나면(이전 세션 잔재 등) 맞추고 한 번 새로고침한다.
+    function setLangCookie(v) { try { document.cookie = "cpguard_lang=" + v + ";path=/;max-age=31536000;samesite=lax"; } catch (e) {} }
+    (function () {
+      var ck = (document.cookie.match(/(?:^|; )cpguard_lang=([^;]*)/) || [])[1] || "ko";
+      var want = (LANG === "en") ? "en" : "ko";
+      if (ck !== want) { setLangCookie(want); location.reload(); }
+    })();
 
     if (LANG === "en") {
       applyEN(document.body);
@@ -495,7 +599,8 @@
     if (btn) btn.addEventListener("click", function () {
       var next = (LANG === "en") ? "ko" : "en";
       try { localStorage.setItem("cpguard.lang", next); } catch (e) {}
-      location.reload();   // KO=원본이므로 reload 로 확실히 원복/적용
+      setLangCookie(next);   // 서버가 다음 렌더부터 같은 언어를 쓰게
+      location.reload();     // KO=원본이므로 reload 로 확실히 원복/적용
     });
   })();
 </script>

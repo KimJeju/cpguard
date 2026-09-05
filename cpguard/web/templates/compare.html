@@ -4,12 +4,12 @@
 {% block head %}
 <style>
   .cmp-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; }
-  .cmp-tiles .t { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .cmp-tiles .t { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
   .cmp-tiles .t .n { font-size: 28px; font-weight: 800; }
   .cmp-tiles .t .l { color: var(--muted); font-size: 12px; margin-top: 4px; }
   .t.new .n { color: var(--crit); } .t.res .n { color: var(--low); }
   .pick { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .pick select { background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font-size: 13px; min-width: 240px; }
+  .pick select { background: var(--sunken); color: var(--fg); border: 1px solid var(--line); border-radius:0; padding: 8px 10px; font-size: 13px; min-width: 240px; }
   td.mono { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); }
 </style>
 {% endblock %}
@@ -48,7 +48,7 @@
 </div>
 
 <div class="card">
-  <h2>🔴 신규 — <span class="muted">{{ a.name }} → {{ b.name }}</span></h2>
+  <h2><span style="color:var(--crit)">●</span> 신규 — <span class="muted">{{ a.name }} → {{ b.name }}</span></h2>
   {% if new %}
   <table>
     <tr><th>위험도</th><th>규칙</th><th>파일</th><th>CWE</th></tr>
@@ -58,7 +58,7 @@
 </div>
 
 <div class="card">
-  <h2>🟢 해결 — <span class="muted">기준에 있었으나 대상에서 사라짐</span></h2>
+  <h2><span style="color:var(--low)">●</span> 해결 — <span class="muted">기준에 있었으나 대상에서 사라짐</span></h2>
   {% if resolved %}
   <table>
     <tr><th>위험도</th><th>규칙</th><th>파일</th><th>CWE</th></tr>

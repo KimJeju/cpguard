@@ -1,6 +1,6 @@
 [project]
 name = "cpguard"
-version = "0.1.3"
+version = "0.1.4"
 description = "CPG-based taint analysis SAST with LLM triage"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml",
     "django>=5.0",
     "openpyxl>=3.1",
+    "reportlab>=4.0",
 ]
 
 [project.scripts]

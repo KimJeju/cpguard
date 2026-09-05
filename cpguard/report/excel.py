@@ -60,8 +60,45 @@ REMEDIATION = {
 }
 
 
-def _remediation(rule_id: str) -> str:
-    for key, text in REMEDIATION.items():
+# ── 영문(외국 대상) — lang="en" 일 때 사용 ──────────────────────────────
+COLUMNS_EN = [
+    "ID", "Severity", "Language", "Checker", "Line", "File", "In scope(Y/N)", "Function", "Path",
+    "Checker description", "Issue note", "Fixed(Y/N)", "Remediation", "Source code",
+]
+SEVERITY_EN = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low", "info": "Info"}
+REMEDIATION_EN_XLSX = {
+    "sqli": "User input is concatenated into SQL. Switch to parameter binding (prepared statements) and validate input against an allowlist.",
+    "command-injection": "User input is concatenated into a system command. Use a non-shell API (argument array) and wrap arguments with escapeshellarg/shlex.quote.",
+    "code-injection": "User input reaches a code-execution function such as eval. Remove dynamic code execution; if needed replace with a safe parser or allowlist dispatch.",
+    "xss": "User input is output without sanitization. Encode for the output context (htmlspecialchars/escape) and avoid dangerouslySetInnerHTML in React.",
+    "path-traversal": "User input is used as a file path. Normalize with basename and block access outside the allowed directory.",
+    "file-inclusion": "User input is used in include/require. Restrict includable files to a fixed list.",
+    "ssrf": "User input becomes a server-side request target. Validate against an allowed-host list and block internal addresses.",
+    "open-redirect": "User input becomes a redirect target. Allow only relative paths or validate against an allowed-domain list.",
+    "secret.": "Remove the secret from the source and move it to environment variables / a secret manager. Revoke and rotate any already-committed value.",
+    "vendor.": "A vendor API key is exposed. Rotate it immediately, remove it from source, inject via environment variables, and clean the repository history.",
+    "pii.": "Personal data exists in plaintext in the source/dump. Delete it immediately and switch to encrypted/masked storage as needed; this is subject to statutory safeguards under privacy law.",
+    "web.tls": "Enable TLS certificate verification. Register self-signed certificates in the trust store.",
+    "web.token-in-web-storage": "Tokens in web storage are stealable via XSS. Move them to HttpOnly/Secure cookies.",
+    "web.": "Unsanitized values reach the DOM directly. Sanitize with DOMPurify or use textContent.",
+    "crypto.": "A weak algorithm is used. Replace with SHA-256+, AES-GCM, and cryptographic RNG (crypto.randomBytes/secrets).",
+    "hygiene.debug": "Remove debug code / debug mode from production code — it causes information disclosure and performance issues.",
+    "hygiene.": "Clean up before production.",
+    "infra.default-test-account": "Remove default/test accounts and force an initial password change.",
+    "infra.": "Remove internal infrastructure details from source and externalize them to configuration.",
+}
+# 요약/시트 라벨
+LABELS_EN = {
+    "요약": "Summary", "분석목록표": "Analysis Sheet",
+    "소스코드 취약점 진단 분석목록표": "Source Code Vulnerability Analysis Sheet",
+    "프로젝트": "Project", "생성 일시": "Generated", "총 탐지 건수": "Total findings",
+    "위험도": "Severity", "건수": "Count", "규칙": "Rule", "파일 (상위 30)": "File (top 30)",
+}
+
+
+def _remediation(rule_id: str, lang: str = "ko") -> str:
+    table = REMEDIATION_EN_XLSX if lang == "en" else REMEDIATION
+    for key, text in table.items():
         if key in rule_id:
             return text
     return ""
@@ -88,21 +125,25 @@ def _rel(path: str, base: Path | None) -> str:
 
 
 def to_rows(findings: list[Finding], base: str | Path | None = None,
-            audit: dict[str, str] | None = None) -> list[list]:
+            audit: dict[str, str] | None = None, lang: str = "ko") -> list[list]:
+    from ..i18n import tr
+    en = lang == "en"
+    sevmap = SEVERITY_EN if en else SEVERITY_KO
     base_path = Path(base).resolve() if base else None
     audit = audit or {}
     rows = []
     for i, f in enumerate(findings):
         rel = _rel(f.sink.loc.file, base_path)
-        opinion = f.message
+        opinion = tr(f.message, lang)
         if f.fp_hint:
-            opinion += " (같은 줄에 환경변수/예시 신호가 있어 오탐 가능성 있음 — 확인 필요)"
+            opinion += (" (env/example signal on the same line — possible false positive, verify)"
+                        if en else " (같은 줄에 환경변수/예시 신호가 있어 오탐 가능성 있음 — 확인 필요)")
         if f.verdict:
-            opinion += f" [LLM 판정: {f.verdict}]"
+            opinion += (f" [LLM verdict: {f.verdict}]" if en else f" [LLM 판정: {f.verdict}]")
         done = "Y" if audit.get(str(i)) in ("fixed",) else "N"
         rows.append([
             i + 1,
-            SEVERITY_KO.get(f.severity, f.severity),
+            sevmap.get(f.severity, f.severity),
             _language_of(rel),
             f.rule_id,
             f.sink.loc.start_line or "",
@@ -113,7 +154,7 @@ def to_rows(findings: list[Finding], base: str | Path | None = None,
             f"{f.cwe}{' · ' + f.owasp if f.owasp else ''}",
             opinion,
             done,
-            _remediation(f.rule_id),
+            _remediation(f.rule_id, lang),
             _source_text(f),
         ])
     return rows
@@ -121,34 +162,39 @@ def to_rows(findings: list[Finding], base: str | Path | None = None,
 
 def write_workbook(findings: list[Finding], out_path: str | Path,
                    project: str = "결과", base: str | Path | None = None,
-                   audit: dict[str, str] | None = None) -> Path:
+                   audit: dict[str, str] | None = None, lang: str = "ko") -> Path:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
+
+    en = lang == "en"
+    L = (lambda s: LABELS_EN.get(s, s)) if en else (lambda s: s)
+    sevmap = SEVERITY_EN if en else SEVERITY_KO
+    cols = COLUMNS_EN if en else COLUMNS
 
     wb = Workbook()
 
     # ---- 요약 ----
     s = wb.active
-    s.title = "요약"
+    s.title = L("요약")
     bold = Font(name="맑은 고딕", size=11, bold=True)
-    s.append(["소스코드 취약점 진단 분석목록표"]); s["A1"].font = Font(name="맑은 고딕", size=14, bold=True)
+    s.append([L("소스코드 취약점 진단 분석목록표")]); s["A1"].font = Font(name="맑은 고딕", size=14, bold=True)
     s.append([])
-    s.append(["프로젝트", project])
-    s.append(["생성 일시", datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
-    s.append(["총 탐지 건수", len(findings)])
+    s.append([L("프로젝트"), project])
+    s.append([L("생성 일시"), datetime.now().strftime("%Y-%m-%d %H:%M:%S")])
+    s.append([L("총 탐지 건수"), len(findings)])
     s.append([])
-    s.append(["위험도", "건수"]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
+    s.append([L("위험도"), L("건수")]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
     for sev in ("critical", "high", "medium", "low", "info"):
         n = sum(1 for f in findings if f.severity == sev)
         if n:
-            s.append([SEVERITY_KO[sev], n])
+            s.append([sevmap[sev], n])
     s.append([])
-    s.append(["규칙", "건수"]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
+    s.append([L("규칙"), L("건수")]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
     for rid, n in Counter(f.rule_id for f in findings).most_common():
         s.append([rid, n])
     s.append([])
-    s.append(["파일 (상위 30)", "건수"]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
+    s.append([L("파일 (상위 30)"), L("건수")]); s.cell(s.max_row, 1).font = bold; s.cell(s.max_row, 2).font = bold
     base_path = Path(base).resolve() if base else None
     for path, n in Counter(_rel(f.sink.loc.file, base_path) for f in findings).most_common(30):
         s.append([path, n])
@@ -156,7 +202,7 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     s.column_dimensions["B"].width = 12
 
     # ---- 분석목록표 ----
-    ws = wb.create_sheet("분석목록표")
+    ws = wb.create_sheet(L("분석목록표"))
     thin = Side(style="thin", color="FF000000")
     thick = Side(style="thick", color="FF000000")
     header_border = Border(left=thin, right=thin, top=thin, bottom=thick)
@@ -168,12 +214,12 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     data_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     center = Alignment(horizontal="center", vertical="top")
 
-    ws.append(COLUMNS)
+    ws.append(cols)
     for c in ws[1]:
         c.font, c.fill, c.border, c.alignment = header_font, header_fill, header_border, header_align
     ws.row_dimensions[1].height = 20
 
-    rows = to_rows(findings, base, audit)
+    rows = to_rows(findings, base, audit, lang)
     for r, f in zip(rows, findings):
         ws.append(r)
         rn = ws.max_row
@@ -189,7 +235,7 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     for col, w in COLUMN_WIDTHS.items():
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUMNS))}{max(ws.max_row, 1)}"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(cols))}{max(ws.max_row, 1)}"
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

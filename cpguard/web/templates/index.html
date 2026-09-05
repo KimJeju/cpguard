@@ -5,8 +5,8 @@
   /* ---- 상태 타일 (콘텐츠 레이어 · 표준 머티리얼) ---- */
   .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-4); margin-bottom: var(--sp-5); }
   .tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: var(--sp-4) var(--sp-5) var(--sp-5);
-          position: relative; overflow: hidden; box-shadow: var(--elev-1); transition: transform .16s ease, box-shadow .16s ease; }
-  .tile:hover { transform: translateY(-2px); box-shadow: var(--elev-2); }
+          position: relative; overflow: hidden; transition: border-color .14s ease, background .14s ease; }
+  .tile:hover { border-color: var(--ln); }
   .tile::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: .85; }
   .tile.crit::before { background: var(--crit); } .tile.good::before { background: var(--low); } .tile.accent::before { background: var(--accent); }
   .tile .tn { font-size: var(--fs-display); font-weight: 700; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin-top: var(--sp-2); }
@@ -19,8 +19,8 @@
   /* ---- 분포 바 ---- */
   .dbar { display: grid; grid-template-columns: 74px 1fr 42px; align-items: center; gap: 10px; margin: 9px 0; font-size: 12.5px; }
   .dbar .lab { display: flex; align-items: center; gap: 6px; }
-  .dbar .track { height: 12px; background: var(--sunken); border-radius: 6px; overflow: hidden; }
-  .dbar .fill { display: block; height: 100%; border-radius: 6px; min-width: 2px; }
+  .dbar .track { height: 12px; background: var(--sunken); border-radius:0; overflow: hidden; }
+  .dbar .fill { display: block; height: 100%; border-radius:0; min-width: 2px; }
   .fill.s-critical { background: var(--crit); } .fill.s-high { background: var(--high); }
   .fill.s-medium { background: var(--med); } .fill.s-low { background: var(--low); } .fill.s-info { background: var(--muted); }
   .dbar .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -30,16 +30,16 @@
 
   .rule-bar { display: grid; grid-template-columns: 1fr 40px; align-items: center; gap: 10px; margin: 7px 0; font-size: 12px; }
   .rule-bar .rn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rule-bar .rt { height: 8px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 4px; margin-top: 3px; min-width: 3px; }
+  .rule-bar .rt { height: 8px; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius:0; margin-top: 3px; min-width: 3px; }
   .rule-bar .rc { text-align: right; color: var(--muted); }
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
   .empty-hint { color: var(--muted); font-size: 13px; padding: 8px 0; }
-  .secrets-toggle { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+  .secrets-toggle { border: 1px solid var(--line); border-radius:0; padding: 10px 12px; background: var(--panel-2); }
   @media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } .grid2 { grid-template-columns: 1fr; } }
   /* 업로드 로딩 오버레이 — 진단 시작 후 진행 페이지로 넘어가기 전 대기 표시 */
   .loading-ov { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center;
-    background:var(--overlay); backdrop-filter:blur(3px) }
+    background:var(--overlay) }
   .loading-ov.on { display:flex }
   .loading-box { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
     box-shadow:var(--elev-2); padding:26px 34px; text-align:center; min-width:260px }
@@ -55,10 +55,10 @@
 
   <!-- 상태 타일 -->
   <div class="tiles">
-    <div class="tile accent"><div class="tn">{{ stats.total }}</div><div class="tl">총 탐지 (프로젝트별 최신)</div><span class="spark">🛡️</span></div>
-    <div class="tile crit"><div class="tn">{{ stats.crit_high }}</div><div class="tl">심각 · 높음</div><span class="spark">🔴</span></div>
-    <div class="tile"><div class="tn">{{ stats.projects }}</div><div class="tl">프로젝트 · 스캔 {{ stats.scans }}회</div><span class="spark">📁</span></div>
-    <div class="tile {% if stats.new_total %}crit{% else %}good{% endif %}"><div class="tn">{% if stats.new_total %}+{{ stats.new_total }}{% else %}0{% endif %}</div><div class="tl">최근 신규</div><span class="spark">✨</span></div>
+    <div class="tile accent"><div class="tn">{{ stats.total }}</div><div class="tl">총 탐지 (프로젝트별 최신)</div></div>
+    <div class="tile crit"><div class="tn">{{ stats.crit_high }}</div><div class="tl">심각 · 높음</div></div>
+    <div class="tile"><div class="tn">{{ stats.projects }}</div><div class="tl">프로젝트 · 스캔 {{ stats.scans }}회</div></div>
+    <div class="tile {% if stats.new_total %}crit{% else %}good{% endif %}"><div class="tn">{% if stats.new_total %}+{{ stats.new_total }}{% else %}0{% endif %}</div><div class="tl">최근 신규</div></div>
   </div>
 
   <div class="grid2" style="margin-bottom:16px">
@@ -96,7 +96,7 @@
 
   <!-- 업로드 -->
   <div class="card">
-    <h2>{% if secrets_mode %}🔑 시크릿·설정 빠른 점검{% else %}프로젝트 업로드{% endif %}</h2>
+    <h2>{% if secrets_mode %}시크릿·설정 빠른 점검{% else %}프로젝트 업로드{% endif %}</h2>
     <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다.
        지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code> <code>.php</code> <code>.py</code>
        {% if not secrets_mode %}(데이터 흐름 + 패턴 두 축){% else %}(패턴 축만 — 하드코딩 비밀정보·개인정보·설정 위생){% endif %}</p>
@@ -111,7 +111,7 @@
     <div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">
       <label class="secrets-toggle" style="display:flex;gap:8px;align-items:center;cursor:pointer">
         <input type="checkbox" name="secrets_only" form="scanform" value="1" {% if secrets_mode %}checked{% endif %}>
-        🔑 시크릿·설정만 빠르게 <span class="muted" style="font-size:12px">(데이터 흐름 분석 생략)</span>
+        시크릿·설정만 빠르게 <span class="muted" style="font-size:12px">(데이터 흐름 분석 생략)</span>
       </label>
       <label class="muted" style="display:flex;gap:8px;align-items:center;cursor:pointer">
         <input type="checkbox" name="triage" form="scanform" value="1">
@@ -195,7 +195,7 @@
         <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)</td>
       </tr>
       <tr>
-        <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점 · 🔑 빠른 점검</span></td>
+        <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점 · 빠른 점검</span></td>
         <td class="muted">전 언어</td>
         <td class="muted">하드코딩 비밀정보(798)·벤더키 · 개인정보(PII) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 예측 가능 난수(338) · 쿠키 플래그(1004) · 디버그 코드(489)</td>
       </tr>

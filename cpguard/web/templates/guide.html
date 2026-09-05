@@ -11,12 +11,12 @@
   .guide ul, .guide ol { line-height: 1.75; padding-left: 24px; margin: 10px 0; }
   .guide li { margin: 5px 0; }
   .guide code { font-family: Consolas, monospace; font-size: 12.5px; background: var(--sunken);
-    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
-  .guide pre { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px;
+    border: 1px solid var(--line); border-radius:0; padding: 1px 5px; }
+  .guide pre { background: var(--sunken); border: 1px solid var(--line); border-radius:0;
     padding: 12px 14px; overflow-x: auto; margin: 12px 0; }
   .guide pre code { background: none; border: 0; padding: 0; font-size: 12.5px; line-height: 1.6; }
   .guide blockquote { border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent);
-    margin: 12px 0; padding: 8px 14px; color: var(--fg); border-radius: 0 6px 6px 0; }
+    margin: 12px 0; padding: 8px 14px; color: var(--fg); border-radius:0; }
   .guide blockquote + blockquote { margin-top: -12px; border-top: 0; padding-top: 0; }
   .guide hr { border: 0; border-top: 1px solid var(--line); margin: 26px 0; }
   .guide a { color: var(--accent); }
@@ -28,7 +28,7 @@
 <div class="guide">
   <div class="top">
     <a class="btn ghost" href="/">← 홈으로</a>
-    <a class="btn ghost" href="{% url 'settings' %}">⚙️ LLM 설정</a>
+    <a class="btn ghost" href="{% url 'settings' %}">LLM 설정</a>
   </div>
   {{ content }}
 </div>

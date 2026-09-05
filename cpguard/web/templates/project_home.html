@@ -7,7 +7,7 @@
   .ph-head h1 { margin:0; font-size:20px }
   .grid2 { display:grid; grid-template-columns: 1fr 340px; gap:16px; align-items:start }
   .status { display:flex; gap:10px; flex-wrap:wrap; align-items:center }
-  .status .big { font-size:22px; font-weight:800; padding:8px 14px; border-radius:8px; border:1px solid var(--line) }
+  .status .big { font-size:22px; font-weight:800; padding:8px 14px; border-radius:0; border:1px solid var(--line) }
   .sevbtn { cursor:pointer; border:1px solid transparent; transition:border-color .12s, transform .06s }
   .sevbtn:hover { transform:translateY(-1px) } .sevbtn.on { border-color:currentColor }
   .delta-up { color: var(--crit) } .delta-down { color: var(--low) } .delta-flat { color: var(--muted) }
@@ -15,7 +15,7 @@
   .prio:last-child { border-bottom:0 }
   .prio a { color: var(--fg); font-weight:700 }
   .prio .loc { color: var(--muted); font-family: Consolas, monospace; font-size:11.5px }
-  .newtag { font-size:10px; font-weight:800; background: var(--accent); color:var(--on-accent); border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:middle }
+  .newtag { font-size:10px; font-weight:800; background: var(--accent); color:var(--on-accent); border-radius:0; padding:1px 5px; margin-left:6px; vertical-align:middle }
   .sev-ico { display:inline-block; width:18px; text-align:center; margin-right:4px }
   .kv { display:grid; grid-template-columns: 90px 1fr; gap:5px 10px; font-size:13px }
   .kv dt { color: var(--muted) } .kv dd { margin:0; min-width:0 }
@@ -23,7 +23,7 @@
   /* 추세 */
   .trend { display:flex; align-items:flex-end; gap:6px; height:120px; padding:6px 2px 0; border-bottom:1px solid var(--line) }
   .bar { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:22px }
-  .bar .col { width:100%; background:var(--elev); border-radius:3px 3px 0 0; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden; cursor:pointer }
+  .bar .col { width:100%; background:var(--elev); border-radius:0; position:relative; display:flex; flex-direction:column-reverse; overflow:hidden; cursor:pointer }
   .bar .col:hover { outline:2px solid var(--accent); outline-offset:1px }
   .bar .seg-critical { background: var(--crit) } .bar .seg-high { background: var(--high) }
   .bar .seg-medium { background: var(--med) } .bar .seg-low { background: var(--low) } .bar .seg-info { background: var(--muted) }
@@ -38,19 +38,22 @@
   .chart h3 { margin:0 0 10px; font-size:13px; color:var(--muted); font-weight:700 }
   .donut-wrap { display:flex; align-items:center; gap:14px }
   .legend { display:flex; flex-direction:column; gap:5px; font-size:12px }
-  .legend span.d { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:middle }
-  .legend .lrow { cursor:pointer; padding:2px 4px; border-radius:5px } .legend .lrow:hover{ background:var(--hover) }
-  .barrow { display:flex; align-items:center; gap:8px; margin:5px 0; cursor:pointer; padding:2px 4px; border-radius:6px }
+  .legend span.d { display:inline-block; width:10px; height:10px; border-radius:0; margin-right:6px; vertical-align:middle }
+  .legend .lrow { cursor:pointer; padding:2px 4px; border-radius:0} .legend .lrow:hover{ background:var(--hover) }
+  .barrow { display:flex; align-items:center; gap:8px; margin:5px 0; cursor:pointer; padding:2px 4px; border-radius:0}
   .barrow:hover { background:var(--hover) } .barrow.on { background:color-mix(in srgb,var(--accent) 16%,transparent) }
   .barrow .lbl { width:150px; flex:none; font:11.5px/1.3 Consolas,monospace; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .barrow .track { flex:1; height:14px; background:var(--sunken); border-radius:4px; overflow:hidden }
-  .barrow .fill { display:block; height:100%; background:var(--accent); border-radius:4px }
+  .barrow .track { flex:1; height:14px; background:var(--sunken); border-radius:0; overflow:hidden }
+  .barrow .fill { display:block; height:100%; background:var(--accent); border-radius:0}
   .barrow .cnt { width:34px; text-align:right; font-size:11.5px; color:var(--muted) }
 
   .fbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
-  .chip { cursor:pointer; padding:4px 11px; border-radius:20px; font-size:12px; font-weight:700;
+  .chip { cursor:pointer; padding:4px 11px; border-radius:0; font-size:12px; font-weight:600;
     border:1px solid var(--line); background:var(--panel); color:var(--muted); user-select:none }
   .chip.on { border-color:currentColor }
+  .sd { display:inline-block; width:8px; height:8px; border-radius:50%; vertical-align:middle }
+  .sd-critical{ background:var(--crit) } .sd-high{ background:var(--high) } .sd-medium{ background:var(--med) }
+  .sd-low{ background:var(--low) } .sd-info{ background:var(--muted) }
   .chip.c-critical.on{ color:var(--crit); background:color-mix(in srgb,var(--crit) 15%,transparent) }
   .chip.c-high.on{ color:var(--high); background:color-mix(in srgb,var(--high) 15%,transparent) }
   .chip.c-medium.on{ color:var(--med); background:color-mix(in srgb,var(--med) 15%,transparent) }
@@ -58,7 +61,7 @@
   .chip.c-info.on{ color:var(--muted); background:color-mix(in srgb,var(--muted) 15%,transparent) }
   .chip.c-all.on{ color:var(--accent); background:color-mix(in srgb,var(--accent) 15%,transparent) }
   .fbar input, .fbar select { background:var(--sunken); color:var(--fg); border:1px solid var(--line);
-    border-radius:6px; padding:5px 9px; font-size:12px }
+    border-radius:0; padding:5px 9px; font-size:12px }
   .fbar input.search { width:220px; font-family:Consolas,monospace }
 
   table.ftable { width:100%; border-collapse:collapse; font-size:12.5px }
@@ -68,7 +71,7 @@
   table.ftable .loc { font-family:Consolas,monospace; font-size:11.5px; color:var(--muted); word-break:break-all }
   table.ftable .rid { font-family:Consolas,monospace; font-weight:700; color:var(--fg) }
   .pager { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:12px; font-size:12.5px; color:var(--muted) }
-  .pager button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:5px 11px; cursor:pointer }
+  .pager button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:0; padding:5px 11px; cursor:pointer }
   .pager button:disabled { opacity:.4; cursor:default }
   .muted-c { color:var(--muted) }
 </style>
@@ -88,9 +91,7 @@
   <h2>보안 상태 <span class="muted" style="font-weight:400;font-size:12px">— 배지를 누르면 아래 탐색기에서 해당 위험도만 봅니다</span></h2>
   <div class="status">
     <span class="big">{{ latest.finding_count }} <span class="muted" style="font-size:13px;font-weight:400">건</span></span>
-    {% for sev, n in counts.items %}<span class="badge {{ sev }} sevbtn" data-sev="{{ sev }}" style="font-size:13px;padding:4px 10px">
-      {% if sev == "critical" %}🔴{% elif sev == "high" %}🟠{% elif sev == "medium" %}🟡{% elif sev == "low" %}🔵{% else %}⚪{% endif %}
-      {{ sev|upper }} {{ n }}</span>{% endfor %}
+    {% for sev, n in counts.items %}<span class="badge {{ sev }} sevbtn" data-sev="{{ sev }}" style="font-size:13px;padding:4px 10px">{{ sev|upper }} {{ n }}</span>{% endfor %}
     {% if prev %}
       <span class="sep muted">|</span>
       <span class="muted">이전 스캔 대비</span>
@@ -112,7 +113,7 @@
     <h2>우선 조사 대상 <span class="muted" style="font-weight:400;font-size:12px">— 신규 → 위험도 순, 감사 안 된 것만</span></h2>
     {% for f in priority %}
       <div class="prio">
-        <span class="sev-ico">{% if f.severity == "critical" %}🔴{% elif f.severity == "high" %}🟠{% elif f.severity == "medium" %}🟡{% elif f.severity == "low" %}🔵{% else %}⚪{% endif %}</span>
+        <span class="sev-ico"><i class="sd sd-{{ f.severity }}"></i></span>
         <div style="flex:1;min-width:0">
           <a href="{% url 'detail' latest.pk %}#f{{ f.id }}">{{ f.rule_id }}</a>
           {% if prev and f.fp in new_fps %}<span class="newtag">NEW</span>{% endif %}
@@ -122,7 +123,7 @@
         <span class="badge {{ f.severity }}">{{ f.severity|upper }}</span>
       </div>
     {% empty %}
-      <p class="muted">감사되지 않은 이슈가 없습니다. 🎉</p>
+      <p class="muted">감사되지 않은 이슈가 없습니다.</p>
     {% endfor %}
   </div>
 
@@ -156,7 +157,8 @@
         {% endfor %}
       </div>
       <div class="trend-x">{% for t in trend %}<div>{{ t.when|date:"m/d" }}</div>{% endfor %}</div>
-      <div class="muted" style="font-size:11px;margin-top:8px">🔴 심각 🟠 높음 🟡 중간 🔵 낮음 ⚪ 정보 · 막대 클릭 시 해당 스캔으로</div>
+      <div class="muted" style="font-size:11px;margin-top:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <span><i class="sd sd-critical"></i> 심각</span><span><i class="sd sd-high"></i> 높음</span><span><i class="sd sd-medium"></i> 중간</span><span><i class="sd sd-low"></i> 낮음</span><span><i class="sd sd-info"></i> 정보</span><span>· 막대 클릭 시 해당 스캔으로</span></div>
     </div>
   </div>
 </div>
@@ -241,8 +243,8 @@
   var cs = getComputedStyle(document.documentElement);
   // 일부 WebView 는 getComputedStyle 로 CSS 커스텀 속성을 빈 문자열로 돌려준다.
   // 그 경우 SVG 도넛 색이 무효화돼 안 보이므로 폴백 색을 둔다(막대는 CSS var 라 무관).
-  var FALLBACK = { '--crit':'#ff5c5c','--high':'#ff9f43','--med':'#ffd166','--low':'#6fcf97',
-                   '--muted':'#8b98a8','--fg':'#e6edf3','--accent':'#4da3ff' };
+  var FALLBACK = { '--crit':'#ff6b6b','--high':'#ffa657','--med':'#e3c04a','--low':'#5fd39a',
+                   '--muted':'#8a8f98','--fg':'#eceef1','--accent':'#7c86ff' };
   function col(v){ return (cs.getPropertyValue(v).trim()) || FALLBACK[v] || '#888'; }
   var SEV = {
     critical: {c: col('--crit'), ko:'심각'}, high: {c: col('--high'), ko:'높음'},

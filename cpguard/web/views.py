@@ -17,10 +17,18 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
 from ..extract import UnsafeArchive, safe_extract_zip
+from ..i18n import tr
 from ..report.finding import Finding
 from ..report.sarif import to_sarif
 from ..scanner import scan_path
 from .models import Scan
+
+
+def _lang(request) -> str:
+    """응답 언어 — 헤더 토글이 심는 쿠키(cpguard_lang)/`?lang=` 로 판별. 기본 ko.
+
+    UI 는 클라이언트 사전으로 번역하지만 룰 메시지·PDF 는 서버 생성이라 여기서 고른다."""
+    return "en" if (request.GET.get("lang") or request.COOKIES.get("cpguard_lang")) == "en" else "ko"
 
 # 코드 뷰어용 원본 보관 한도 (DB 비대화 방지)
 # 원본 보관 상한 — 대형 프로젝트(수천 파일에 탐지)에서도 뷰어가 원본을 보여줄 수 있게
@@ -309,16 +317,16 @@ def reports(request):
     return render(request, "reports.html", {"scans": list(Scan.objects.all()[:100])})
 
 
-def _pdf_response(scan, kind: str):
+def _pdf_response(scan, kind: str, lang: str = "ko"):
     from ..report import pdf as pdfmod
     tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "out.pdf"
     try:
         if kind == "guide":
-            pdfmod.remediation_guide(scan, tmp)
-            suffix = "조치가이드"
+            pdfmod.remediation_guide(scan, tmp, lang=lang)
+            suffix = "remediation-guide" if lang == "en" else "조치가이드"
         else:
-            pdfmod.combined_report(scan, tmp)
-            suffix = "진단결과보고서"
+            pdfmod.combined_report(scan, tmp, lang=lang)
+            suffix = "assessment-report" if lang == "en" else "진단결과보고서"
         data = tmp.read_bytes()
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -330,13 +338,13 @@ def _pdf_response(scan, kind: str):
 @never_cache
 def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
-    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined")
+    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined", _lang(request))
 
 
 @never_cache
 def export_pdf_guide(request, pk: int):
     """유형별 조치 가이드(PDF)."""
-    return _pdf_response(get_object_or_404(Scan, pk=pk), "guide")
+    return _pdf_response(get_object_or_404(Scan, pk=pk), "guide", _lang(request))
 
 
 # ---- 대량 탐지: 서버측 집계·페이지네이션 API (Finding 테이블 질의) ----
@@ -406,6 +414,7 @@ def scan_finding_api(request, pk: int, idx: int):
     f = findings[idx]
     f["audit"] = scan.audit.get(str(idx), "")
     f["audit_note"] = scan.audit_notes.get(str(idx), "")
+    f["message"] = tr(f.get("message", ""), _lang(request))
     prev = scan.previous()
     new_fps = scan.compare_with(prev)["new_fps"] if prev else set()
     f["is_new"] = bool(prev) and f.get("fp") in new_fps
@@ -643,6 +652,7 @@ def scan_status(request, job_id: str):
 def detail(request, pk: int):
     """감사 작업대 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
     scan = get_object_or_404(Scan, pk=pk)
+    lang = _lang(request)
     findings = scan.findings
     audit = scan.audit
     notes = scan.audit_notes
@@ -650,6 +660,7 @@ def detail(request, pk: int):
         f.setdefault("id", i)   # 구버전/외부 생성 스캔은 id 가 없을 수 있다
         f["audit"] = audit.get(str(f["id"]), "")
         f["audit_note"] = notes.get(str(f["id"]), "")
+        f["message"] = tr(f.get("message", ""), lang)
 
     # 이전 스캔 대비 신규 여부를 각 이슈에 표시 (조사 우선순위의 첫 번째 신호)
     prev = scan.previous()
@@ -800,7 +811,15 @@ def ai_ask(request, pk: int):
 @never_cache
 def sarif_download(request, pk: int):
     scan = get_object_or_404(Scan, pk=pk)
-    resp = HttpResponse(scan.sarif_json, content_type="application/json")
+    if _lang(request) == "en":
+        # 저장된 sarif_json 은 KO 메시지라 EN 은 번역해 재생성한다(파일 경로는 이미 상대경로).
+        findings = _findings_from_scan(scan)
+        for f in findings:
+            f.message = tr(f.message, "en")
+        body = json.dumps(to_sarif(findings), indent=2, ensure_ascii=False)
+    else:
+        body = scan.sarif_json
+    resp = HttpResponse(body, content_type="application/json")
     resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.sarif"'
     return resp
 
@@ -809,16 +828,21 @@ def sarif_download(request, pk: int):
 def export_csv(request, pk: int):
     """표 형태 내보내기 — 보고서·엑셀 정리를 위한 실무 기능."""
     scan = get_object_or_404(Scan, pk=pk)
+    lang = _lang(request)
     audit = scan.audit
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
     resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.csv"'
     resp.write("﻿")  # 엑셀 한글 깨짐 방지
     w = csv.writer(resp)
-    w.writerow(["번호", "위험도", "규칙", "CWE", "OWASP", "파일", "라인",
-                "설명", "LLM판정", "감사상태", "흐름단계수"])
+    if lang == "en":
+        w.writerow(["No", "Severity", "Rule", "CWE", "OWASP", "File", "Line",
+                    "Description", "LLM verdict", "Audit", "Flow steps"])
+    else:
+        w.writerow(["번호", "위험도", "규칙", "CWE", "OWASP", "파일", "라인",
+                    "설명", "LLM판정", "감사상태", "흐름단계수"])
     for f in scan.findings:
         w.writerow([f["id"], f["severity"], f["rule_id"], f["cwe"], f.get("owasp", ""),
-                    f["file"], f["line"], f["message"], f.get("verdict") or "",
+                    f["file"], f["line"], tr(f["message"], lang), f.get("verdict") or "",
                     audit.get(str(f["id"]), ""), len(f["steps"])])
     return resp
 
@@ -852,17 +876,19 @@ def export_xlsx(request, pk: int):
     """고객 제출용 분석목록표 — 조치여부/조치방법 컬럼과 표준 이슈 의견이 들어간다."""
     from ..report import excel
     scan = get_object_or_404(Scan, pk=pk)
+    lang = _lang(request)
     findings = _findings_from_scan(scan)
     tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "out.xlsx"
     try:
-        excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit)
+        excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit, lang=lang)
         data = tmp.read_bytes()
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)
+    stem = Path(scan.name).stem
+    fname = f"{stem}_analysis-sheet.xlsx" if lang == "en" else f"{stem}_소스코드_취약점진단_분석목록표.xlsx"
     resp = HttpResponse(
         data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    resp["Content-Disposition"] = (
-        f'attachment; filename="{Path(scan.name).stem}_소스코드_취약점진단_분석목록표.xlsx"')
+    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
     return resp
 
 
