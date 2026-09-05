@@ -577,11 +577,19 @@ def scan_findings_api(request, pk: int):
     """필터·정렬·페이지네이션된 finding 목록(JSON). 작업대 가상 스크롤용."""
     from django.db.models import Case, IntegerField, Q, When
     from .models import FindingRow
-    get_object_or_404(Scan, pk=pk)
+    scan = get_object_or_404(Scan, pk=pk)
+    audit = scan.audit                       # idx(str) -> 상태. 대량 모드 행 색·감사 상태 필터용
     qs = FindingRow.objects.filter(scan_id=pk)
 
     if sev := request.GET.get("severity"):
         qs = qs.filter(severity=sev)
+    # 감사 상태 필터: none=미확인(상태 없음), 그 외=해당 상태만
+    if a := request.GET.get("audit"):
+        audited = [int(k) for k in audit]
+        if a == "none":
+            qs = qs.exclude(idx__in=audited)
+        else:
+            qs = qs.filter(idx__in=[int(k) for k, v in audit.items() if v == a])
     if rule := request.GET.get("rule"):
         qs = qs.filter(rule_id=rule)
     if f := request.GET.get("file"):
@@ -603,6 +611,8 @@ def scan_findings_api(request, pk: int):
         page, size = 1, 100
     rows = list(qs[(page - 1) * size: page * size].values(
         "idx", "severity", "rule_id", "cwe", "owasp", "file", "line", "fp", "category", "verdict"))
+    for r in rows:                            # 행 배경색·라벨용 감사 상태
+        r["audit"] = audit.get(str(r["idx"]), "")
     return JsonResponse({"total": total, "page": page, "size": size, "rows": rows})
 
 

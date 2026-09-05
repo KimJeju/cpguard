@@ -53,7 +53,18 @@
   .issue:hover { background:var(--hover) } .issue.sel { background:var(--sel); box-shadow:inset 3px 0 0 var(--accent) }
   .issue > div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
   .issue .rid { font-weight:700 } .issue .loc { color:var(--muted); font-size:11px; font-family:Consolas,monospace }
-  .issue.audited { opacity:.5 }
+  /* 감사 상태별 행 배경 — 확정 옅은빨강 · 오탐 주황 · 조치완료 옅은초록 · 보류 옅은노랑 */
+  .issue.a-confirmed      { background:color-mix(in srgb, var(--crit) 14%, transparent) }
+  .issue.a-false_positive { background:color-mix(in srgb, var(--high) 22%, transparent) }
+  .issue.a-fixed          { background:color-mix(in srgb, var(--low) 16%, transparent) }
+  .issue.a-deferred       { background:color-mix(in srgb, var(--med) 18%, transparent) }
+  .issue.a-confirmed:hover, .issue.a-false_positive:hover, .issue.a-fixed:hover, .issue.a-deferred:hover { filter:brightness(1.12) }
+  /* 닫을 수 있는 상단 안내 배너 */
+  .notice { display:flex; align-items:flex-start; gap:10px }
+  .notice > span { flex:1; min-width:0 }
+  .nclose { flex:0 0 auto; background:transparent; border:1px solid transparent; color:inherit; opacity:.6;
+            cursor:pointer; font-size:16px; line-height:1; padding:0 6px; margin:-2px -6px 0 0 }
+  .nclose:hover { opacity:1; border-color:currentColor }
   .sev { display:inline-block; font-size:10.5px; font-weight:800; margin-right:5px; letter-spacing:.3px }
   .sev-critical { color:var(--crit) } .sev-high { color:var(--high) } .sev-medium { color:var(--med) } .sev-low { color:var(--accent) } .sev-info { color:var(--muted) }
   .newtag { font-size:10px; font-weight:800; background:var(--accent); color:var(--on-accent); border-radius:0; padding:0 5px; margin-left:6px; vertical-align:middle }
@@ -197,9 +208,9 @@
   </span>
 </div>
 
-{% if scan.integrity_note %}<div class="err" style="margin:6px 12px">스캔 무결성: {{ scan.integrity_note }} — 결과가 전체를 대표하지 않을 수 있습니다.</div>{% endif %}
-{% if scan.triage_note %}<div class="err" style="margin:6px 12px">{{ scan.triage_note }}</div>{% endif %}
-{% if truncated %}<div class="err" style="margin:6px 12px">대량 탐지 <b>{{ truncated }}</b>건 — 브라우저 부하를 막기 위해 위험도 상위 <b>{{ shown }}</b>건만 표시합니다. 전체 필터·집계는 <a href="{% url 'scan_summary_api' scan.pk %}">집계 API</a> · <a href="{% url 'reports' %}">리포트</a> 참조.</div>{% endif %}
+{% if scan.integrity_note %}<div class="err notice" data-notice="integrity" style="margin:6px 12px"><span>스캔 무결성: {{ scan.integrity_note }} — 결과가 전체를 대표하지 않을 수 있습니다.</span><button class="nclose" title="닫기" aria-label="닫기">×</button></div>{% endif %}
+{% if scan.triage_note %}<div class="err notice" data-notice="triage" style="margin:6px 12px"><span>{{ scan.triage_note }}</span><button class="nclose" title="닫기" aria-label="닫기">×</button></div>{% endif %}
+{% if truncated %}<div class="err notice" data-notice="large" style="margin:6px 12px"><span>대량 탐지 <b>{{ truncated }}</b>건 — 브라우저 부하를 막기 위해 위험도 상위 <b>{{ shown }}</b>건만 표시합니다. 전체 필터·집계는 <a href="{% url 'scan_summary_api' scan.pk %}">집계 API</a> · <a href="{% url 'reports' %}">리포트</a> 참조.</span><button class="nclose" title="닫기" aria-label="닫기">×</button></div>{% endif %}
 
 <div class="wb" id="wb">
   <!-- 좌: 탐색기 -->
@@ -229,6 +240,10 @@
           </select>
           <select id="fnew">
             <option value="">전체</option><option value="new">신규만</option><option value="fp">오탐힌트만</option>
+          </select>
+          <select id="faudit" title="감사 상태">
+            <option value="all">감사 전체</option><option value="none">미확인</option><option value="confirmed">취약 확정</option>
+            <option value="false_positive">오탐</option><option value="fixed">조치완료</option><option value="deferred">보류</option>
           </select>
         </div>
         <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px;white-space:nowrap;cursor:pointer">
@@ -359,7 +374,7 @@
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
   const WS_KEY = 'cpguard.ws.v1';
   let ws = { leftW: 320, rightW: 380, bottomH: 260, bottom: true, left: true, right: true, tab: 'ai', view: 'tree',
-             group: 'severity', sev: '', cat: '', fnew: '', hideAudited: false, sort: 'severity', asc: true };
+             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', hideAudited: false, sort: 'severity', asc: true };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
@@ -372,6 +387,7 @@
     document.querySelectorAll('.tab-body').forEach(b => b.classList.toggle('on', b.id === 'tab-' + ws.tab));
     el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table'); el('v-files').classList.toggle('on', ws.view === 'files');
     el('group').value = ws.group; el('fsev').value = ws.sev; el('fcat').value = ws.cat; el('fnew').value = ws.fnew; el('hideAudited').checked = ws.hideAudited;
+    el('faudit').value = ws.audit || 'all';
   }
 
   // 끌어서 크기 조절
@@ -404,6 +420,9 @@
       if (ws.fnew === 'new' && !f.is_new) return false;
       if (ws.fnew === 'fp' && !f.fp_hint) return false;
       if (ws.hideAudited && f.audit) return false;
+      // 감사 상태 필터: all=전체, none=미확인(상태 없음), 그 외=해당 상태만
+      if (ws.audit === 'none' && f.audit) return false;
+      if (ws.audit && ws.audit !== 'all' && ws.audit !== 'none' && (f.audit || '') !== ws.audit) return false;
       if (!q) return true;
       return (f.rule_id + ' ' + f.file + ' ' + f.message + ' ' + (f.cwe || '') + ' ' + (f.owasp || '')).toLowerCase().includes(q);
     });
@@ -414,6 +433,7 @@
   function lgParams() {
     const p = new URLSearchParams({ page: LG.page + 1, size: LG.size });
     if (ws.sev) p.set('severity', ws.sev);
+    if (ws.audit && ws.audit !== 'all') p.set('audit', ws.audit);
     const q = el('q').value.trim(); if (q) p.set('q', q);
     return p.toString();
   }
@@ -442,9 +462,9 @@
     }).catch(() => { LG.loading = false; });
   }
   function lgRowHtml(r) {
-    return `<div class="issue${sel === r.idx ? ' sel' : ''}" data-id="${r.idx}">
+    return `<div class="issue${sel === r.idx ? ' sel' : ''}${r.audit ? ' audited a-' + r.audit : ''}" data-id="${r.idx}">
       <div>${sevTag(r.severity)}<span class="rid">${esc(r.rule_id)}</span></div>
-      <div class="loc" title="${esc(r.file)}:${r.line}">${esc(r.file)}:${r.line}${r.verdict ? ' · ' + esc(r.verdict) : ''}</div></div>`;
+      <div class="loc" title="${esc(r.file)}:${r.line}">${esc(r.file)}:${r.line}${r.audit ? ' · ' + esc(AUDIT_LABEL[r.audit] || r.audit) : (r.verdict ? ' · ' + esc(r.verdict) : '')}</div></div>`;
   }
   function ensureFinding(idx) {
     // 대량 모드는 원본을 임베드하지 않으므로, 이미 목록에 있는 이슈여도 원본이 없으면
@@ -491,7 +511,7 @@
     el('tree').querySelectorAll('.group-hd').forEach(n => n.onclick = () => n.parentElement.classList.toggle('closed'));
   }
   function issueHtml(f) {
-    return `<div class="issue${sel === f.id ? ' sel' : ''}${f.audit ? ' audited' : ''}" data-id="${f.id}">
+    return `<div class="issue${sel === f.id ? ' sel' : ''}${f.audit ? ' audited a-' + f.audit : ''}" data-id="${f.id}">
       <div>${sevTag(f.severity)}<span class="rid">${esc(f.rule_id)}</span>${f.is_new ? '<span class="newtag">NEW</span>' : ''}${f.fp_hint ? '<span class="fptag" title="같은 줄에 환경변수/예시 신호 — 오탐 가능">?</span>' : ''}</div>
       <div class="loc" title="${esc(f.file)}:${f.line}">${esc(f.file)}:${f.line}${f.audit ? ' · ' + esc(AUDIT_LABEL[f.audit]) : ''}</div></div>`;
   }
@@ -814,6 +834,15 @@
   el('fcat').onchange = () => { ws.cat = el('fcat').value; saveWS(); renderTree(); };
   el('fnew').onchange = () => { ws.fnew = el('fnew').value; saveWS(); renderTree(); };
   el('hideAudited').onchange = () => { ws.hideAudited = el('hideAudited').checked; saveWS(); renderTree(); };
+  el('faudit').onchange = () => { ws.audit = el('faudit').value; saveWS(); renderTree(); };
+
+  // 상단 안내 배너 닫기 — 스캔별로 기억해 다음에 안 뜬다(다시 보려면 새 스캔이거나 localStorage 삭제)
+  document.querySelectorAll('.notice').forEach(n => {
+    const key = `cpguard.notice.${SCAN_PK}.${n.dataset.notice}`;
+    try { if (localStorage.getItem(key)) { n.remove(); return; } } catch (e) {}
+    const b = n.querySelector('.nclose');
+    if (b) b.onclick = () => { try { localStorage.setItem(key, '1'); } catch (e) {} n.remove(); };
+  });
 
   // 대량 모드: 좌측 목록 무한 스크롤
   el('tree').addEventListener('scroll', () => {
