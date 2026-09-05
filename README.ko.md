@@ -4,7 +4,7 @@
 <h1 align="center">CPGuard</h1>
 
 <p align="center">
-  <b>CPG 기반 Taint 분석 + LLM 트리아지</b>를 결합한 오픈소스 정적 보안 분석(SAST) 도구<br/>
+  <b>CPG 기반 Taint 분석 + LLM 트리아지</b>를 결합한 오픈소스 정적 보안 분석 도구<br/>
   <sub>Fortify 급 분석 파이프라인에 Ghidra 결의 검토 화면을 얹은 데스크톱 보안 도구 · 완전 오프라인 동작</sub>
 </p>
 
