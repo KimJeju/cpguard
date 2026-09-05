@@ -629,6 +629,7 @@ def scan_standard_api(request, pk: int):
     items = standards.coverage(std, counts)
     return JsonResponse({
         "id": std.id, "name": std.name, "name_en": std.name_en, "source": std.source,
+        "show_code": std.show_code,
         "items": items,
         "violated": sum(1 for i in items if i["n"]),
         "total_items": len(items),

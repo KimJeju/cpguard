@@ -93,7 +93,7 @@ REMEDIATION_EN_XLSX = {
 # 요약/시트 라벨
 LABELS_EN = {
     "점검항목 결과": "Check items", "점검 기준": "Standard", "근거": "Source",
-    "분류": "Group", "항목": "Code", "점검 항목": "Check item", "판정": "Result",
+    "유형": "Category", "코드": "Code", "보안약점": "Weakness", "판정": "Result",
     "탐지 건수": "Findings", "기준 미매핑 탐지": "Findings outside the standard",
     "요약": "Summary", "분석목록표": "Analysis Sheet",
     "소스코드 취약점 진단 분석목록표": "Source Code Vulnerability Analysis Sheet",
@@ -261,27 +261,33 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
         cs.append([L("점검 기준"), std.name_en if en else std.name])
         cs.append([L("근거"), std.source])
         cs.append([])
-        head = ([L("분류"), L("항목"), L("점검 항목"), L("판정"), L("탐지 건수"), "CWE"])
+        code = std.show_code
+        head = ([L("유형")] + ([L("코드")] if code else [])
+                + [L("보안약점"), L("판정"), L("탐지 건수"), "CWE"])
         cs.append(head)
         for c in cs[cs.max_row]:
             c.font, c.fill, c.border, c.alignment = header_font, header_fill, header_border, header_align
+        vcol = 3 if code else 2                    # 판정 열 위치
         for r in _std_mod.coverage(std, cwe_counts):
             verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
-            cs.append([r["group_en"] if en else r["group"], r["code"],
-                       r["name_en"] if en else r["name"], verdict, r["n"], ", ".join(r["cwes"])])
+            cs.append([r["group_en"] if en else r["group"]] + ([r["code"]] if code else [])
+                      + [r["name_en"] if en else r["name"], verdict, r["n"], ", ".join(r["cwes"])])
             rn = cs.max_row
             for c in cs[rn]:
                 c.font, c.border, c.alignment = data_font, data_border, data_align
-            for col in (2, 4, 5):
+            for col in (vcol + 1, vcol + 2):
                 cs.cell(rn, col).alignment = center
             if r["n"]:
-                cs.cell(rn, 4).fill = PatternFill(fill_type="solid", fgColor=SEVERITY_FILL["high"])
+                cs.cell(rn, vcol + 1).fill = PatternFill(fill_type="solid",
+                                                         fgColor=SEVERITY_FILL["high"])
         um = _std_mod.unmapped(std, cwe_counts)
         if um:
             cs.append([])
             cs.append([L("기준 미매핑 탐지"),
                        ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1]))])
-        for col, w in {"A": 26, "B": 9, "C": 46, "D": 9, "E": 11, "F": 34}.items():
+        widths = ({"A": 26, "B": 9, "C": 46, "D": 9, "E": 11, "F": 34} if code
+                  else {"A": 26, "B": 46, "C": 9, "D": 11, "E": 34})
+        for col, w in widths.items():
             cs.column_dimensions[col].width = w
         cs.freeze_panes = "A5"
 

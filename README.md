@@ -63,9 +63,9 @@ then hands the result to a three-pane review screen where a human confirms the v
 - **Bulk deliverables** — select projects and download one ZIP with each project's PDF report and xlsx sheet, ready to hand to developers.
 
 **Assess against the standard your client asks for**
-- Pick the reference the findings are judged by: **MOIS Secure Coding Guide** (Korea's public-sector standard, 48 check items) · **OWASP Top 10 (2021)** · **CWE**.
+- Pick the reference the findings are judged by: **MOIS Secure Coding Guide** (Korea's public-sector standard, 7 weakness categories) · **OWASP Top 10 (2021)** · **CWE**.
 - The mapping key is CWE, so **the scan runs once and the standard is chosen when you look** — switching references never means rescanning.
-- Filter the review screen by check item, group the issue list by it, and the deliverables follow: the PDF's *check items* section becomes that standard's full checklist with a violated/pass verdict per item, and the xlsx gains a *check items* sheet. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
+- Filter the review screen by check item, group the issue list by it, and the deliverables follow: the PDF's *check items* section becomes that standard's full checklist with a violated/pass verdict per item, and the xlsx gains a *check items* sheet. Items are identified by category and weakness name, the way real assessment deliverables are written — never by an item number, which differs between editions of the guide. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
 - Findings outside the chosen standard's mapping are reported separately, never silently dropped.
 
 **LLM triage**

@@ -177,6 +177,8 @@ def _styles():
                           textColor=colors.HexColor("#2a3a55"))
     h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName=_FONT_B, fontSize=12, spaceBefore=10, spaceAfter=5)
     small = ParagraphStyle("small", parent=body, fontSize=8.5, textColor=colors.HexColor("#555"))
+    # 표 셀용 — 긴 항목명이 셀을 넘치지 않게 줄바꿈시킨다
+    cell = ParagraphStyle("cell", parent=body, fontSize=8, leading=10.5)
     lbl = ParagraphStyle("lbl", parent=body, fontName=_FONT_B, fontSize=9, textColor=colors.HexColor("#333"))
     cardt = ParagraphStyle("cardt", parent=body, fontName=_FONT_B, fontSize=10.5, textColor=colors.white, leading=14)
     code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8, textColor=colors.HexColor("#0a3"),
@@ -184,7 +186,7 @@ def _styles():
     flow = ParagraphStyle("flow", parent=body, fontName="Courier", fontSize=8, leading=12,
                           textColor=colors.HexColor("#333"))
     return {"body": body, "h1": h1, "h2": h2, "h2sec": h2sec, "small": small,
-            "lbl": lbl, "cardt": cardt, "code": code, "flow": flow}
+            "lbl": lbl, "cardt": cardt, "code": code, "flow": flow, "cell": cell}
 
 
 def _sev_chart(counts, sevmap):
@@ -552,21 +554,31 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
                 cwe_counts[c] = cwe_counts.get(c, 0) + 1
         rows_std = _std_mod.coverage(std, cwe_counts)
         violated = sum(1 for r in rows_std if r["n"])
-        name = std.name_en if en else std.name
-        intro = (f"Assessed against {name} ({std.source}). "
-                 f"{violated} of {len(rows_std)} check items were violated."
+        # 근거 문서 하나만 쓴다 — 이름과 출처를 나란히 적으면 같은 말이 두 번 나온다.
+        intro = (f"Assessed against {std.source}. "
+                 f"{violated} of the {len(rows_std)} weaknesses below were found."
                  if en else
-                 f"점검 기준은 {name}({std.source})이며, 전체 {len(rows_std)}개 점검항목 중 "
+                 f"점검 기준은 {std.source}이며, 아래 {len(rows_std)}개 보안약점 중 "
                  f"{violated}개 항목에서 위반이 확인되었다. 위반이 없는 항목은 양호로 표기한다.")
         story.append(Paragraph(intro, st["body"]))
         story.append(Spacer(1, 2 * mm))
-        irows = [[T("분류"), T("항목"), T("점검 항목"), T("판정"), T("탐지")]]
+        # 항목 번호는 싣지 않는다 — 기준 문서는 판마다 번호가 달라 대조 부담만 생기고,
+        # 실제 진단 산출물도 분류·유형·보안약점명으로 적는다. 공식 코드가 있는 기준만 붙인다.
+        code = std.show_code
+        head = [T("유형")] + ([T("코드")] if code else []) + [T("보안약점"), "CWE", T("판정"), T("탐지")]
+        irows = [head]
         for r in rows_std:
             verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
-            irows.append([r["group_en"] if en else r["group"], r["code"],
-                          r["name_en"] if en else r["name"], verdict, str(r["n"]) if r["n"] else "-"])
-        widths = [30 * mm, 16 * mm, 92 * mm, 18 * mm, 18 * mm]
-        body_align = True
+            cw = ", ".join(r["cwes"][:3]) + ("…" if len(r["cwes"]) > 3 else "")
+            # 보안약점명은 길다("사용자 하드디스크에 저장되는 쿠키를 통한 정보 노출").
+            # 문자열로 두면 셀을 넘치므로 Paragraph 로 감싸 줄바꿈시킨다.
+            nm = Paragraph(r["name_en"] if en else r["name"], st["cell"])
+            irows.append([r["group_en"] if en else r["group"]]
+                         + ([r["code"]] if code else [])
+                         + [nm, cw, verdict, str(r["n"]) if r["n"] else "-"])
+        widths = ([30 * mm] + ([14 * mm] if code else [])
+                  + [(60 if code else 74) * mm, 32 * mm, 18 * mm, 16 * mm])
+        body_align = len(head)
 
 
     style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
@@ -576,11 +588,12 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
              ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
     if body_align:
-        style += [("ALIGN", (1, 0), (1, -1), "CENTER"), ("ALIGN", (3, 0), (-1, -1), "CENTER")]
+        vcol = body_align - 2                      # 판정 열 (마지막에서 두 번째)
+        style += [("ALIGN", (vcol - 1, 0), (-1, -1), "CENTER"), ("FONTSIZE", (0, 0), (-1, -1), 8)]
         for i, r in enumerate(rows_std, 1):
             if r["n"]:
-                style.append(("TEXTCOLOR", (3, i), (3, i), colors.HexColor("#b3261e")))
-                style.append(("FONTNAME", (3, i), (3, i), _FONT_B))
+                style.append(("TEXTCOLOR", (vcol, i), (vcol, i), colors.HexColor("#b3261e")))
+                style.append(("FONTNAME", (vcol, i), (vcol, i), _FONT_B))
     else:
         style.append(("ALIGN", (2, 0), (2, -1), "CENTER"))
     it = Table(irows, colWidths=widths, repeatRows=1)

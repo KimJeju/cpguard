@@ -64,7 +64,7 @@ def test_coverage_marks_untouched_items_as_pass():
     rows = standards.coverage(std, {"CWE-89": 3})
     assert len(rows) == len(std.items)
     hit = [r for r in rows if r["n"]]
-    assert len(hit) == 1 and hit[0]["code"] == "SC-01" and hit[0]["n"] == 3
+    assert len(hit) == 1 and hit[0]["code"] == "sql-injection" and hit[0]["n"] == 3
 
 
 def _seed(c: Client) -> int:
@@ -96,7 +96,7 @@ def test_standard_api_and_item_filter():
     assert got["total"] == hit[0]["n"]
 
     # 없는 항목 코드는 0건(전체가 새는 것보다 낫다)
-    none = c.get(f"/scan/{pk}/api/findings?std=mois&item=SC-999", SERVER_NAME="127.0.0.1").json()
+    none = c.get(f"/scan/{pk}/api/findings?std=mois&item=없는항목", SERVER_NAME="127.0.0.1").json()
     assert none["total"] == 0
 
 
@@ -120,4 +120,6 @@ def test_deliverables_carry_the_chosen_standard():
     pdf = c.get(f"/scan/{pk}/report.pdf?std=mois", SERVER_NAME="127.0.0.1")
     assert pdf.status_code == 200
     txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf.content)).pages)
-    assert "행정안전부" in txt and "SC-01" in txt and "양호" in txt
+    assert "행정안전부" in txt and "SQL 삽입" in txt and "양호" in txt
+    # 항목 번호는 판마다 달라 싣지 않는다(대조 부담 제거)
+    assert "SC-01" not in txt

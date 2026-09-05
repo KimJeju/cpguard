@@ -249,7 +249,7 @@
         <div style="display:flex;gap:6px">
           <select id="fstd" title="점검 기준 — 어떤 레퍼런스로 판정할지">
             <option value="">기준 미적용</option>
-            <option value="mois">행정안전부 시큐어코딩</option>
+            <option value="mois">행안부 보안약점</option>
             <option value="owasp">OWASP Top 10</option>
             <option value="cwe">CWE</option>
           </select>
@@ -868,10 +868,11 @@
   // ---------- 점검 기준 ----------
   // 기준은 스캔이 아니라 "볼 때" 고르는 축이다. 서버에서 항목별 집계를 받아 채우고,
   // 선택한 항목의 CWE 집합으로만 거른다(같은 결과를 발주처 기준으로 다시 묶어 보는 것).
-  const STD = { items: [], byCwe: new Map(), cwes: new Set() };
+  const STD = { items: [], byCwe: new Map(), cwes: new Set(), showCode: true };
   function stdLabel(f) {
     const it = STD.byCwe.get((f.cwe || '').toUpperCase());
-    return it ? `${it.code} ${it.name}` : (ws.std ? '기준 미매핑' : '(기준 미선택)');
+    return it ? (STD.showCode ? `${it.code} ${it.name}` : it.name)
+              : (ws.std ? '기준 미매핑' : '(기준 미선택)');
   }
   function stdSuffix() { return ws.std ? ('?std=' + ws.std) : ''; }
   function applyStdLinks() {
@@ -889,11 +890,11 @@
     }
     sel.disabled = true;
     fetch(`/scan/${SCAN_PK}/api/standard?std=${encodeURIComponent(ws.std)}`).then(r => r.json()).then(d => {
-      STD.items = d.items || [];
+      STD.items = d.items || []; STD.showCode = !!d.show_code;
       for (const it of STD.items) for (const c of it.cwes) STD.byCwe.set(c, it);
       const hit = STD.items.filter(i => i.n > 0);
       sel.innerHTML = `<option value="">점검항목 전체 (위반 ${d.violated}/${d.total_items})</option>`
-        + hit.map(i => `<option value="${i.code}">${i.code} ${esc(i.name)} (${i.n})</option>`).join('');
+        + hit.map(i => `<option value="${i.code}">${STD.showCode ? i.code + ' ' : ''}${esc(i.name)} (${i.n})</option>`).join('');
       if (ws.item && !hit.some(i => i.code === ws.item)) ws.item = '';
       sel.value = ws.item || '';
       sel.disabled = false;
