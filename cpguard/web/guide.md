@@ -33,7 +33,7 @@ CPG 기반 taint 분석 + LLM 트리아지를 결합한 정적 보안 분석(SAS
   필터링하고 페이지네이션으로 전부 훑을 수 있습니다. 규칙 막대를 누르면 그 규칙만 봅니다.
 - **위험도 추세** — 같은 프로젝트를 다시 스캔하면 스캔 간 신규/해결이 비교됩니다.
 
-### 취약점 분석 (`자세히`)
+### 취약점 검토 (`자세히`)
 3분할 화면으로 한 건씩 조사합니다.
 
 - **좌: 이슈 탐색기** — 목록/표/소스 트리. 규칙·파일·위험도로 그룹·필터.
@@ -74,7 +74,7 @@ CPG 기반 taint 분석 + LLM 트리아지를 결합한 정적 보안 분석(SAS
 GitHub Actions 로 PR·푸시마다 자동 스캔하고 결과를 Code Scanning 에 올릴 수 있습니다.
 
 ```yaml
-- uses: KimJeju/cpguard@v0.1.4
+- uses: KimJeju/cpguard@v0.1.5
   with: { path: '.', fail-on: 'high' }   # high 이상 탐지 시 빌드 실패
 - if: always()
   uses: github/codeql-action/upload-sarif@v3

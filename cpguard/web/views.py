@@ -1,4 +1,4 @@
-"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 취약점 분석."""
+"""대시보드 뷰 — zip 업로드 → 안전해제 → 스캔 → 취약점 검토."""
 from __future__ import annotations
 
 import csv
@@ -944,7 +944,7 @@ def batch_status(request, batch_id: str):
 
 
 def detail(request, pk: int):
-    """취약점 분석 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
+    """취약점 검토 — 좌: 이슈 트리, 중앙: 코드 뷰어, 우: 상세/흐름."""
     scan = get_object_or_404(Scan, pk=pk)
     lang = _lang(request)
     findings = scan.findings

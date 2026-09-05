@@ -1,6 +1,6 @@
 [project]
 name = "cpguard"
-version = "0.1.4"
+version = "0.1.5"
 description = "CPG-based taint analysis SAST with LLM triage"
 requires-python = ">=3.11"
 dependencies = [
