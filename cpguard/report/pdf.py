@@ -1,7 +1,8 @@
 """PDF 산출 — 합본 진단 결과 보고서 · 유형별 조치 가이드.
 
-reportlab(순수 파이썬, 번들 가능) + 시스템 맑은고딕(Windows). 폰트가 없으면
-Helvetica 로 폴백(한글이 깨지므로 Windows 대상에선 malgun.ttf 를 쓴다).
+reportlab(순수 파이썬, 번들 가능) + 시스템 한글 폰트. Windows/macOS/Linux 순으로
+설치된 한글 폰트를 찾아 등록하고, 없으면 Helvetica 로 폴백한다(이 경우 한글이 깨진다).
+CPGUARD_PDF_FONT / CPGUARD_PDF_FONT_BOLD 환경변수로 직접 지정할 수 있다.
 """
 from __future__ import annotations
 
@@ -27,24 +28,67 @@ from ..i18n import (DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, STEP_LABEL,
 # ---- 폰트 등록 (한글) ----
 _FONT = "Helvetica"
 _FONT_B = "Helvetica-Bold"
+_KO, _KO_B = "CPGKo", "CPGKoB"
+
+# 플랫폼별 한글 폰트 후보 (정규, 굵게). 앞에서부터 먼저 존재하는 것을 쓴다.
+# reportlab 은 TrueType(glyf) 만 읽는다 — CFF 기반 NotoSansCJK*.otf/ttc 는 등록에 실패하므로
+# 실패하면 다음 후보로 넘어간다.
+_FONT_CANDIDATES = [
+    # Windows
+    ("C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/malgunbd.ttf"),
+    ("C:/Windows/Fonts/gulim.ttc", None),
+    # macOS
+    ("/System/Library/Fonts/AppleSDGothicNeo.ttc", None),
+    ("/Library/Fonts/AppleGothic.ttf", None),
+    # Linux (배포판 표준 경로)
+    ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+     "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"),
+    ("/usr/share/fonts/nanum/NanumGothic.ttf", "/usr/share/fonts/nanum/NanumGothicBold.ttf"),
+    ("/usr/share/fonts/opentype/noto/NotoSansKR-Regular.ttf",
+     "/usr/share/fonts/opentype/noto/NotoSansKR-Bold.ttf"),
+]
+
+# 표준 경로에 없을 때 훑어볼 폰트 디렉터리와 파일명 패턴.
+_FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts",
+              str(Path.home() / ".fonts"), str(Path.home() / ".local/share/fonts")]
+_FONT_GLOBS = ["NanumGothic.ttf", "NanumBarunGothic.ttf", "NotoSansKR-Regular.ttf",
+               "NotoSansKR[[]wght[]].ttf", "malgun.ttf"]
+
+
+def _scan_font_dirs() -> list[tuple[str, str | None]]:
+    """표준 경로 밖에 설치된 한글 폰트 찾기(배포판마다 위치가 다르다)."""
+    found = []
+    for d in _FONT_DIRS:
+        root = Path(d)
+        if not root.is_dir():
+            continue
+        for pat in _FONT_GLOBS:
+            for hit in sorted(root.rglob(pat)):
+                bold = hit.with_name(hit.name.replace("Regular", "Bold").replace("Gothic.", "GothicBold."))
+                found.append((str(hit), str(bold) if bold.is_file() and bold != hit else None))
+    return found
 
 
 def _register_font() -> None:
+    """한글 폰트를 찾아 등록. 못 찾으면 Helvetica 폴백(한글 깨짐)."""
     global _FONT, _FONT_B
-    if _FONT == "Malgun":
+    if _FONT == _KO:
         return
-    for reg, bold, name, bname in (
-        ("C:/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/malgunbd.ttf", "Malgun", "MalgunB"),
-        ("C:/Windows/Fonts/gulim.ttc", None, "Malgun", "MalgunB"),
-    ):
-        try:
-            if Path(reg).exists():
-                pdfmetrics.registerFont(TTFont("Malgun", reg))
-                pdfmetrics.registerFont(TTFont("MalgunB", bold if bold and Path(bold).exists() else reg))
-                _FONT, _FONT_B = "Malgun", "MalgunB"
-                return
-        except Exception:
+
+    import os
+    env = os.environ.get("CPGUARD_PDF_FONT")
+    cands = ([(env, os.environ.get("CPGUARD_PDF_FONT_BOLD"))] if env else []) + _FONT_CANDIDATES
+
+    for reg, bold in cands + _scan_font_dirs():
+        if not reg or not Path(reg).exists():
             continue
+        try:
+            pdfmetrics.registerFont(TTFont(_KO, reg))
+            pdfmetrics.registerFont(TTFont(_KO_B, bold if bold and Path(bold).exists() else reg))
+        except Exception:
+            continue  # CFF(.otf) 등 reportlab 이 못 읽는 포맷 → 다음 후보
+        _FONT, _FONT_B = _KO, _KO_B
+        return
 
 
 SEV_KR = {"critical": "매우위험", "high": "위험", "medium": "보통", "low": "낮음", "info": "정보"}
