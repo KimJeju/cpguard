@@ -6,6 +6,8 @@
 # Django 는 설정·앱을 문자열로 늦게 불러오므로 hiddenimports 로 명시해야 한다.
 # tree-sitter 문법은 컴파일된 확장 모듈이라 collect_dynamic_libs 로 함께 담는다.
 
+from pathlib import Path
+
 from PyInstaller.utils.hooks import (collect_all, collect_data_files,
                                      collect_dynamic_libs, collect_submodules)
 
@@ -23,8 +25,13 @@ datas += [
 ]
 
 # tree-sitter 문법 (컴파일된 확장 모듈)
-for mod in ("tree_sitter", "tree_sitter_javascript", "tree_sitter_typescript",
-            "tree_sitter_php", "tree_sitter_python"):
+# 손으로 적은 목록은 언어를 늘릴 때마다 잊는다 — 실제로 loader 가 임포트하는 모듈을
+# 소스에서 뽑아 쓴다. 빠지면 설치본에서 그 언어만 조용히 동작하지 않는다.
+import re as _re
+_loader = (Path(SPECPATH).parent / "cpguard" / "parse" / "loader.py").read_text(encoding="utf-8")
+_grammars = sorted(set(_re.findall(r"^import (tree_sitter\w*)", _loader, _re.M)))
+assert len(_grammars) >= 12, f"tree-sitter 문법을 못 찾았다: {_grammars}"
+for mod in ["tree_sitter"] + _grammars:
     binaries += collect_dynamic_libs(mod)
     datas += collect_data_files(mod)
     hiddenimports.append(mod)
@@ -71,14 +78,16 @@ hiddenimports += [
     "clr",
 ]
 
-# PDF 산출(reportlab) — 데이터/폰트 포함해 통째로 담는다
-try:
-    d, b, h = collect_all("reportlab")
-    datas += d
-    binaries += b
-    hiddenimports += h
-except Exception:
-    pass
+# 산출물 라이브러리 — 템플릿·폰트 같은 데이터 파일까지 필요해 통째로 담는다.
+# python-docx 는 기본 .docx 템플릿을 패키지 데이터로 들고 있어 collect_all 이 필수다.
+for mod in ("reportlab", "docx"):
+    try:
+        d, b, h = collect_all(mod)
+        datas += d
+        binaries += b
+        hiddenimports += h
+    except Exception:
+        pass
 
 # 선택 의존성(있으면 담고 없으면 건너뜀) — LLM 프로바이더
 for optional in ("anthropic", "openai", "google.genai"):

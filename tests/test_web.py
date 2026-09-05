@@ -485,3 +485,59 @@ def test_download_headers_are_ascii_rfc5987():
         assert cd.isascii() and not cd.startswith("=?"), f"{url}: {cd[:40]}"
         assert "filename*=UTF-8''" in cd
         assert len(unquote(cd.split("filename*=UTF-8''")[1]).encode("utf-8")) <= 255
+
+
+def test_installer_spec_bundles_every_grammar():
+    """설치본 스펙이 모든 tree-sitter 문법을 담는지.
+
+    손으로 적은 목록을 쓰던 시절 언어 7개가 빠져 있었다 — 개발 환경에서는 잘 되고
+    설치본에서만 그 언어가 조용히 동작하지 않아 알아채기 어렵다."""
+    import re
+    root = Path(__file__).resolve().parent.parent
+    spec = (root / "packaging" / "cpguard.spec").read_text(encoding="utf-8")
+    loader = (root / "cpguard" / "parse" / "loader.py").read_text(encoding="utf-8")
+    grammars = set(re.findall(r"^import (tree_sitter\w*)", loader, re.M))
+    assert len(grammars) >= 12
+    # 스펙은 목록을 하드코딩하지 않고 loader 에서 뽑아야 한다
+    assert "loader.py" in spec and r"tree_sitter\w*" in spec
+    assert not re.search(r'"tree_sitter_javascript",\s*"tree_sitter_typescript"', spec)
+
+
+def test_word_report_downloads():
+    """Word 산출물 — 담당자가 고쳐 쓰는 원본."""
+    import io
+
+    from docx import Document
+    c = Client()
+    pk = _seed_scan(c)
+    r = c.get(f"/scan/{pk}/report.docx?std=mois", SERVER_NAME="127.0.0.1")
+    assert r.status_code == 200
+    assert "wordprocessingml" in r["Content-Type"]
+    d = Document(io.BytesIO(r.content))
+    heads = [p.text for p in d.paragraphs if p.style.name.startswith("Heading")]
+    assert "1. 진단 개요" in heads and "3. 진단 항목" in heads and "5. 종합 의견" in heads
+    # 고른 기준의 점검표가 실려야 한다
+    cells = {c.text for t in d.tables for row in t.rows for c in row.cells}
+    assert "SQL 삽입" in cells and "양호" in cells
+
+
+def test_pdf_report_is_grayscale():
+    """산출물은 검은 글자 + 옅은 회색으로 통일한다.
+
+    진단 보고서는 흑백 출력·복사본으로 돌아다니고 발주처 문서 양식에 얹히는 일이 많다.
+    색으로만 구분되는 정보가 있으면 그 과정에서 사라진다."""
+    import re
+
+    from pypdf import PdfReader
+    c = Client()
+    pk = _seed_scan(c)
+    data = c.get(f"/scan/{pk}/report.pdf?std=mois", SERVER_NAME="127.0.0.1").content
+    colors = set()
+    for page in PdfReader(io.BytesIO(data)).pages:
+        ops = page.get_contents().get_data().decode("latin-1", "replace")
+        for m in re.finditer(r"([\d.]+) ([\d.]+) ([\d.]+) (?:rg|RG)", ops):
+            colors.add(tuple(round(float(m.group(i)), 3) for i in (1, 2, 3)))
+    assert colors, "색 연산자를 하나도 못 찾았다 — 검사가 헛돌고 있다"
+    non_gray = [c for c in colors
+                if abs(c[0] - c[1]) > 0.02 or abs(c[1] - c[2]) > 0.02]
+    assert not non_gray, f"회색이 아닌 색이 남아 있다: {sorted(non_gray)}"

@@ -65,9 +65,14 @@ then hands the result to a three-pane review screen where a human confirms the v
 **Assess against the standard your client asks for**
 - Tick the references before the scan starts: **MOIS Secure Coding Guide** (Korea's public-sector standard) · **Electronic Financial Supervision Regulation** web checklist (Korean finance) · **OWASP Top 10 (2021)** · **CWE**. Pick several — real Korean deliverables report against more than one at a time.
 - The mapping key is CWE, so **the scan runs once and the standards only shape the report** — switching or adding references never means rescanning.
-- Filter the review screen by check item, group the issue list by it, and the deliverables follow: the PDF's *check items* section becomes that standard's full checklist with a violated/pass verdict per item, and the xlsx gains a *check items* sheet. Items are identified by category and weakness name, the way real assessment deliverables are written — never by an item number, which differs between editions of the guide. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
+- Filter the review screen by check item, group the issue list by it, and tick which standards each export carries. The report's *check items* section becomes those standards' full checklists with a verdict per item, and the xlsx gains a *check items* sheet. Items are identified by category and weakness name, the way real assessment deliverables are written — never by an item number, which differs between editions of the guide. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
 - **A check item with no rule behind it is never reported as "pass."** Items outside static analysis — directory indexing, admin page exposure, CSRF — are marked *Not assessed*, so the deliverable never claims a check that did not happen.
 - Findings outside the chosen standard's mapping are reported separately, never silently dropped.
+
+**Deliverables you can actually hand over**
+- **Assessment report** in both **Word (.docx)** and PDF — the Word file is the editable master, so the analyst can drop it into the client's document template, add the false-positive opinions confirmed on site, and ship it. Same sections, same tables, same wording as the PDF.
+- **Analysis sheet (xlsx)** — the fixed 14-column format Korean clients expect, plus a *check items* sheet.
+- Everything is **black text on light grey**. Assessment reports travel as black-and-white printouts and photocopies and get pasted into the client's own template, so nothing is distinguished by colour alone — severity is graded by lightness, verdicts read as words.
 
 **LLM triage**
 - Claude · ChatGPT (OpenAI) · Gemini. Re-verifies findings for reachability and explains them; provider and model are selectable. Gemini's free tier is enough to try it.

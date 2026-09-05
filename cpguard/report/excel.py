@@ -25,9 +25,9 @@ COLUMN_WIDTHS = {
     "I": 44, "J": 40, "K": 44, "L": 13, "M": 30, "N": 70,
 }
 SEVERITY_KO = {"critical": "심각", "high": "높음", "medium": "중간", "low": "낮음", "info": "정보"}
-SEVERITY_FILL = {
-    "critical": "F8B4B4", "high": "F8CBAD", "medium": "FFE699", "low": "D9E1F2", "info": "EDEDED",
-}
+# 색이 아니라 명도로 구분한다(report/style.py) — 흑백 출력·복사본에서도 순서가 읽힌다.
+from .style import SEV_FILL_XLSX as SEVERITY_FILL  # noqa: E402
+from .style import VIOLATED_FILL_XLSX
 LANG_BY_EXT = {
     ".js": "JavaScript", ".jsx": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript",
     ".ts": "TypeScript", ".tsx": "TypeScript", ".php": "PHP", ".phtml": "PHP", ".inc": "PHP",
@@ -218,7 +218,7 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     data_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     header_font = Font(name="맑은 고딕", size=11, bold=True)
     data_font = Font(name="맑은 고딕", size=10)
-    header_fill = PatternFill(fill_type="solid", fgColor="FFBFBFBF")
+    header_fill = PatternFill(fill_type="solid", fgColor="FFEDEDED")
     header_align = Alignment(horizontal="center", vertical="center")
     data_align = Alignment(horizontal="left", vertical="top", wrap_text=True)
     center = Alignment(horizontal="center", vertical="top")
@@ -287,7 +287,7 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
                     cs.cell(rn, col).alignment = center
                 if r["verdict"] == _std_mod.VIOLATED:
                     cs.cell(rn, vcol).fill = PatternFill(fill_type="solid",
-                                                         fgColor=SEVERITY_FILL["high"])
+                                                         fgColor=VIOLATED_FILL_XLSX)
         um = {}
         for std in stds:
             um.update(_std_mod.unmapped(std, cwe_counts))

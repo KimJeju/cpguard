@@ -24,6 +24,7 @@ from reportlab.platypus.tableofcontents import TableOfContents
 
 from ..i18n import (DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, STEP_LABEL,
                     STEP_LABEL_EN, tr)
+from . import style as S
 
 # ---- 폰트 등록 (한글) ----
 _FONT = "Helvetica"
@@ -92,9 +93,8 @@ def _register_font() -> None:
 
 
 SEV_KR = {"critical": "매우위험", "high": "위험", "medium": "보통", "low": "낮음", "info": "정보"}
-SEV_COLOR = {"critical": colors.HexColor("#c0392b"), "high": colors.HexColor("#e67e22"),
-             "medium": colors.HexColor("#b7950b"), "low": colors.HexColor("#2e7d32"),
-             "info": colors.HexColor("#7f8c8d")}
+# 위험도는 색상이 아니라 명도로 구분한다(style.py) — 흑백 출력·복사본에서도 순서가 읽힌다.
+SEV_COLOR = {k: colors.HexColor(v) for k, v in S.SEV_INK.items()}
 SEV_ORDER = ["critical", "high", "medium", "low", "info"]
 
 # 유형별 조치 권고 (rule_id 접미사 기준). (제목, 설명, 조치 권고, 안전 예시)
@@ -172,19 +172,19 @@ def _styles():
     body = ParagraphStyle("body", parent=ss["Normal"], fontName=_FONT, fontSize=9.5, leading=15)
     # h1 = 대단원(TOC L0), h2sec = 중단원(TOC L1). afterFlowable 가 이 스타일명으로 목차를 만든다.
     h1 = ParagraphStyle("h1", parent=ss["Heading1"], fontName=_FONT_B, fontSize=15, spaceBefore=14, spaceAfter=8,
-                        textColor=colors.HexColor("#1a2740"))
+                        textColor=colors.HexColor("#1a1a1a"))
     h2sec = ParagraphStyle("h2sec", parent=ss["Heading2"], fontName=_FONT_B, fontSize=11.5, spaceBefore=10, spaceAfter=4,
-                          textColor=colors.HexColor("#2a3a55"))
+                          textColor=colors.HexColor("#1a1a1a"))
     h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName=_FONT_B, fontSize=12, spaceBefore=10, spaceAfter=5)
-    small = ParagraphStyle("small", parent=body, fontSize=8.5, textColor=colors.HexColor("#555"))
+    small = ParagraphStyle("small", parent=body, fontSize=8.5, textColor=colors.HexColor("#444444"))
     # 표 셀용 — 긴 항목명이 셀을 넘치지 않게 줄바꿈시킨다
     cell = ParagraphStyle("cell", parent=body, fontSize=8, leading=10.5)
-    lbl = ParagraphStyle("lbl", parent=body, fontName=_FONT_B, fontSize=9, textColor=colors.HexColor("#333"))
+    lbl = ParagraphStyle("lbl", parent=body, fontName=_FONT_B, fontSize=9, textColor=colors.HexColor("#444444"))
     cardt = ParagraphStyle("cardt", parent=body, fontName=_FONT_B, fontSize=10.5, textColor=colors.white, leading=14)
-    code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8, textColor=colors.HexColor("#0a3"),
+    code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8, textColor=colors.HexColor("#1a1a1a"),
                           backColor=colors.HexColor("#f4f4f4"), borderPadding=4, leading=11)
     flow = ParagraphStyle("flow", parent=body, fontName="Courier", fontSize=8, leading=12,
-                          textColor=colors.HexColor("#333"))
+                          textColor=colors.HexColor("#444444"))
     return {"body": body, "h1": h1, "h2": h2, "h2sec": h2sec, "small": small,
             "lbl": lbl, "cardt": cardt, "code": code, "flow": flow, "cell": cell}
 
@@ -201,16 +201,16 @@ def _sev_chart(counts, sevmap):
     d = Drawing(W, H)
     # 겉 테두리(옅은 회색, 얇게)
     d.add(Rect(0.5, 0.5, W - 1, H - 1, fillColor=colors.white,
-               strokeColor=colors.HexColor("#d9d9d9"), strokeWidth=0.6))
+               strokeColor=colors.HexColor("#d0d0d0"), strokeWidth=0.6))
     y = H - pad - row_h + 4
     for s in order:
         n = counts.get(s, 0)
         w = (n / mx) * bar_w if n else 0
-        d.add(String(pad + 2, y + 3, sevmap[s], fontName=_FONT, fontSize=9, fillColor=colors.HexColor("#222222")))
+        d.add(String(pad + 2, y + 3, sevmap[s], fontName=_FONT, fontSize=9, fillColor=colors.HexColor("#1a1a1a")))
         d.add(Rect(78, y, bar_w, 12, fillColor=colors.HexColor("#eeeeee"), strokeColor=None))
         if w:
             d.add(Rect(78, y, w, 12, fillColor=colors.HexColor("#3a3a3a"), strokeColor=None))
-        d.add(String(78 + bar_w + 8, y + 3, str(n), fontName=_FONT_B, fontSize=9, fillColor=colors.HexColor("#222222")))
+        d.add(String(78 + bar_w + 8, y + 3, str(n), fontName=_FONT_B, fontSize=9, fillColor=colors.HexColor("#1a1a1a")))
         y -= row_h
     return d
 
@@ -222,9 +222,9 @@ def _kv_table(rows, T, col0=50 * mm, col1=124 * mm):
     t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
         ("FONTNAME", (0, 0), (0, -1), _FONT_B),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f3f5f8")),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#334")),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#ededed")),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#444444")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("LEFTPADDING", (0, 0), (-1, -1), 8),
@@ -235,18 +235,18 @@ def _kv_table(rows, T, col0=50 * mm, col1=124 * mm):
 def _cover(story, st, title, subtitle, meta_rows):
     center = ParagraphStyle("cvc", parent=st["body"], alignment=TA_CENTER)
     story.append(Spacer(1, 45 * mm))
-    story.append(Paragraph("SOURCE CODE SECURITY ASSESSMENT", ParagraphStyle("c0", parent=center, fontName=_FONT, fontSize=11, textColor=colors.HexColor("#888"))))
+    story.append(Paragraph("SOURCE CODE SECURITY ASSESSMENT", ParagraphStyle("c0", parent=center, fontName=_FONT, fontSize=11, textColor=colors.HexColor("#808080"))))
     story.append(Spacer(1, 8 * mm))
     story.append(Paragraph(title, ParagraphStyle("c1", parent=center, fontName=_FONT_B, fontSize=22, leading=30)))
     story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph(subtitle, ParagraphStyle("c2", parent=center, fontName=_FONT, fontSize=13, textColor=colors.HexColor("#444"))))
+    story.append(Paragraph(subtitle, ParagraphStyle("c2", parent=center, fontName=_FONT, fontSize=13, textColor=colors.HexColor("#444444"))))
     story.append(Spacer(1, 30 * mm))
     t = Table([[k, v] for k, v in meta_rows], colWidths=[50 * mm, 124 * mm])
     t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#666")),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#444444")),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#ddd")),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#e2e2e2")),
     ]))
     story.append(t)
     story.append(PageBreak())
@@ -258,8 +258,8 @@ def _severity_table(story, st, counts, sevmap, T):
     row = [T("개수")] + [str(counts.get(s, 0)) for s in SEV_ORDER] + [str(total)]
     t = Table([head, row], colWidths=[30 * mm] + [24 * mm] * 5 + [24 * mm])
     style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
-             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ccc")),
-             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
+             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
              ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
              ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]
     for i, s in enumerate(SEV_ORDER, 1):
@@ -278,7 +278,7 @@ def _cwe_ref(cwe: str) -> str:
     m = re.search(r"(\d+)", cwe or "")
     if not m:
         return _esc(cwe or "-")
-    return f'<link href="https://cwe.mitre.org/data/definitions/{m.group(1)}.html" color="#2a5db0">{_esc(cwe)}</link>'
+    return f'<link href="https://cwe.mitre.org/data/definitions/{m.group(1)}.html" color="#1a1a1a">{_esc(cwe)}</link>'
 
 
 # 위험도별 조치 우선순위(부록·상세 요약용)
@@ -351,8 +351,8 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
 
 _ITEM_TABLE_STYLE = [
     ("FONTSIZE", (0, 0), (-1, -1), 8),
-    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
+    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
     ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
 ]
@@ -381,10 +381,10 @@ def _item_table(rows_std, std, V, T, st, en):
     ]
     for i, r in enumerate(rows_std, 1):
         if r["verdict"] == _sm.VIOLATED:
-            style += [("TEXTCOLOR", (vcol, i), (vcol, i), colors.HexColor("#b3261e")),
+            style += [("TEXTCOLOR", (vcol, i), (vcol, i), colors.HexColor("#1a1a1a")),
                       ("FONTNAME", (vcol, i), (vcol, i), _FONT_B)]
         elif r["verdict"] == _sm.NOT_COVERED:
-            style.append(("TEXTCOLOR", (0, i), (-1, i), colors.HexColor("#8a8f98")))
+            style.append(("TEXTCOLOR", (0, i), (-1, i), colors.HexColor("#9a9a9a")))
     tbl = Table(data, colWidths=widths, repeatRows=1)
     tbl.setStyle(TableStyle(style))
     return tbl
@@ -441,9 +441,9 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     rt = Table(rev, colWidths=[20 * mm, 30 * mm, 96 * mm, 28 * mm])
     rt.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
         ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
-        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
         ("ALIGN", (0, 0), (1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
     story.append(rt)
@@ -453,8 +453,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     story.append(Paragraph(T("목차"), st["h1"]))
     toc = TableOfContents()
     toc.levelStyles = [
-        ParagraphStyle("toc0", fontName=_FONT_B, fontSize=10.5, leading=20, textColor=colors.HexColor("#22314f")),
-        ParagraphStyle("toc1", fontName=_FONT, fontSize=9.5, leading=16, leftIndent=14, textColor=colors.HexColor("#444")),
+        ParagraphStyle("toc0", fontName=_FONT_B, fontSize=10.5, leading=20, textColor=colors.HexColor("#1a1a1a")),
+        ParagraphStyle("toc1", fontName=_FONT, fontSize=9.5, leading=16, leftIndent=14, textColor=colors.HexColor("#444444")),
     ]
     story.append(toc)
     story.append(PageBreak())
@@ -485,7 +485,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         note = ("* Partial coverage — some files could not be fully analyzed; results may not "
                 "represent the whole." if en else "* " + scan.integrity_note)
         story.append(Spacer(1, 2 * mm))
-        story.append(Paragraph(f'<font color="#a33">{_esc(note)}</font>', st["small"]))
+        story.append(Paragraph(f'<b>{_esc(note)}</b>', st["small"]))
     story.append(PageBreak())
 
     # ── 2. 진단 결과 요약 ──
@@ -508,8 +508,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         rows.append([cwe, seen.get(cwe, ""), str(n)])
     ct = Table(rows, colWidths=[36 * mm, 118 * mm, 20 * mm])
     ct.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
-                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
                             ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
                             ("ALIGN", (2, 0), (2, -1), "CENTER"),
                             ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
@@ -541,8 +541,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
                       str(r.sev_critical), str(r.sev_high), str(r.sev_medium), str(r.sev_low), str(r.sev_info)])
     ht = Table(hrows, colWidths=[14 * mm, 30 * mm, 16 * mm, 16 * mm, 16 * mm] + [16.4 * mm] * 5, repeatRows=1)
     hstyle = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
+              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
               ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
               ("ALIGN", (2, 0), (-1, -1), "CENTER"), ("ALIGN", (0, 0), (0, -1), "CENTER"),
               ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -641,7 +641,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     if total > CAP:
         note = (f"Showing the top {CAP} findings by severity; see the analysis sheet (xlsx) for all {total}."
                 if en else f"위험도 상위 {CAP}건을 상세 기술하며, 전체 {total}건은 분석목록표(xlsx)를 참조한다.")
-        story.append(Paragraph(f'<font color="#a33">* {note}</font>', st["small"]))
+        story.append(Paragraph(f'<b>* {note}</b>', st["small"]))
         story.append(Spacer(1, 2 * mm))
     for i, f in enumerate(shown, 1):
         for fl in _finding_card(i, f, SEV, REM, DFT, T, st, en):
@@ -670,8 +670,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         arows.append([SEV.get(s, s), CRIT[s], T(_PRIORITY[s])])
     at = Table(arows, colWidths=[28 * mm, 118 * mm, 28 * mm])
     astyle = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
-              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d0d0")),
+              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#ededed")),
               ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
               ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
               ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]
@@ -720,7 +720,7 @@ def remediation_guide(scan, path, lang: str = "ko", meta: dict | None = None) ->
         rem = REM.get(rk, DFT)
         cnt = len(info["files"])
         cnt_lbl = f"{cnt}" if en else f"{cnt}건"
-        story.append(Paragraph(f"{idx}. {rem[0]} <font size=9 color='#888'>({rid} · {cnt_lbl})</font>", st["h1"]))
+        story.append(Paragraph(f"{idx}. {rem[0]} <font size=9 color='#808080'>({rid} · {cnt_lbl})</font>", st["h1"]))
         story.append(Paragraph(f'<b>CWE:</b> {info["cwe"] or "-"} &nbsp;&nbsp; <b>OWASP:</b> {info["owasp"] or "-"}', st["small"]))
         story.append(Paragraph(f'<b>{T("설명")}.</b> {rem[1]}', st["body"]))
         story.append(Paragraph(f'<b>{T("조치 방법")}.</b> {rem[2]}', st["body"]))
@@ -741,7 +741,7 @@ def _footer(canvas, doc):
         return
     canvas.saveState()
     canvas.setFont(_FONT, 8)
-    canvas.setFillColor(colors.HexColor("#999"))
+    canvas.setFillColor(colors.HexColor("#808080"))
     canvas.drawRightString(A4[0] - 18 * mm, 12 * mm, f"{doc.page}")
     canvas.drawString(18 * mm, 12 * mm, "CPGuard")
     canvas.restoreState()

@@ -124,6 +124,16 @@
   .empty { padding:28px 16px; color:var(--muted); text-align:center; font-size:13px }
   .toolbtn { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:0; padding:3px 8px; font-size:11.5px; cursor:pointer; text-decoration:none; white-space:nowrap }
   .toolbtn:hover { border-color:var(--accent); color:var(--fg); text-decoration:none } .toolbtn.on { color:var(--fg); border-color:var(--accent) }
+  .export { position:relative }
+  .export > summary { list-style:none; display:inline-block }
+  .export > summary::-webkit-details-marker { display:none }
+  .export-panel { position:absolute; right:0; top:calc(100% + 4px); z-index:60; width:290px;
+                  background:var(--panel); border:1px solid var(--line); padding:10px 12px 12px }
+  .export-std { display:flex; gap:7px; align-items:center; font-size:12px; color:var(--fg);
+                padding:2px 0; cursor:pointer }
+  .export-std input { width:auto; margin:0; flex:0 0 auto }
+  .export-links { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; padding-top:9px;
+                  border-top:1px solid var(--line) }
   kbd { font-family:Consolas,monospace; font-size:10.5px; background:var(--sunken); border:1px solid var(--line); border-radius:0; padding:0 4px; color:var(--muted) }
 
   /* ---- AI 패널 ---- */
@@ -198,11 +208,26 @@
     <button class="toolbtn" id="tgl-left" title="탐색기 접기/펼치기">◧</button>
     <button class="toolbtn" id="tgl-bottom" title="분석 패널">▭</button>
     <button class="toolbtn" id="tgl-right" title="인스펙터 접기/펼치기">◨</button>
-    <a class="toolbtn" download id="dl-report" href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 PDF">보고서</a>
-    <a class="toolbtn" download href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">조치</a>
-    <a class="toolbtn" download href="{% url 'sarif' scan.pk %}">SARIF</a>
-    <a class="toolbtn" download href="{% url 'export_csv' scan.pk %}">CSV</a>
-    <a class="toolbtn" download id="dl-xlsx" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
+    <details id="exportbox" class="export">
+      <summary class="toolbtn" title="산출물 내보내기 — 점검 기준 선택">산출물 ▾</summary>
+      <div class="export-panel">
+        <div class="muted" style="font-size:11px;margin-bottom:6px">점검 기준 — 산출물에 실을 점검표를 고릅니다</div>
+        {% for s in scan_standards %}
+        <label class="export-std" title="{{ s.source }}">
+          <input type="checkbox" name="xstd" value="{{ s.id }}"{% if s.checked %} checked{% endif %}>
+          <span>{{ s.name }} <span style="opacity:.55">({{ s.count }})</span></span>
+        </label>
+        {% endfor %}
+        <div class="export-links">
+          <a class="toolbtn" download data-std href="{% url 'export_docx_report' scan.pk %}" title="합본 진단 결과 보고서 — 편집 가능한 Word 원본">보고서 (Word)</a>
+          <a class="toolbtn" download data-std id="dl-report" href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 — 제출용 PDF">보고서 (PDF)</a>
+          <a class="toolbtn" download data-std id="dl-xlsx" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표 + 점검항목 시트">분석목록표 (xlsx)</a>
+          <a class="toolbtn" download href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">조치 가이드</a>
+          <a class="toolbtn" download href="{% url 'sarif' scan.pk %}">SARIF</a>
+          <a class="toolbtn" download href="{% url 'export_csv' scan.pk %}">CSV</a>
+        </div>
+      </div>
+    </details>
     {% if scan.project %}<a class="toolbtn" href="{% url 'project_home' scan.project %}">{{ scan.project }} 홈</a>{% endif %}
     <a class="toolbtn" href="/">목록</a>
   </span>
@@ -383,7 +408,7 @@
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
   const WS_KEY = 'cpguard.ws.v1';
   let ws = { leftW: 320, rightW: 380, bottomH: 260, bottom: true, left: true, right: true, tab: 'ai', view: 'tree',
-             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', stdPicked: false, hideAudited: false, sort: 'severity', asc: true };
+             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
@@ -879,18 +904,30 @@
     return it ? (STD.showCode ? `${it.code} ${it.name}` : it.name)
               : (ws.std ? '기준 미매핑' : '(기준 미선택)');
   }
-  // 사용자가 직접 고른 경우에만 산출물을 그 기준 하나로 좁힌다. 자동 선택(진단 시 고른
-  // 기준)일 때는 파라미터를 붙이지 않아야 서버가 스캔에 지정된 기준 전부를 싣는다.
-  function stdSuffix() { return ws.stdPicked ? ('?std=' + ws.std) : ''; }
+  // 산출물에 실을 점검 기준은 내보내기 패널이 소유한다(검토 화면의 기준 필터와는 별개 —
+  // 화면에서 무엇을 보는지와 산출물에 무엇을 싣는지는 다른 결정이다).
   function applyStdLinks() {
-    for (const [id, url] of [['dl-report', REPORT_URL], ['dl-xlsx', XLSX_URL]]) {
-      const a = el(id); if (a) a.href = url + stdSuffix();
-    }
+    const picked = [...document.querySelectorAll('#exportbox input[name=xstd]:checked')]
+      .map(i => i.value);
+    // 아무것도 안 고르면 파라미터를 비워 보낸다 — 서버가 기준 없는 산출물을 낸다.
+    const q = '?std=' + picked.join(',');
+    document.querySelectorAll('#exportbox a[data-std]').forEach(a => {
+      a.href = a.getAttribute('href').split('?')[0] + q;
+    });
+    const n = picked.length;
+    const sum = document.querySelector('#exportbox > summary');
+    if (sum) sum.textContent = n ? `산출물 · 기준 ${n} ▾` : '산출물 ▾';
   }
+  document.querySelectorAll('#exportbox input[name=xstd]')
+    .forEach(i => i.addEventListener('change', applyStdLinks));
+  applyStdLinks();
+  document.addEventListener('click', e => {          // 바깥을 누르면 닫기
+    const box = el('exportbox');
+    if (box && box.open && !box.contains(e.target)) box.open = false;
+  });
   function loadStandard() {
     const sel = el('fitem');
     STD.items = []; STD.byCwe = new Map(); STD.cwes = new Set();
-    applyStdLinks();
     if (!ws.std) {
       sel.innerHTML = '<option value="">점검항목 전체</option>'; sel.disabled = true;
       ws.item = ''; saveWS(); renderTree(); return;
@@ -914,7 +951,7 @@
     const it = STD.items.find(i => i.code === ws.item);
     if (it) for (const c of it.cwes) STD.cwes.add(c);
   }
-  el('fstd').onchange = () => { ws.std = el('fstd').value; ws.item = ''; ws.stdPicked = true; saveWS(); loadStandard(); };
+  el('fstd').onchange = () => { ws.std = el('fstd').value; ws.item = ''; saveWS(); loadStandard(); };
   el('fitem').onchange = () => { ws.item = el('fitem').value; setItemCwes(); saveWS(); renderTree(); };
 
   // 상단 안내 배너 닫기 — 스캔별로 기억해 다음에 안 뜬다(다시 보려면 새 스캔이거나 localStorage 삭제)

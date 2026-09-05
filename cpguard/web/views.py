@@ -500,6 +500,7 @@ def portfolio_export(request):
     import io
     from ..report import excel
     from ..report import pdf as pdfmod
+    from ..report import word as wordmod
 
     from . import config as appcfg
     lang = _lang(request)
@@ -518,11 +519,18 @@ def portfolio_export(request):
             safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in proj)[:80] or f"scan{scan.pk}"
             folder = f"{safe}"
             if kind in ("report", "both"):
+                stds = _stds(request, scan)
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "r.pdf"
                 try:
-                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta,
-                                           standards=_stds(request, scan))
+                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standards=stds)
                     zf.writestr(f"{folder}/{safe}_report.pdf", tmp.read_bytes())
+                finally:
+                    shutil.rmtree(tmp.parent, ignore_errors=True)
+                # Word 본은 담당자가 고쳐 쓰는 원본이라 함께 배부한다
+                tmp = Path(tempfile.mkdtemp(prefix="cpguard_docx_")) / "r.docx"
+                try:
+                    wordmod.combined_report(scan, tmp, lang=lang, meta=meta, standards=stds)
+                    zf.writestr(f"{folder}/{safe}_report.docx", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
             if kind in ("xlsx", "both"):
@@ -590,6 +598,28 @@ def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
     scan = get_object_or_404(Scan, pk=pk)
     return _pdf_response(scan, "combined", _lang(request), _stds(request, scan))
+
+
+@never_cache
+def export_docx_report(request, pk: int):
+    """합본 진단 결과 보고서(Word) — 담당자가 발주처 양식에 맞춰 고쳐 쓰는 원본."""
+    from ..report import word as wordmod
+    from . import config as appcfg
+    scan = get_object_or_404(Scan, pk=pk)
+    lang = _lang(request)
+    tmp = Path(tempfile.mkdtemp(prefix="cpguard_docx_")) / "out.docx"
+    try:
+        wordmod.combined_report(scan, tmp, lang=lang, meta=appcfg.report_meta(),
+                                standards=_stds(request, scan))
+        data = tmp.read_bytes()
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+    suffix = "assessment-report" if lang == "en" else "진단결과보고서"
+    resp = HttpResponse(
+        data,
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    resp["Content-Disposition"] = _attachment(_download_name(Path(scan.name).stem, suffix, "docx"))
+    return resp
 
 
 @never_cache
