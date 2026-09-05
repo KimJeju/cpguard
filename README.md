@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
-  <img src="https://img.shields.io/badge/tests-247%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -70,7 +70,9 @@ then hands the result to a three-pane review screen where a human confirms the v
 - Findings outside the chosen standard's mapping are reported separately, never silently dropped.
 
 **Deliverables you can actually hand over**
-- **Assessment report** in both **Word (.docx)** and PDF — the Word file is the editable master, so the analyst can drop it into the client's document template, add the false-positive opinions confirmed on site, and ship it. Same sections, same tables, same wording as the PDF.
+- **Consolidated assessment report** — tick the projects on the Reports screen and get one submission-ready document covering all of them: purpose and legal basis, schedule, tool, assessor, the standards' check items, **initial findings → false-positive review → final items to remediate**, per-project detail (files, lines of code, languages, weaknesses by severity), remediation by type, and appendices. Structured like the reports Korean assessment firms actually deliver.
+- **The review verdicts become the report.** Marking a finding as a false positive or excluding it on the review screen — with the note explaining why — is what turns a raw scanner dump into a deliverable. Section 3.2 is built from exactly those verdicts, and the initial/final totals differ accordingly.
+- **Word (.docx) and PDF.** The Word file is the editable master, so the analyst can drop it into the client's template, add on-site opinions, and ship it. Same sections, same tables, same wording as the PDF.
 - **Analysis sheet (xlsx)** — the fixed 14-column format Korean clients expect, plus a *check items* sheet.
 - Everything is **black text on light grey**. Assessment reports travel as black-and-white printouts and photocopies and get pasted into the client's own template, so nothing is distinguished by colour alone — severity is graded by lightness, verdicts read as words.
 

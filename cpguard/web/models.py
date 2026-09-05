@@ -35,6 +35,13 @@ class Scan(models.Model):
     # 진단 시 고른 점검 기준(쉼표 구분 id). 탐지 결과 자체는 기준과 무관하지만,
     # "무엇으로 진단하기로 했는가"가 남아야 산출물·검토 화면이 그 기준을 기본으로 쓴다.
     standards = models.CharField(max_length=120, blank=True, default="")
+    # 진단 규모 근거 — 합본 보고서의 '빌드 라인 수 / 개발언어' 열이 쓴다.
+    code_lines = models.IntegerField(default=0)
+    languages = models.CharField(max_length=200, blank=True, default="")
+
+    @property
+    def language_list(self) -> list[str]:
+        return [x for x in (self.languages or "").split(",") if x]
 
     @property
     def standard_ids(self) -> list[str]:

@@ -250,6 +250,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
             triage_note=triage_note, integrity_note=integrity_note, standards=standards,
+            code_lines=scan_report.code_lines, languages=",".join(scan_report.languages),
             sev_critical=sevc.get("critical", 0), sev_high=sevc.get("high", 0),
             sev_medium=sevc.get("medium", 0), sev_low=sevc.get("low", 0), sev_info=sevc.get("info", 0),
         )
@@ -426,8 +427,65 @@ def compare(request):
 
 
 def reports(request):
-    """리포트 — 스캔별 내보내기(SARIF/CSV/분석목록표/PDF) 바로가기."""
-    return render(request, "reports.html", {"scans": list(Scan.objects.all()[:100])})
+    """리포트 — 합본 진단 결과 보고서(다중 프로젝트) + 스캔별 개별 내보내기.
+
+    합본 보고서는 여기서만 만든다. 여러 프로젝트를 한 건의 진단으로 묶는 산출물이라
+    스캔 하나를 보고 있는 검토 화면에서는 만들 수 없다."""
+    lang = _lang(request)
+    scans = list(Scan.objects.all()[:100])
+    picked = {int(x) for x in request.GET.getlist("scan") if x.isdigit()}
+    latest = {s.project or s.name: s.pk for s in reversed(scans)}   # 프로젝트별 최신
+    for s in scans:
+        s.checked = (s.pk in picked) if picked else (latest.get(s.project or s.name) == s.pk)
+        # 조치대상 = 오탐·제외·조치완료로 판정한 것을 뺀 나머지(합본 보고서의 최종 결과 기준)
+        s.open_count = s.finding_count - sum(
+            1 for v in (s.audit or {}).values() if v in ("false_positive", "deferred", "fixed"))
+    return render(request, "reports.html", {
+        "scans": scans,
+        "standards": _standard_choices(_stds(request) or None, lang),
+    })
+
+
+@never_cache
+def consolidated_report(request):
+    """선택한 프로젝트들의 합본 진단 결과 보고서(Word/PDF)."""
+    from . import config as appcfg
+    ids = [int(x) for x in request.GET.getlist("scan") if x.isdigit()][:100]
+    scans = sorted(Scan.objects.filter(pk__in=ids), key=lambda s: -s.pk)
+    if not scans:
+        return HttpResponse("포함할 프로젝트를 하나 이상 선택하세요.", status=400)
+
+    lang = _lang(request)
+    stds = [s for s in request.GET.getlist("std") if _standard_id(s)]
+    fmt = "docx" if request.GET.get("fmt", "docx") == "docx" else "pdf"
+    meta = appcfg.report_meta()
+
+    tmp = Path(tempfile.mkdtemp(prefix="cpguard_con_")) / f"out.{fmt}"
+    try:
+        if fmt == "docx":
+            from ..report import word as wordmod
+            wordmod.consolidated_report(scans, tmp, lang=lang, meta=meta, standards=stds)
+            ctype = ("application/vnd.openxmlformats-officedocument"
+                     ".wordprocessingml.document")
+        else:
+            from ..report import pdf as pdfmod
+            pdfmod.consolidated_report(scans, tmp, lang=lang, meta=meta, standards=stds)
+            ctype = "application/pdf"
+        data = tmp.read_bytes()
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+
+    stem = (meta.get("client") or "") + (" " + meta.get("system") if meta.get("system") else "")
+    stem = stem.strip() or (scans[0].project or Path(scans[0].name).stem)
+    suffix = "consolidated-report" if lang == "en" else "합본_진단결과보고서"
+    resp = HttpResponse(data, content_type=ctype)
+    resp["Content-Disposition"] = _attachment(_download_name(stem, suffix, fmt))
+    return resp
+
+
+def _standard_id(value: str):
+    from .. import standards
+    return standards.get(value)
 
 
 # 무거운 JSON 컬럼 — 포트폴리오 목록엔 필요 없으니 defer 로 로드 안 한다(수백 프로젝트 대응)

@@ -425,3 +425,289 @@ def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:
                 run.font.size = Pt(8)
                 run._element.rPr.rFonts.set(qn("w:eastAsia"), _FONT_MONO)
     _para(doc, "", space_after=8)
+
+
+# ==================== 합본 진단 결과 보고서 (다중 프로젝트) ====================
+
+def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
+                        standards: list[str] | str | None = None) -> None:
+    """합본 진단 결과 보고서(Word). 구성·문안은 pdf.consolidated_report 와 같다.
+
+    Word 본이 담당자가 고쳐 쓰는 원본이다 — 발주처 양식·기관 표지·현장 의견을 얹어
+    최종 산출물로 만드는 일이 실제 진단의 대부분이다.
+    """
+    from .. import standards as _sm
+    from . import consolidated as C
+    from .pdf import _tool_version
+
+    en = lang == "en"
+    T = lambda s: tr(s, lang)                       # noqa: E731
+    SEV = SEV_EN if en else SEV_KR
+    REM = REMEDIATION_EN if en else REMEDIATION
+    DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
+    CRIT = _CRITERIA_EN if en else _CRITERIA
+    meta = meta or {}
+    scans = list(scans)
+    D = C.build(scans, standards, lang)
+    stds = D["standards"]
+
+    version = meta.get("version") or "1.0"
+    author = meta.get("author") or "CPGuard"
+    today = _dt.date.today().strftime("%Y-%m-%d")
+    client = meta.get("client") or ""
+    system = meta.get("system") or ""
+    title = " ".join(x for x in (client, system) if x) or T("소스코드 취약점 진단")
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.top_margin = sec.bottom_margin = Cm(2.0)
+    sec.left_margin = sec.right_margin = Cm(2.0)
+    normal = doc.styles["Normal"]
+    normal.font.name = _FONT_KO
+    normal.font.size = Pt(10)
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), _FONT_KO)
+
+    # ── 표지 ──
+    _para(doc, "", space_after=60)
+    _para(doc, "SOURCE CODE SECURITY ASSESSMENT", size=11, color=S.MUTED, align=CENTER)
+    _para(doc, title, size=22, bold=True, align=CENTER, space_after=2)
+    _para(doc, T("소스코드 취약점 진단 결과 보고서"), size=18, bold=True, align=CENTER)
+    _para(doc, T("SAST 진단 · CPGuard"), size=12, color=S.INK_SOFT, align=CENTER, space_after=24)
+    _kv(doc, [(T("발주처/고객"), client or "-"), (T("대상 시스템"), system or "-"),
+              (T("대상 프로젝트"), str(D["projects"]) + ("" if en else "개")),
+              (T("수행 기관/회사"), meta.get("org") or "-"),
+              (T("진단 수행 기간"), meta.get("period") or "-"),
+              (T("보고서 버전"), version), (T("작성일"), today), (T("작성자"), author)])
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 제·개정 이력 ── (Heading 스타일이 아니라 목차에 안 들어간다)
+    _para(doc, T("제·개정 이력"), size=12, bold=True, space_after=6)
+    _table(doc, [[T("버전"), T("변경일"), T("변경 사유"), T("변경 내용"), T("작성자"), T("비고")],
+                 [version, today, T("최초 작성"), T("최초 작성"), author, "-"]],
+           [1.6, 2.4, 3.4, 5.6, 2.6, 1.8], sizes=9,
+           aligns=[CENTER, CENTER, None, None, CENTER, CENTER])
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 목차 ── (Heading 을 쓰지 않아 목차가 자기 자신을 담지 않는다)
+    _para(doc, T("목 차"), size=15, bold=True, space_after=8)
+    _toc_field(doc, T("목차를 갱신하려면 이 영역을 선택하고 F9 를 누르세요."))
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 1. 취약점 진단 개요 ──
+    _heading(doc, T("1. 취약점 진단 개요"), 1)
+    _heading(doc, T("1.1 진단 목적"), 2)
+    subject = (client + " " + system).strip() or T("대상 시스템")
+    _para(doc, (f"The purpose of this assessment is to identify and remove security weaknesses "
+                f"in the source code of {subject} in advance, so that the threats arising from "
+                f"those weaknesses are mitigated and the service and its information are "
+                f"protected from malicious internal and external attack."
+                if en else
+                f"{subject}의 소스코드 보안약점을 도출하여 이를 사전에 제거함으로써, 소스코드 "
+                f"보안약점으로 인해 발생할 수 있는 위협에 대한 대응방안을 마련하고, 내·외부의 "
+                f"악의적인 공격으로부터 서비스 및 정보를 보호하는 것을 목적으로 한다."))
+    if stds:
+        basis = ", ".join(s.source_for(lang) for s in stds)
+        _para(doc, (f"The assessment is performed in accordance with {basis}." if en
+                    else f"{basis}의 기준을 준수하여 진단을 수행한다."), space_after=10)
+
+    _heading(doc, T("1.2 점검 수행 일정"), 2)
+    _kv(doc, [(T("진단 수행 기간"), meta.get("period") or "-"),
+              (T("보고서 작성일"), today),
+              (T("대상 프로젝트 수"), str(D["projects"]) + ("" if en else "개"))])
+
+    _heading(doc, T("1.3 점검 도구"), 2)
+    tool = meta.get("tool") or ("CPGuard " + _tool_version()).strip()
+    _table(doc, [[T("진단 도구명"), T("용도"), T("비고")],
+                 [tool, T("소스코드의 데이터 흐름(taint)과 위험 패턴을 정적으로 분석하여 "
+                          "보안약점을 검출하는 정적 분석 도구"), T("CPG 기반")]],
+           [4.0, 10.6, 2.8], sizes=9)
+
+    _heading(doc, T("1.4 점검 수행 인원"), 2)
+    _table(doc, [[T("이름"), T("직급"), T("이메일"), T("연락처")],
+                 [meta.get("tester") or author, meta.get("tester_rank") or "-",
+                  meta.get("tester_email") or "-", meta.get("tester_phone") or "-"]],
+           [3.4, 2.6, 6.2, 5.2], sizes=9, aligns=[CENTER, CENTER, None, CENTER])
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 2. 진단 항목 ──
+    _heading(doc, T("2. 진단 항목"), 1)
+    if not stds:
+        _para(doc, T("점검 기준을 지정하지 않아 이번 진단에서 탐지된 규칙 유형을 그대로 싣는다."))
+    for std in stds:
+        _heading(doc, std.name_en if en else std.name, 2)
+        _para(doc, (f"Assessed against {std.source_for(lang)}. The check items are as follows."
+                    if en else
+                    f"{std.source_for(lang)}에 근거한 진단 항목을 적용한다. 점검 항목은 다음과 같다."),
+              size=9.5, space_after=6)
+        gs = [g for g in D["groups"] if g["standard"] == (std.name_en if en else std.name)]
+        rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
+        for i, g in enumerate(gs, 1):
+            rows.append([str(i), g["group"], g["desc"], str(g["n"])])
+        rows.append([("", S.INK, True), (T("합계"), S.INK, True), "",
+                     (str(sum(g["n"] for g in gs)), S.INK, True)])
+        _table(doc, rows, [1.3, 3.8, 10.5, 1.8], sizes=8.5,
+               aligns=[CENTER, None, None, CENTER])
+        _para(doc, "", space_after=8)
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 3. 진단 결과 ──
+    _heading(doc, T("3. 진단 결과"), 1)
+    it, ft = D["initial_total"], D["final_total"]
+
+    def scale_table(rows, total):
+        data = [[T("프로젝트"), T("파일 수"), T("빌드 라인"), T("검출")] + [SEV[s] for s in SEV_ORDER]]
+        for r in rows:
+            data.append([r.name, f"{r.files:,}", f"{r.lines:,}", str(r.total)]
+                        + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
+        data.append([(T("총 계"), S.INK, True), (f"{total['files']:,}", S.INK, True),
+                     (f"{total['lines']:,}", S.INK, True), (str(total["total"]), S.INK, True)]
+                    + [(str(total["sev"][s]), S.INK, True) for s in SEV_ORDER])
+        _table(doc, data, [4.0, 1.7, 2.0, 1.5] + [1.64] * 5, sizes=8,
+               aligns=[None] + [CENTER] * 8)
+
+    _heading(doc, T("3.1 최초 보안약점 진단 결과"), 2)
+    _para(doc, (f"The initial assessment across {D['projects']} project(s) detected "
+                f"{it['total']} security weaknesses."
+                if en else
+                f"총 {D['projects']}개 프로젝트를 대상으로 수행한 최초 소스코드 보안약점 진단 "
+                f"결과, {it['total']}건의 보안약점이 검출되었다."), size=9.5, space_after=6)
+    scale_table(D["initial"], it)
+
+    _heading(doc, T("3.2 진단 결과 점검"), 2)
+    dropped = it["total"] - ft["total"]
+    if D["review"]:
+        _para(doc, (f"Reviewing the source context, {dropped} of the {it['total']} detections "
+                    f"were classified as excluded / false positive / fixed, leaving "
+                    f"{ft['total']} items to remediate. The rationale recorded by the assessor "
+                    f"is as follows."
+                    if en else
+                    f"소스 컨텍스트 재확인을 통해 검출 {it['total']}건 중 {dropped}건을 "
+                    f"「제외 / 오탐 / 조치완료」로 분류하고, 조치대상 {ft['total']}건을 "
+                    f"확정하였다. 항목별 사유와 진단원 의견은 다음과 같다."), size=9.5)
+        _para(doc, T("※ 소스 컨텍스트(Source Context) : 검출 지점 전후의 코드 흐름, 호출 관계, "
+                     "프레임워크·설정 정보 등 취약점의 실제 성립 여부를 판단하기 위해 참조하는 "
+                     "주변 소스코드 정보를 의미한다."), size=8.5, color=S.INK_SOFT, space_after=6)
+        rows = [[T("보안약점명"), T("위험도"), T("건수"), T("사유"), T("진단원 의견")]]
+        for r in D["review"][:60]:
+            rows.append([r["name"], SEV.get(r["severity"], r["severity"]), str(r["n"]),
+                         r["reason"], r["opinion"] or "-"])
+        rows.append([(T("총 계"), S.INK, True), "", (str(D["review_total"]), S.INK, True), "", ""])
+        _table(doc, rows, [3.6, 1.8, 1.4, 1.8, 8.8], sizes=8,
+               aligns=[None, CENTER, CENTER, CENTER, None])
+    else:
+        _para(doc, ("No detection has been reviewed as excluded or a false positive yet, so the "
+                    "initial result stands as the final result. Verdicts and opinions recorded "
+                    "on the review screen appear in this section."
+                    if en else
+                    "검토 화면에서 오탐·제외로 판정한 항목이 아직 없어, 최초 진단 결과가 그대로 "
+                    "최종 결과가 된다. 검토 화면에서 판정과 의견을 기록하면 이 절에 반영된다."),
+              size=9.5)
+
+    _heading(doc, T("3.3 최종 점검 결과"), 2)
+    _para(doc, (f"After the review, the initial {it['total']} detections were confirmed as "
+                f"{ft['total']} items to remediate."
+                if en else
+                f"오탐·제외 항목을 정리한 결과, 최초 {it['total']}건에서 최종 {ft['total']}건으로 "
+                f"확정되었다."), size=9.5, space_after=6)
+    scale_table(D["final"], ft)
+    _para(doc, ("Per-project detail follows. Each weakness carries its severity, and where it "
+                "maps to a check item of the applied standards that item name is used."
+                if en else
+                "아래는 프로젝트별 상세 진단 결과이며, 각 항목에 위험도를 부여하고 적용 기준의 "
+                "점검항목에 대응되는 경우 그 보안약점명으로 표기하였다."), size=9.5, space_after=8)
+
+    for i, r in enumerate(D["final"], 1):
+        _heading(doc, f"3.3.{i} {r.name}", 2)
+        _kv(doc, [(T("발주처/고객"), client or "-"), (T("서비스명"), r.name),
+                  (T("개발언어"), r.languages), (T("파일 수"), f"{r.files:,}"),
+                  (T("빌드 라인 수"), f"{r.lines:,}")], w0=3.4, w1=13.6)
+        _para(doc, "", space_after=4)
+        rows = [[T("순번"), T("분류"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
+        if r.weaknesses:
+            for j, w in enumerate(r.weaknesses, 1):
+                rows.append([str(j), w["cls"], w["group"], w["name"],
+                             SEV.get(w["severity"], w["severity"]), str(w["n"]), "-"])
+        else:
+            rows.append(["1", "-", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
+        rows.append([("", S.INK, True), (T("총 계"), S.INK, True), "", "", "",
+                     (str(r.total), S.INK, True), ""])
+        _table(doc, rows, [1.2, 3.0, 3.0, 5.2, 1.8, 1.4, 1.8], sizes=8,
+               aligns=[CENTER, None, None, None, CENTER, CENTER, CENTER])
+        _para(doc, "", space_after=8)
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+    # ── 4. 유형별 조치 권고 ──
+    _heading(doc, T("4. 유형별 조치 권고"), 1)
+    _para(doc, ("Remediation for each weakness type found across the assessed projects. Code "
+                "examples for each type are in the separate remediation guide."
+                if en else
+                "이번 진단에서 도출된 보안약점 유형별 조치 방안은 다음과 같다. 유형별 상세 코드 "
+                "예시는 별도의 조치 가이드를 참조한다."), size=9.5, space_after=6)
+    seen: dict[str, int] = {}
+    for r in D["final"]:
+        for f in r.scan.findings:
+            k = _rule_key(f["rule_id"])
+            seen[k] = seen.get(k, 0) + 1
+    rows = [[T("보안약점 유형"), T("영향"), T("조치 방안"), T("건수")]]
+    for k, n in sorted(seen.items(), key=lambda x: -x[1])[:20]:
+        rem = REM.get(k, DFT)
+        rows.append([rem[0], rem[1], rem[2], str(n)])
+    _table(doc, rows, [3.4, 6.0, 6.6, 1.4], sizes=8, aligns=[None, None, None, CENTER])
+
+    # ── 5. 종합 의견 ──
+    _para(doc, "", space_after=10)
+    _heading(doc, T("5. 종합 의견"), 1)
+    ch = ft["sev"]["critical"] + ft["sev"]["high"]
+    _para(doc, (f"Across {D['projects']} project(s), {it['total']} weaknesses were detected and "
+                f"{ft['total']} were confirmed for remediation, of which {ch} are Critical/High "
+                f"and require immediate action. Address Critical/High items first, then apply "
+                f"input validation, output encoding, secret separation and safe algorithms per "
+                f"the remediation for each type."
+                if en else
+                f"총 {D['projects']}개 프로젝트에서 {it['total']}건이 검출되어 {ft['total']}건이 "
+                f"조치대상으로 확정되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 등급이 "
+                f"{ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 "
+                f"입력 검증·출력 인코딩·비밀정보 분리·안전한 알고리즘 적용을 권고한다."))
+
+    # ── 부록 ──
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+    _heading(doc, T("부록 A. 위험도 판정 기준"), 1)
+    rows = [[T("판정"), T("기준"), T("조치 우선순위")]]
+    for s in SEV_ORDER:
+        rows.append([(SEV.get(s, s), S.SEV_INK[s], True), CRIT[s], T(_PRIORITY[s])])
+    _table(doc, rows, [2.8, 11.8, 2.8], sizes=9)
+
+    if stds:
+        _para(doc, "", space_after=10)
+        _heading(doc, T("부록 B. 점검항목별 진단 결과"), 1)
+        _para(doc, ("Every check item of the applied standards with its verdict. Items with no "
+                    "rule behind them are marked 'Not assessed' rather than passing."
+                    if en else
+                    "적용 기준의 전체 점검항목과 판정이다. 이 도구가 볼 수 있는 규칙이 없는 "
+                    "항목은 양호가 아니라 '진단 대상 아님'으로 표기한다."), size=9.5, space_after=6)
+        avail = _sm.rule_cwes()
+        V = _sm.VERDICT_EN if en else _sm.VERDICT_KO
+        for std in stds:
+            _heading(doc, std.name_en if en else std.name, 2)
+            code = std.show_code
+            head = ([T("유형")] + ([T("코드")] if code else [])
+                    + [T("보안약점"), "CWE", T("판정"), T("탐지")])
+            rows = [head]
+            for r in _sm.coverage(std, D["cwe_counts"], avail):
+                cw = (", ".join(r["cwes"][:3]) + ("…" if len(r["cwes"]) > 3 else "")) or "-"
+                dim = S.MUTED if r["verdict"] == _sm.NOT_COVERED else S.INK
+                rows.append([(r["group_en"] if en else r["group"], dim, False)]
+                            + ([(r["code"], dim, False)] if code else [])
+                            + [(r["name_en"] if en else r["name"], dim, False),
+                               (cw, dim, False),
+                               (V[r["verdict"]], dim, r["verdict"] == _sm.VIOLATED),
+                               (str(r["n"]) if r["n"] else "-", dim, False)])
+            widths = ([2.9] + ([1.5] if code else [])
+                      + [(5.6 if code else 7.0), 3.0, 2.4, 1.4])
+            _table(doc, rows, widths, sizes=8,
+                   aligns=[None] * (len(head) - 3) + [CENTER, CENTER, CENTER])
+            _para(doc, "", space_after=8)
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(out))

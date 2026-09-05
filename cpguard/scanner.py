@@ -73,6 +73,8 @@ class ScanReport:
     """
     scanned: int = 0                                   # 파싱·분석에 성공한 소스 파일 수
     text_scanned: int = 0                              # 패턴 축이 훑은 텍스트 파일 수(소스 포함)
+    code_lines: int = 0                                # 분석한 소스의 총 라인 수(진단 규모 근거)
+    languages: list[str] = field(default_factory=list)  # 분석한 개발언어(보고서 '개발언어')
     skipped_too_large: list[str] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)  # (경로, 사유)
     partial: list[str] = field(default_factory=list)             # 구문오류로 일부만 분석
@@ -276,6 +278,13 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         findings = scan_file(root, rules, pattern_rules)
         report.scanned = 1 if root.suffix.lower() in loader.SUPPORTED_EXTENSIONS else 0
         report.text_scanned = 1
+        try:
+            data = root.read_bytes()
+            report.code_lines = data.count(b"\n") + 1 if data else 0
+        except OSError:
+            pass
+        lang = loader.language_name_for(root)
+        report.languages = [lang] if lang else []
         return findings, report
 
     findings: list[Finding] = []
@@ -305,6 +314,9 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
             for i, f in enumerate(src_files, 1):
                 _accept(_parse_one(str(f)), i)
         report.scanned = len(parsed)
+        # 진단 규모 근거 — 산출물의 '파일 수 / 빌드 라인 수 / 개발언어' 열이 이걸 쓴다.
+        report.code_lines = sum(src.count(b"\n") + 1 for _p, _m, src, _l in parsed if src)
+        report.languages = sorted({lang for _p, _m, _s, lang in parsed if lang})
 
         # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
         if parsed:

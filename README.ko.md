@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
-  <img src="https://img.shields.io/badge/tests-247%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -70,7 +70,9 @@
 - 선택한 기준에 매핑되지 않는 탐지는 숨기지 않고 따로 보고합니다.
 
 **그대로 제출할 수 있는 산출물**
-- **진단 결과 보고서**를 **Word(.docx)** 와 PDF 두 형태로 냅니다. Word 본이 편집 원본이라 발주처 문서 양식에 얹고, 현장에서 확인한 정오탐 의견을 더해 최종본으로 만들 수 있습니다. 절·표·문안은 PDF 와 동일합니다.
+- **합본 진단 결과 보고서** — 리포트 화면에서 포함할 프로젝트를 체크하면, 여러 프로젝트를 한 건의 진단으로 묶은 제출용 문서가 나옵니다. 진단 목적·근거 고시·수행 일정·점검 도구·수행 인원, 기준별 진단 항목, **최초 검출 → 정오탐 점검 → 최종 조치대상**, 프로젝트별 상세(파일 수·빌드 라인·개발언어·보안약점별 위험도), 유형별 조치 권고, 부록까지. 국내 진단업체가 실제로 내는 산출물 구성을 따랐습니다.
+- **검토 판정이 곧 보고서가 됩니다.** 검토 화면에서 오탐·제외로 판정하고 그 사유를 적는 일이, 스캐너 출력을 산출물로 바꾸는 과정입니다. 3.2 절이 그 판정으로 만들어지고 최초/최종 건수가 그만큼 달라집니다.
+- **Word(.docx) 와 PDF.** Word 본이 편집 원본이라 발주처 문서 양식에 얹고, 현장에서 확인한 의견을 더해 최종본으로 만들 수 있습니다. 절·표·문안은 PDF 와 동일합니다.
 - **분석목록표(xlsx)** — 국내 발주처가 요구하는 14컬럼 고정 형식에 *점검항목 결과* 시트를 더합니다.
 - 산출물은 전부 **검은 글자 + 옅은 회색**입니다. 진단 보고서는 흑백 출력·복사본으로 돌아다니고 발주처 양식에 그대로 얹히므로, 색으로만 구분되는 정보를 두지 않았습니다 — 위험도는 명도로, 판정은 글자로 읽힙니다.
 

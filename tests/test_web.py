@@ -103,9 +103,12 @@ def test_workbench_renders_panes_and_data():
     assert 'id="data-findings"' in body and 'id="data-sources"' in body
     # 다운로드 링크는 download 속성이 있어야 한다: 네이티브 WebView2 가 PDF 를 창 안에서
     # 열어(뷰어 탈취) 먹통 되는 것을 막고 실제 다운로드로 보낸다.
-    for url in (f"/scan/{pk}/report.pdf", f"/scan/{pk}/export.xlsx"):
+    for url in (f"/scan/{pk}/export.xlsx", f"/scan/{pk}/guide.pdf"):
         i = body.index(f'href="{url}"')
         assert "download" in body[max(0, i - 60):i]
+    # 합본 보고서는 여러 프로젝트를 묶는 산출물이라 검토 화면이 아니라 리포트에서 만든다
+    assert f"/scan/{pk}/report.pdf" not in body
+    assert "/reports/" in body
 
 
 def test_sources_are_stored_for_code_viewer():

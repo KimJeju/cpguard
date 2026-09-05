@@ -3,19 +3,56 @@
 
 {% block content %}
 <h1 style="font-size:20px;margin:0 0 6px">리포트 · 내보내기</h1>
-<p class="muted" style="margin-bottom:16px">스캔별로 SARIF·CSV·고객 제출용 분석목록표(xlsx)를 내려받습니다.</p>
+<p class="muted" style="margin-bottom:16px">
+  포함할 프로젝트를 골라 <b>합본 진단 결과 보고서</b>를 만듭니다. 개별 스캔의 조치 가이드·SARIF·CSV·분석목록표는 각 행에서 내려받습니다.</p>
+
+<form method="get" action="{% url 'consolidated_report' %}" id="conform">
+<div class="card" style="margin-bottom:14px">
+  <h2 style="font-size:15px;margin:0 0 4px">합본 진단 결과 보고서</h2>
+  <p class="muted" style="font-size:12.5px;margin:0 0 12px">
+    선택한 프로젝트를 한 건의 진단으로 묶어, 진단 개요·진단 항목·최초 결과·정오탐 점검·최종 결과·프로젝트별 상세까지 담은 제출용 보고서를 만듭니다.
+    Word 본은 발주처 양식에 맞춰 고쳐 쓸 수 있는 원본입니다.</p>
+
+  <div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start">
+    <fieldset style="border:1px solid var(--line);padding:9px 13px 11px;min-width:260px">
+      <legend class="muted" style="font-size:11.5px;padding:0 6px">점검 기준 (복수 선택)</legend>
+      {% for s in standards %}
+      <label class="muted" style="display:flex;gap:7px;align-items:center;cursor:pointer;font-size:12.5px;padding:2px 0" title="{{ s.source }}">
+        <input type="checkbox" name="std" value="{{ s.id }}"{% if s.checked %} checked{% endif %} style="flex:0 0 auto;width:auto;margin:0">
+        <span>{{ s.name }} <span style="opacity:.55">({{ s.count }})</span></span>
+      </label>
+      {% endfor %}
+    </fieldset>
+
+    <div>
+      <div class="muted" style="font-size:11.5px;margin-bottom:6px">포함할 프로젝트 — 아래 표에서 선택</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn" type="submit" name="fmt" value="docx">합본 보고서 (Word)</button>
+        <button class="btn ghost" type="submit" name="fmt" value="pdf">합본 보고서 (PDF)</button>
+        <span class="muted" id="pickinfo" style="font-size:12px"></span>
+      </div>
+      <p class="muted" style="font-size:11.5px;margin:10px 0 0;max-width:430px">
+        표지·수행 인원·발주처 등 보고서 정보는 <a href="{% url 'settings' %}">설정</a>에서 입력한 값이 들어갑니다.</p>
+    </div>
+  </div>
+</div>
 
 <div class="card">
   {% if scans %}
   <table>
-    <tr><th>스캔</th><th>일시</th><th>탐지</th><th>내보내기</th><th></th></tr>
+    <tr>
+      <th style="width:34px"><input type="checkbox" id="allpick" title="전체 선택" style="width:auto;margin:0"></th>
+      <th>스캔</th><th>일시</th><th>탐지</th><th>조치대상</th><th>규모</th><th>개별 내보내기</th><th></th>
+    </tr>
     {% for s in scans %}
     <tr>
+      <td><input type="checkbox" class="pick" name="scan" value="{{ s.pk }}"{% if s.checked %} checked{% endif %} style="width:auto;margin:0"></td>
       <td><a href="{% url 'detail' s.pk %}"><b>{{ s.name }}</b></a>{% if s.project %} <span class="muted">· {{ s.project }}</span>{% endif %}</td>
       <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
       <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td>{% if s.open_count %}{{ s.open_count }}{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td class="muted" style="font-size:12px">{{ s.file_count }}파일{% if s.code_lines %} · {{ s.code_lines }}줄{% endif %}</td>
       <td>
-        <a class="btn ghost" download href="{% url 'export_pdf_report' s.pk %}">진단보고서</a>
         <a class="btn ghost" download href="{% url 'export_pdf_guide' s.pk %}">조치가이드</a>
         <a class="btn ghost" download href="{% url 'sarif' s.pk %}">SARIF</a>
         <a class="btn ghost" download href="{% url 'export_csv' s.pk %}">CSV</a>
@@ -29,4 +66,28 @@
   <p class="muted">아직 스캔 기록이 없습니다.</p>
   {% endif %}
 </div>
+</form>
+
+<script>
+(function () {
+  var form = document.getElementById('conform');
+  if (!form) return;
+  var picks = function () { return [].slice.call(form.querySelectorAll('.pick')); };
+  var info = document.getElementById('pickinfo');
+  function sync() {
+    var n = picks().filter(function (c) { return c.checked; }).length;
+    info.textContent = n ? n + '개 프로젝트 선택됨' : '프로젝트를 하나 이상 선택하세요';
+    form.querySelectorAll('button[type=submit]').forEach(function (b) { b.disabled = !n; });
+    var all = document.getElementById('allpick');
+    if (all) all.checked = n > 0 && n === picks().length;
+  }
+  picks().forEach(function (c) { c.addEventListener('change', sync); });
+  var all = document.getElementById('allpick');
+  if (all) all.addEventListener('change', function () {
+    picks().forEach(function (c) { c.checked = all.checked; });
+    sync();
+  });
+  sync();
+})();
+</script>
 {% endblock %}

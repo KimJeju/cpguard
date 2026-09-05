@@ -219,13 +219,14 @@
         </label>
         {% endfor %}
         <div class="export-links">
-          <a class="toolbtn" download data-std href="{% url 'export_docx_report' scan.pk %}" title="합본 진단 결과 보고서 — 편집 가능한 Word 원본">보고서 (Word)</a>
-          <a class="toolbtn" download data-std id="dl-report" href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 — 제출용 PDF">보고서 (PDF)</a>
           <a class="toolbtn" download data-std id="dl-xlsx" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표 + 점검항목 시트">분석목록표 (xlsx)</a>
           <a class="toolbtn" download href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">조치 가이드</a>
           <a class="toolbtn" download href="{% url 'sarif' scan.pk %}">SARIF</a>
           <a class="toolbtn" download href="{% url 'export_csv' scan.pk %}">CSV</a>
         </div>
+        <p class="muted" style="font-size:11px;margin:9px 0 0;line-height:1.5">
+          합본 진단 결과 보고서는 여러 프로젝트를 한 건으로 묶는 산출물이라
+          <a href="{% url 'reports' %}">리포트</a> 화면에서 만듭니다.</p>
       </div>
     </details>
     {% if scan.project %}<a class="toolbtn" href="{% url 'project_home' scan.project %}">{{ scan.project }} 홈</a>{% endif %}
@@ -355,7 +356,6 @@
   const FINDINGS = JSON.parse(document.getElementById('data-findings').textContent);
   const SOURCES  = JSON.parse(document.getElementById('data-sources').textContent);
   const SCAN_PK  = {{ scan.pk }};
-  const REPORT_URL = "{% url 'export_pdf_report' scan.pk %}";
   const XLSX_URL   = "{% url 'export_xlsx' scan.pk %}";
   const LARGE    = {{ truncated|default:0 }} > 0;   // 대량 모드: 목록을 서버 API 로 페이지·가상 스크롤
   const TOTAL    = {{ total }};

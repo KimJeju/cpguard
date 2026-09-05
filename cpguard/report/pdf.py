@@ -179,6 +179,7 @@ def _styles():
     small = ParagraphStyle("small", parent=body, fontSize=8.5, textColor=colors.HexColor(S.INK_SOFT))
     # 표 셀용 — 긴 항목명이 셀을 넘치지 않게 줄바꿈시킨다
     cell = ParagraphStyle("cell", parent=body, fontSize=8, leading=10.5)
+    tochd = ParagraphStyle("tochd", parent=h1)      # 목차 제목 — 목차에 자기 자신을 안 넣는다
     lbl = ParagraphStyle("lbl", parent=body, fontName=_FONT_B, fontSize=9, textColor=colors.HexColor(S.INK_SOFT))
     cardt = ParagraphStyle("cardt", parent=body, fontName=_FONT_B, fontSize=10.5, textColor=colors.white, leading=14)
     code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8, textColor=colors.HexColor(S.INK),
@@ -186,7 +187,8 @@ def _styles():
     flow = ParagraphStyle("flow", parent=body, fontName="Courier", fontSize=8, leading=12,
                           textColor=colors.HexColor(S.INK_SOFT))
     return {"body": body, "h1": h1, "h2": h2, "h2sec": h2sec, "small": small,
-            "lbl": lbl, "cardt": cardt, "code": code, "flow": flow, "cell": cell}
+            "lbl": lbl, "cardt": cardt, "code": code, "flow": flow, "cell": cell,
+            "tochd": tochd}
 
 
 def _sev_chart(counts, sevmap):
@@ -450,7 +452,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     story.append(PageBreak())
 
     # ── 목차 ──
-    story.append(Paragraph(T("목차"), st["h1"]))
+    story.append(Paragraph(T("목차"), st["tochd"]))
     toc = TableOfContents()
     toc.levelStyles = [
         ParagraphStyle("toc0", fontName=_FONT_B, fontSize=10.5, leading=20, textColor=colors.HexColor(S.INK)),
@@ -776,3 +778,332 @@ def _build(story, path, title):
                             leftMargin=18 * mm, rightMargin=18 * mm,
                             topMargin=18 * mm, bottomMargin=18 * mm)
     doc.build(story, onLaterPages=_footer, onFirstPage=lambda c, d: None)
+
+
+# ==================== 합본 진단 결과 보고서 (다중 프로젝트) ====================
+
+def _tool_version() -> str:
+    try:
+        from importlib.metadata import version
+        return "v" + version("cpguard")
+    except Exception:
+        return ""
+
+
+def _tbl(rows, widths, *, sizes=8.5, aligns=None, head=True, wrap_cols=(), st=None):
+    """보고서 공용 표. wrap_cols 의 열은 Paragraph 로 감싸 줄바꿈시킨다(긴 문안이 셀을 넘친다)."""
+    data = []
+    for ri, row in enumerate(rows):
+        out = []
+        for ci, v in enumerate(row):
+            txt = v[0] if isinstance(v, tuple) else v
+            if ci in wrap_cols and ri and st is not None:
+                out.append(Paragraph(_esc(str(txt)), st["cell"]))
+            else:
+                out.append(str(txt))
+        data.append(out)
+    style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), sizes),
+             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor(S.LINE)),
+             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+    if head:
+        style += [("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(S.FILL_HEAD)),
+                  ("FONTNAME", (0, 0), (-1, 0), _FONT_B)]
+    for ci, how in (aligns or {}).items():
+        style.append(("ALIGN", (ci, 0), (ci, -1), how))
+    for ri, row in enumerate(rows):
+        for ci, v in enumerate(row):
+            if isinstance(v, tuple) and v[1]:
+                style.append(("FONTNAME", (ci, ri), (ci, ri), _FONT_B))
+    t = Table(data, colWidths=widths, repeatRows=1 if head else 0)
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _scale_table(rows, total, SEV, T):
+    """3.1 / 3.3 의 프로젝트별 규모·검출 표."""
+    data = [[T("프로젝트"), T("파일 수"), T("빌드 라인"), T("검출")] + [SEV[s] for s in SEV_ORDER]]
+    for r in rows:
+        data.append([r.name, f"{r.files:,}", f"{r.lines:,}", str(r.total)]
+                    + [str(r.sev.get(s, 0)) for s in SEV_ORDER])
+    data.append([(T("총 계"), True), (f"{total['files']:,}", True), (f"{total['lines']:,}", True),
+                 (str(total["total"]), True)]
+                + [(str(total["sev"][s]), True) for s in SEV_ORDER])
+    return _tbl(data, [40 * mm, 17 * mm, 20 * mm, 15 * mm] + [16.4 * mm] * 5,
+                aligns=dict.fromkeys(range(1, 9), "CENTER"))
+
+
+def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
+                        standards: list[str] | str | None = None) -> None:
+    """합본 진단 결과 보고서 — 선택한 프로젝트를 한 건의 진단으로 묶어 낸다.
+
+    구성은 실제 제출 산출물을 따른다. 최초 검출과 최종 조치대상을 나눠 싣는 것이 핵심이다 —
+    정적 분석 결과를 그대로 내면 발주처가 받지 않는다. 진단원이 오탐·제외로 판정한 근거를
+    3.2 에 함께 실어야 산출물이 된다.
+    """
+    from .. import standards as _sm
+    from . import consolidated as C
+
+    _register_font()
+    st = _styles()
+    en = lang == "en"
+    T = lambda s: tr(s, lang)                       # noqa: E731
+    SEV = SEV_EN if en else SEV_KR
+    REM = REMEDIATION_EN if en else REMEDIATION
+    DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
+    CRIT = _CRITERIA_EN if en else _CRITERIA
+    meta = meta or {}
+    scans = list(scans)
+    D = C.build(scans, standards, lang)
+    stds = D["standards"]
+
+    version = meta.get("version") or "1.0"
+    author = meta.get("author") or "CPGuard"
+    today = _dt.date.today().strftime("%Y-%m-%d")
+    client = meta.get("client") or ""
+    system = meta.get("system") or ""
+    title = " ".join(x for x in (client, system) if x) or T("소스코드 취약점 진단")
+    story: list = []
+
+    # ── 표지 ──
+    cover = [(T("발주처/고객"), client or "-"), (T("대상 시스템"), system or "-"),
+             (T("대상 프로젝트"), str(D["projects"]) + ("" if en else "개")),
+             (T("수행 기관/회사"), meta.get("org") or "-"),
+             (T("진단 수행 기간"), meta.get("period") or "-"),
+             (T("보고서 버전"), version), (T("작성일"), today), (T("작성자"), author)]
+    _cover(story, st, title + "\n" + T("소스코드 취약점 진단 결과 보고서"),
+           T("SAST 진단 · CPGuard"), cover)
+
+    # ── 제·개정 이력 ── (h2 = 목차 미등록)
+    story.append(Paragraph(T("제·개정 이력"), st["h2"]))
+    story.append(_tbl([[T("버전"), T("변경일"), T("변경 사유"), T("변경 내용"), T("작성자"), T("비고")],
+                       [version, today, T("최초 작성"), T("최초 작성"), author, "-"]],
+                      [16 * mm, 24 * mm, 34 * mm, 56 * mm, 26 * mm, 18 * mm], sizes=9))
+    story.append(PageBreak())
+
+    # ── 목차 ──
+    story.append(Paragraph(T("목 차"), st["tochd"]))
+    toc = TableOfContents()
+    toc.levelStyles = [
+        ParagraphStyle("toc0", fontName=_FONT_B, fontSize=10.5, leading=20,
+                       textColor=colors.HexColor(S.INK)),
+        ParagraphStyle("toc1", fontName=_FONT, fontSize=9.5, leading=16, leftIndent=14,
+                       textColor=colors.HexColor(S.INK_SOFT)),
+    ]
+    story.append(toc)
+    story.append(PageBreak())
+
+    # ── 1. 취약점 진단 개요 ──
+    story.append(Paragraph(T("1. 취약점 진단 개요"), st["h1"]))
+    story.append(Paragraph(T("1.1 진단 목적"), st["h2sec"]))
+    subject = (client + " " + system).strip() or T("대상 시스템")
+    if en:
+        purpose = (f"The purpose of this assessment is to identify and remove security weaknesses "
+                   f"in the source code of {subject} in advance, so that the threats arising from "
+                   f"those weaknesses are mitigated and the service and its information are "
+                   f"protected from malicious internal and external attack.")
+    else:
+        purpose = (f"{subject}의 소스코드 보안약점을 도출하여 이를 사전에 제거함으로써, 소스코드 "
+                   f"보안약점으로 인해 발생할 수 있는 위협에 대한 대응방안을 마련하고, 내·외부의 "
+                   f"악의적인 공격으로부터 서비스 및 정보를 보호하는 것을 목적으로 한다.")
+    story.append(Paragraph(purpose, st["body"]))
+    if stds:
+        basis = ", ".join(s.source_for(lang) for s in stds)
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(
+            (f"The assessment is performed in accordance with {basis}." if en
+             else f"{basis}의 기준을 준수하여 진단을 수행한다."), st["body"]))
+
+    story.append(Paragraph(T("1.2 점검 수행 일정"), st["h2sec"]))
+    story.append(_kv_table([("진단 수행 기간", meta.get("period") or "-"),
+                            ("보고서 작성일", today),
+                            ("대상 프로젝트 수", str(D["projects"]) + ("" if en else "개"))], T))
+
+    story.append(Paragraph(T("1.3 점검 도구"), st["h2sec"]))
+    tool = meta.get("tool") or ("CPGuard " + _tool_version()).strip()
+    story.append(_tbl([[T("진단 도구명"), T("용도"), T("비고")],
+                       [tool,
+                        T("소스코드의 데이터 흐름(taint)과 위험 패턴을 정적으로 분석하여 "
+                          "보안약점을 검출하는 정적 분석 도구"),
+                        T("CPG 기반")]],
+                      [40 * mm, 106 * mm, 28 * mm], sizes=9, wrap_cols=(1,), st=st))
+
+    story.append(Paragraph(T("1.4 점검 수행 인원"), st["h2sec"]))
+    story.append(_tbl([[T("이름"), T("직급"), T("이메일"), T("연락처")],
+                       [meta.get("tester") or author, meta.get("tester_rank") or "-",
+                        meta.get("tester_email") or "-", meta.get("tester_phone") or "-"]],
+                      [34 * mm, 26 * mm, 62 * mm, 52 * mm], sizes=9))
+    story.append(PageBreak())
+
+    # ── 2. 진단 항목 ──
+    story.append(Paragraph(T("2. 진단 항목"), st["h1"]))
+    if not stds:
+        story.append(Paragraph(T(
+            "점검 기준을 지정하지 않아 이번 진단에서 탐지된 규칙 유형을 그대로 싣는다."), st["body"]))
+    for std in stds:
+        story.append(Paragraph(std.name_en if en else std.name, st["h2sec"]))
+        story.append(Paragraph(
+            (f"Assessed against {std.source_for(lang)}. The check items are as follows."
+             if en else
+             f"{std.source_for(lang)}에 근거한 진단 항목을 적용한다. 점검 항목은 다음과 같다."),
+            st["body"]))
+        story.append(Spacer(1, 2 * mm))
+        rows = [[T("순번"), T("항목"), T("설명"), T("항목 수")]]
+        gs = [g for g in D["groups"] if g["standard"] == (std.name_en if en else std.name)]
+        for i, g in enumerate(gs, 1):
+            rows.append([str(i), g["group"], g["desc"], str(g["n"])])
+        rows.append([("", True), (T("합계"), True), "", (str(sum(g["n"] for g in gs)), True)])
+        story.append(_tbl(rows, [13 * mm, 38 * mm, 105 * mm, 18 * mm],
+                          aligns={0: "CENTER", 3: "CENTER"}, wrap_cols=(1, 2), st=st))
+        story.append(Spacer(1, 4 * mm))
+    story.append(PageBreak())
+
+    # ── 3. 진단 결과 ──
+    story.append(Paragraph(T("3. 진단 결과"), st["h1"]))
+    it, ft = D["initial_total"], D["final_total"]
+
+    story.append(Paragraph(T("3.1 최초 보안약점 진단 결과"), st["h2sec"]))
+    story.append(Paragraph(
+        (f"The initial assessment across {D['projects']} project(s) detected {it['total']} "
+         f"security weaknesses."
+         if en else
+         f"총 {D['projects']}개 프로젝트를 대상으로 수행한 최초 소스코드 보안약점 진단 결과, "
+         f"{it['total']}건의 보안약점이 검출되었다."), st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    story.append(_scale_table(D["initial"], it, SEV, T))
+
+    story.append(Paragraph(T("3.2 진단 결과 점검"), st["h2sec"]))
+    dropped = it["total"] - ft["total"]
+    if D["review"]:
+        story.append(Paragraph(
+            (f"Reviewing the source context, {dropped} of the {it['total']} detections were "
+             f"classified as excluded / false positive / fixed, leaving {ft['total']} items to "
+             f"remediate. The rationale recorded by the assessor is as follows."
+             if en else
+             f"소스 컨텍스트 재확인을 통해 검출 {it['total']}건 중 {dropped}건을 "
+             f"「제외 / 오탐 / 조치완료」로 분류하고, 조치대상 {ft['total']}건을 확정하였다. "
+             f"항목별 사유와 진단원 의견은 다음과 같다."), st["body"]))
+        story.append(Spacer(1, 1.5 * mm))
+        story.append(Paragraph(T(
+            "※ 소스 컨텍스트(Source Context) : 검출 지점 전후의 코드 흐름, 호출 관계, "
+            "프레임워크·설정 정보 등 취약점의 실제 성립 여부를 판단하기 위해 참조하는 "
+            "주변 소스코드 정보를 의미한다."), st["small"]))
+        story.append(Spacer(1, 2 * mm))
+        rows = [[T("보안약점명"), T("위험도"), T("건수"), T("사유"), T("진단원 의견")]]
+        for r in D["review"][:60]:
+            rows.append([r["name"], SEV.get(r["severity"], r["severity"]), str(r["n"]),
+                         r["reason"], r["opinion"] or "-"])
+        rows.append([(T("총 계"), True), "", (str(D["review_total"]), True), "", ""])
+        story.append(_tbl(rows, [36 * mm, 18 * mm, 14 * mm, 18 * mm, 88 * mm],
+                          aligns={1: "CENTER", 2: "CENTER", 3: "CENTER"},
+                          wrap_cols=(0, 4), st=st))
+    else:
+        story.append(Paragraph(
+            ("No detection has been reviewed as excluded or a false positive yet, so the initial "
+             "result stands as the final result. Verdicts and opinions recorded on the review "
+             "screen appear in this section."
+             if en else
+             "검토 화면에서 오탐·제외로 판정한 항목이 아직 없어, 최초 진단 결과가 그대로 최종 "
+             "결과가 된다. 검토 화면에서 판정과 의견을 기록하면 이 절에 반영된다."), st["body"]))
+
+    story.append(Paragraph(T("3.3 최종 점검 결과"), st["h2sec"]))
+    story.append(Paragraph(
+        (f"After the review, the initial {it['total']} detections were confirmed as "
+         f"{ft['total']} items to remediate."
+         if en else
+         f"오탐·제외 항목을 정리한 결과, 최초 {it['total']}건에서 최종 {ft['total']}건으로 "
+         f"확정되었다."), st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    story.append(_scale_table(D["final"], ft, SEV, T))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(
+        ("Per-project detail follows. Each weakness carries its severity, and where it maps to a "
+         "check item of the applied standards that item name is used."
+         if en else
+         "아래는 프로젝트별 상세 진단 결과이며, 각 항목에 위험도를 부여하고 적용 기준의 "
+         "점검항목에 대응되는 경우 그 보안약점명으로 표기하였다."), st["body"]))
+
+    for i, r in enumerate(D["final"], 1):
+        story.append(Paragraph(f"3.3.{i} {r.name}", st["h2sec"]))
+        story.append(_kv_table([("발주처/고객", client or "-"), ("서비스명", r.name),
+                                ("개발언어", r.languages), ("파일 수", f"{r.files:,}"),
+                                ("빌드 라인 수", f"{r.lines:,}")],
+                               T, col0=34 * mm, col1=140 * mm))
+        story.append(Spacer(1, 2 * mm))
+        rows = [[T("순번"), T("분류"), T("유형"), T("보안약점명"), T("위험도"), T("건수"), T("비고")]]
+        if r.weaknesses:
+            for j, w in enumerate(r.weaknesses, 1):
+                rows.append([str(j), w["cls"], w["group"], w["name"],
+                             SEV.get(w["severity"], w["severity"]), str(w["n"]), "-"])
+        else:
+            rows.append(["1", "-", "-", T("점검 기한 내 발견된 취약점 없음"), "-", "0", "-"])
+        rows.append([("", True), (T("총 계"), True), "", "", "", (str(r.total), True), ""])
+        story.append(_tbl(rows, [12 * mm, 30 * mm, 30 * mm, 52 * mm, 18 * mm, 14 * mm, 18 * mm],
+                          aligns={0: "CENTER", 4: "CENTER", 5: "CENTER", 6: "CENTER"},
+                          wrap_cols=(1, 2, 3), st=st))
+        story.append(Spacer(1, 4 * mm))
+    story.append(PageBreak())
+
+    # ── 4. 유형별 조치 권고 ──
+    story.append(Paragraph(T("4. 유형별 조치 권고"), st["h1"]))
+    story.append(Paragraph(
+        ("Remediation for each weakness type found across the assessed projects. Code examples "
+         "for each type are in the separate remediation guide."
+         if en else
+         "이번 진단에서 도출된 보안약점 유형별 조치 방안은 다음과 같다. 유형별 상세 코드 "
+         "예시는 별도의 조치 가이드를 참조한다."), st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    seen_keys: dict[str, int] = {}
+    for r in D["final"]:
+        for f in r.scan.findings:
+            k = _rule_key(f["rule_id"])
+            seen_keys[k] = seen_keys.get(k, 0) + 1
+    rows = [[T("보안약점 유형"), T("영향"), T("조치 방안"), T("건수")]]
+    for k, n in sorted(seen_keys.items(), key=lambda x: -x[1])[:20]:
+        rem = REM.get(k, DFT)
+        rows.append([rem[0], rem[1], rem[2], str(n)])
+    story.append(_tbl(rows, [34 * mm, 60 * mm, 66 * mm, 14 * mm],
+                      aligns={3: "CENTER"}, wrap_cols=(0, 1, 2), st=st))
+
+    # ── 5. 종합 의견 ──
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(T("5. 종합 의견"), st["h1"]))
+    ch = ft["sev"]["critical"] + ft["sev"]["high"]
+    story.append(Paragraph(
+        (f"Across {D['projects']} project(s), {it['total']} weaknesses were detected and "
+         f"{ft['total']} were confirmed for remediation, of which {ch} are Critical/High and "
+         f"require immediate action. Address Critical/High items first, then apply input "
+         f"validation, output encoding, secret separation and safe algorithms per the "
+         f"remediation for each type."
+         if en else
+         f"총 {D['projects']}개 프로젝트에서 {it['total']}건이 검출되어 {ft['total']}건이 "
+         f"조치대상으로 확정되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 등급이 {ch}건이다. "
+         f"매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 입력 검증·출력 인코딩·"
+         f"비밀정보 분리·안전한 알고리즘 적용을 권고한다."), st["body"]))
+
+    # ── 부록 ──
+    story.append(PageBreak())
+    story.append(Paragraph(T("부록 A. 위험도 판정 기준"), st["h1"]))
+    rows = [[T("판정"), T("기준"), T("조치 우선순위")]]
+    for s in SEV_ORDER:
+        rows.append([(SEV.get(s, s), True), CRIT[s], T(_PRIORITY[s])])
+    story.append(_tbl(rows, [28 * mm, 118 * mm, 28 * mm], sizes=9, wrap_cols=(1,), st=st))
+
+    if stds:
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph(T("부록 B. 점검항목별 진단 결과"), st["h1"]))
+        story.append(Paragraph(
+            ("Every check item of the applied standards with its verdict. Items with no rule "
+             "behind them are marked 'Not assessed' rather than passing."
+             if en else
+             "적용 기준의 전체 점검항목과 판정이다. 이 도구가 볼 수 있는 규칙이 없는 항목은 "
+             "양호가 아니라 '진단 대상 아님'으로 표기한다."), st["body"]))
+        story.append(Spacer(1, 2 * mm))
+        avail = _sm.rule_cwes()
+        V = _sm.VERDICT_EN if en else _sm.VERDICT_KO
+        for std in stds:
+            story.append(Paragraph(std.name_en if en else std.name, st["h2sec"]))
+            story.append(_item_table(_sm.coverage(std, D["cwe_counts"], avail), std, V, T, st, en))
+            story.append(Spacer(1, 4 * mm))
+
+    _build_report(story, path, title + " " + T("진단 결과 보고서"))
