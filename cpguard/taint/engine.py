@@ -156,6 +156,17 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
         if cp and _is_sanitizer(cp, ctx.rule):
             return None  # 정제 통과 -> 오염 끊김
 
+        # map.get("키") — 넣을 때 키 단위로 기록했으므로 읽을 때도 그 슬롯만 본다.
+        if cp and "." in cp and node.args:
+            recv, _, meth = cp.rpartition(".")
+            if meth in _MAP_GET:
+                key = _literal_key(node.args[0], ctx)
+                if key is not None:
+                    hit = _env_lookup(f"{recv}.{key}", env) or _env_lookup(recv, env)
+                    if hit is None:
+                        return None
+                    return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
+
         step = Step("propagation", node.loc, _snippet(node.loc, ctx.src))
         summ = _user_function(cp, ctx)
 
@@ -180,7 +191,7 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
     if isinstance(node, ir.Assign):
         return _taint(node.value, env, ctx)
 
-    if isinstance(node, ir.Opaque):
+    if isinstance(node, ir.FOLDED):
         for c in node.children:
             tr = _taint(c, env, ctx)
             if tr:
@@ -206,7 +217,7 @@ def _iter_calls(node: ir.Node):
     elif isinstance(node, ir.Assign):
         yield from _iter_calls(node.value)
         yield from _iter_calls(node.target)
-    elif isinstance(node, ir.Opaque):
+    elif isinstance(node, ir.FOLDED):
         for c in node.children:
             yield from _iter_calls(c)
 
@@ -230,7 +241,7 @@ def _iter_functions(node: ir.Node):
         yield from _iter_functions(node.obj)
     elif isinstance(node, ir.Assign):
         yield from _iter_functions(node.value)
-    elif isinstance(node, ir.Opaque):
+    elif isinstance(node, ir.FOLDED):
         for c in node.children:
             yield from _iter_functions(c)
 
@@ -275,6 +286,65 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
                 break
 
 
+# 수신자를 변경하는 메서드. list.add(x) 처럼 인자의 오염이 컨테이너로 옮겨간다.
+# 필드 민감도가 없어 컨테이너 전체가 오염되는 과대근사다(안전한 키를 다시 꺼내 써도
+# 오염으로 본다). 보안 도구에서는 놓치는 쪽보다 이쪽이 낫다.
+_MUTATORS = ("add", "addAll", "addFirst", "addLast", "put", "putAll", "putIfAbsent",
+             "append", "insert", "push", "offer", "offerLast", "write", "concat")
+
+
+# 키가 리터럴인 맵 접근은 키 단위로 구분한다. map.put("a", 오염) 뒤에 map.get("b") 를
+# 읽는 코드를 통째로 오염으로 보면 오탐이 된다 — 리터럴 키는 공짜로 정확해진다.
+_MAP_PUT = ("put", "putIfAbsent", "setProperty", "setAttribute")
+_MAP_GET = ("get", "getOrDefault", "getProperty", "getAttribute")
+
+
+def _literal_key(node: ir.Node, ctx: Ctx) -> str | None:
+    """리터럴 문자열 키. 문자열이 아니거나 보간이 섞였으면 None(= 키를 특정할 수 없음).
+
+    문자열 리터럴은 언어에 따라 Literal 이 아니라 Opaque(string_literal + 조각 자식)로
+    오므로 노드 타입 대신 원본 스니펫을 본다."""
+    if not isinstance(node, (ir.Literal, ir.Opaque)):
+        return None
+    raw = _snippet(node.loc, ctx.src)
+    if len(raw) < 2 or raw[0] not in "\"'" or raw[-1] != raw[0]:
+        return None
+    inner = raw[1:-1]
+    if any(m in inner for m in ("${", "#{", "\(", '"', "'")):
+        return None   # 보간·중첩 인용 → 상수 키로 보기 어렵다
+    return inner
+
+
+def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
+    """coll.add(오염) / sb.append(오염) / map.put(키, 오염) → 수신자 경로를 오염시킨다."""
+    for call in _iter_calls(node):
+        cp = path_of(call.callee)
+        if not cp or "." not in cp:
+            continue
+        recv, _, meth = cp.rpartition(".")
+
+        if meth in _MAP_PUT and len(call.args) >= 2:
+            key = _literal_key(call.args[0], ctx)
+            tr = _taint(call.args[1], env, ctx)
+            if tr:
+                # 키를 알면 그 슬롯만, 모르면 맵 전체를 오염으로 본다.
+                target = f"{recv}.{key}" if key is not None else recv
+                if target not in env:
+                    env = dict(env)
+                    env[target] = tr + [Step("propagation", call.loc, _snippet(call.loc, ctx.src))]
+            continue
+
+        if meth not in _MUTATORS or recv in env:
+            continue
+        for a in call.args:
+            tr = _taint(a, env, ctx)
+            if tr:
+                env = dict(env)
+                env[recv] = tr + [Step("propagation", call.loc, _snippet(call.loc, ctx.src))]
+                break
+    return env
+
+
 def _run_nested(node: ir.Node, ctx: Ctx) -> None:
     for fn in _iter_functions(node):
         _run_function(fn, ctx)
@@ -304,6 +374,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
         elif isinstance(s, ir.Assign):
             _check_sinks(s.value, env, ctx)
             _run_nested(s.value, ctx)
+            env = _apply_mutations(s.value, env, ctx)
             tr = _taint(s.value, env, ctx)
             p = path_of(s.target)
             if p:
@@ -334,6 +405,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
         else:
             _check_sinks(s, env, ctx)
             _run_nested(s, ctx)
+            env = _apply_mutations(s, env, ctx)
 
     return env
 

@@ -28,7 +28,7 @@ def _normalizer_version() -> str:
     상수를 손으로 올리는 방식은 잊기 쉽고, 잊으면 옛 IR 이 그대로 재사용돼
     "고쳤는데 결과가 안 바뀐다"는 조용한 오류가 난다."""
     h = hashlib.sha1()
-    for name in ("normalize.py", "normalize_cfam.py"):
+    for name in ("normalize.py", "normalize_cfam.py", "constfold.py"):
         try:
             h.update((Path(__file__).parent / "parse" / name).read_bytes())
         except OSError:

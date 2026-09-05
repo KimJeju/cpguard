@@ -65,18 +65,21 @@ def normalize(tree: Tree, file: str = "<memory>", language: str = "javascript") 
     """CST -> ir.Module. 언어에 맞는 정규화기로 보낸다.
 
     분석 코어는 이 함수 위쪽만 보므로, 언어가 늘어도 여기서만 갈래가 생긴다.
+    마지막에 상수 전파를 한 번 돌려 컴파일 시점에 죽는 분기를 접는다(오탐 감소).
     """
+    from .constfold import fold
+
     if language == "php":
         from .normalize_php import normalize_php
-        return normalize_php(tree, file)
+        return fold(normalize_php(tree, file))
     if language == "python":
         from .normalize_py import normalize_py
-        return normalize_py(tree, file)
+        return fold(normalize_py(tree, file))
     if language in ("java", "kotlin", "go", "ruby", "cpp", "c", "swift", "csharp"):
         from .normalize_cfam import normalize_cfam
-        return normalize_cfam(tree, file, language)
+        return fold(normalize_cfam(tree, file, language))
     root = tree.root_node
-    return ir.Module(loc=loc_of(root, file), body=_block(root.named_children, file))
+    return fold(ir.Module(loc=loc_of(root, file), body=_block(root.named_children, file)))
 
 
 def _block(nodes, file: str) -> list[ir.Node]:

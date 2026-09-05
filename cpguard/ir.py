@@ -68,6 +68,35 @@ class Opaque(Node):
     children: list[Node] = field(default_factory=list)
 
 
+@dataclass
+class Binary(Node):
+    """이항 연산 left op right. children 은 [left, right] 와 같다.
+
+    Opaque 로 접어도 taint 는 똑같이 전파되지만, 상수 전파(constfold)가 연산자를
+    알아야 분기 조건을 접을 수 있어 별도 노드로 둔다."""
+    op: str
+    children: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class Unary(Node):
+    """단항 연산 op operand. children 은 [operand]."""
+    op: str
+    children: list[Node] = field(default_factory=list)
+
+
+@dataclass
+class Ternary(Node):
+    """조건식 test ? then : orelse. children 은 [test, then, orelse].
+
+    상수 전파가 test 를 접으면 children 을 선택된 가지 하나로 줄인다."""
+    children: list[Node] = field(default_factory=list)
+
+
+#: children 합집합으로 taint 를 전파하는 노드들(엔진이 한 덩어리로 다룬다)
+FOLDED = (Opaque, Binary, Unary, Ternary)
+
+
 # ---------- 문(statement) ----------
 
 @dataclass

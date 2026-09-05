@@ -56,6 +56,10 @@ class Spec:
     unwrap_decl: tuple[str, ...] = field(default_factory=tuple)  # C 의 pointer_declarator 등
     new_expr: tuple[str, ...] = field(default_factory=tuple)     # 객체 생성식(new X(y))
     splice: tuple[str, ...] = field(default_factory=tuple)       # try/switch 등: 자식을 문으로 펼침
+    # 상수 전파가 분기 조건을 접으려면 연산자를 알아야 한다 → 이 세 가지는 Opaque 로 접지 않는다.
+    binary: tuple[str, ...] = ("binary_expression",)
+    unary: tuple[str, ...] = ("unary_expression",)
+    ternary: tuple[str, ...] = ("ternary_expression", "conditional_expression")
 
 
 _ID = ("identifier",)
@@ -108,6 +112,7 @@ LANG: dict[str, Spec] = {
         splice=("try_statement", "catch_clause", "finally_clause", "switch_statement",
                 "switch_body", "switch_section", "lock_statement", "using_statement",
                 "checked_statement", "labeled_statement"),
+        unary=("prefix_unary_expression", "unary_expression"),
     ),
     "go": Spec(
         call="call_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -181,6 +186,9 @@ LANG: dict[str, Spec] = {
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("line_string_literal", "multi_line_string_literal"),
         descend=("class_declaration", "protocol_declaration"),
         splice=("do_statement", "catch_block", "switch_statement", "switch_entry",),
+        binary=("additive_expression", "multiplicative_expression", "comparison_expression",
+                "equality_expression", "conjunction_expression", "disjunction_expression"),
+        unary=("prefix_expression",),
     ),
     "ruby": Spec(
         call="call", call_fn=None, call_args="arguments", args_types=("argument_list",),
@@ -199,6 +207,9 @@ LANG: dict[str, Spec] = {
         literals=_LIT_COMMON + ("string", "symbol", "simple_symbol", "hash_key_symbol"),
         descend=("class", "module"),
         splice=("begin", "rescue", "ensure", "case", "when", "then",),
+        binary=("binary",),
+        unary=("unary",),
+        ternary=("conditional",),
     ),
 }
 LANG["c"] = LANG["cpp"]
@@ -544,7 +555,36 @@ class _Worker:
                 return ir.Opaque(loc=loc_of(node, self.file), kind=t, children=self._flat(r))
             return r if r is not None else self._opaque(node)
 
-        # 문자열 보간·이항연산·캐스트·삼항 등은 Opaque(자식 오염 합집합)
+        if t in s.binary:
+            left = self._fld(node, "left") or self._fld(node, "lhs")
+            right = self._fld(node, "right") or self._fld(node, "rhs")
+            op = self._fld(node, "operator") or self._fld(node, "op")
+            if left is not None and right is not None:
+                return ir.Binary(loc=loc_of(node, self.file),
+                                 op=text_of(op) if op is not None else "",
+                                 children=[self.expr(left), self.expr(right)])
+
+        if t in s.unary:
+            operand = (self._fld(node, "operand") or self._fld(node, "argument")
+                       or self._fld(node, "target"))
+            op = self._fld(node, "operator") or self._fld(node, "operation")
+            if operand is None and kids:      # C#: 필드 없이 위치로만
+                operand = kids[-1]
+            if operand is not None:
+                op_txt = text_of(op) if op is not None else (
+                    node.children[0].text.decode("utf-8", "replace") if node.children else "")
+                return ir.Unary(loc=loc_of(node, self.file), op=op_txt,
+                                children=[self.expr(operand)])
+
+        if t in s.ternary:
+            cond = self._fld(node, "condition")
+            yes = self._fld(node, "consequence") or self._fld(node, "if_true")
+            no = self._fld(node, "alternative") or self._fld(node, "if_false")
+            if cond is not None and yes is not None and no is not None:
+                return ir.Ternary(loc=loc_of(node, self.file),
+                                  children=[self.expr(cond), self.expr(yes), self.expr(no)])
+
+        # 문자열 보간·캐스트 등 나머지는 Opaque(자식 오염 합집합)
         return self._opaque(node)
 
     def _member(self, node: TSNode) -> ir.Node:
