@@ -27,6 +27,8 @@
   <img src="docs/img/architecture.svg" width="820" alt="CPGuard 분석 파이프라인"/>
 </p>
 
+> **CPGuard** = **CPG**(Code Property Graph, 코드 속성 그래프) + **Guard** — 패턴 목록이 아니라 코드 속성 그래프로 코드를 지킨다. 로고가 3개의 연결된 노드인 이유도 이 그래프다.
+
 패턴 매칭 중심 SAST 의 오탐 한계를 넘기 위해 —
 **tree-sitter 파싱 → 언어중립 IR → CPG(AST·CFG·def-use·call) → 프로시저간 taint(함수 요약) → LLM 트리아지**
 로 정밀 탐지하고, 3분할 검토 화면에서 사람이 최종 판정한다.
