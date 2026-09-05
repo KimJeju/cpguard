@@ -62,6 +62,12 @@ then hands the result to a three-pane review screen where a human confirms the v
 - **Project portfolio** (`/projects/`) — every project's latest scan in one searchable, sortable, filterable table.
 - **Bulk deliverables** — select projects and download one ZIP with each project's PDF report and xlsx sheet, ready to hand to developers.
 
+**Assess against the standard your client asks for**
+- Pick the reference the findings are judged by: **MOIS Secure Coding Guide** (Korea's public-sector standard, 48 check items) · **OWASP Top 10 (2021)** · **CWE**.
+- The mapping key is CWE, so **the scan runs once and the standard is chosen when you look** — switching references never means rescanning.
+- Filter the review screen by check item, group the issue list by it, and the deliverables follow: the PDF's *check items* section becomes that standard's full checklist with a violated/pass verdict per item, and the xlsx gains a *check items* sheet. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
+- Findings outside the chosen standard's mapping are reported separately, never silently dropped.
+
 **LLM triage**
 - Claude · ChatGPT (OpenAI) · Gemini. Re-verifies findings for reachability and explains them; provider and model are selectable. Gemini's free tier is enough to try it.
 
@@ -127,6 +133,9 @@ Linux install `fonts-nanum`, or point `CPGUARD_PDF_FONT` at any TrueType font yo
 ```bash
 # CLI scan (SARIF + analysis sheet)
 cpguard scan ./project --sarif out.sarif --xlsx out.xlsx
+
+# Assess against a standard (mois | owasp | cwe)
+cpguard scan ./project --standard mois --xlsx out.xlsx
 
 # Re-verify with LLM triage
 cpguard scan ./project --triage --provider gemini

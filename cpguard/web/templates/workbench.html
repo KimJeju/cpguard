@@ -198,11 +198,11 @@
     <button class="toolbtn" id="tgl-left" title="탐색기 접기/펼치기">◧</button>
     <button class="toolbtn" id="tgl-bottom" title="분석 패널">▭</button>
     <button class="toolbtn" id="tgl-right" title="인스펙터 접기/펼치기">◨</button>
-    <a class="toolbtn" download href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 PDF">보고서</a>
+    <a class="toolbtn" download id="dl-report" href="{% url 'export_pdf_report' scan.pk %}" title="합본 진단 결과 보고서 PDF">보고서</a>
     <a class="toolbtn" download href="{% url 'export_pdf_guide' scan.pk %}" title="유형별 조치 가이드 PDF">조치</a>
     <a class="toolbtn" download href="{% url 'sarif' scan.pk %}">SARIF</a>
     <a class="toolbtn" download href="{% url 'export_csv' scan.pk %}">CSV</a>
-    <a class="toolbtn" download href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
+    <a class="toolbtn" download id="dl-xlsx" href="{% url 'export_xlsx' scan.pk %}" title="고객 제출용 14컬럼 분석목록표">분석목록표</a>
     {% if scan.project %}<a class="toolbtn" href="{% url 'project_home' scan.project %}">{{ scan.project }} 홈</a>{% endif %}
     <a class="toolbtn" href="/">목록</a>
   </span>
@@ -236,7 +236,7 @@
         </div>
         <div style="display:flex;gap:6px">
           <select id="group">
-            <option value="severity">위험도별</option><option value="rule_id">규칙별</option><option value="file">파일별</option><option value="category">유형별</option>
+            <option value="severity">위험도별</option><option value="rule_id">규칙별</option><option value="file">파일별</option><option value="category">유형별</option><option value="std_item">점검항목별</option>
           </select>
           <select id="fnew">
             <option value="">전체</option><option value="new">신규만</option><option value="fp">오탐힌트만</option>
@@ -245,6 +245,15 @@
             <option value="all">감사 전체</option><option value="none">미확인</option><option value="confirmed">취약 확정</option>
             <option value="false_positive">오탐</option><option value="fixed">조치완료</option><option value="deferred">보류</option>
           </select>
+        </div>
+        <div style="display:flex;gap:6px">
+          <select id="fstd" title="점검 기준 — 어떤 레퍼런스로 판정할지">
+            <option value="">기준 미적용</option>
+            <option value="mois">행정안전부 시큐어코딩</option>
+            <option value="owasp">OWASP Top 10</option>
+            <option value="cwe">CWE</option>
+          </select>
+          <select id="fitem" title="점검항목" disabled><option value="">점검항목 전체</option></select>
         </div>
         <label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px;white-space:nowrap;cursor:pointer">
           <input type="checkbox" id="hideAudited" style="flex:0 0 auto;width:auto;margin:0"> <span>감사 완료 숨기기</span>
@@ -323,6 +332,8 @@
   const FINDINGS = JSON.parse(document.getElementById('data-findings').textContent);
   const SOURCES  = JSON.parse(document.getElementById('data-sources').textContent);
   const SCAN_PK  = {{ scan.pk }};
+  const REPORT_URL = "{% url 'export_pdf_report' scan.pk %}";
+  const XLSX_URL   = "{% url 'export_xlsx' scan.pk %}";
   const LARGE    = {{ truncated|default:0 }} > 0;   // 대량 모드: 목록을 서버 API 로 페이지·가상 스크롤
   const TOTAL    = {{ total }};
   const PROJECT  = "{{ scan.project|default:scan.name|escapejs }}";
@@ -374,7 +385,7 @@
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
   const WS_KEY = 'cpguard.ws.v1';
   let ws = { leftW: 320, rightW: 380, bottomH: 260, bottom: true, left: true, right: true, tab: 'ai', view: 'tree',
-             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', hideAudited: false, sort: 'severity', asc: true };
+             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
@@ -388,6 +399,7 @@
     el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table'); el('v-files').classList.toggle('on', ws.view === 'files');
     el('group').value = ws.group; el('fsev').value = ws.sev; el('fcat').value = ws.cat; el('fnew').value = ws.fnew; el('hideAudited').checked = ws.hideAudited;
     el('faudit').value = ws.audit || 'all';
+    el('fstd').value = ws.std || '';
   }
 
   // 끌어서 크기 조절
@@ -417,6 +429,7 @@
     return FINDINGS.filter(f => {
       if (ws.sev && f.severity !== ws.sev) return false;
       if (ws.cat && (f.category || 'flow') !== ws.cat) return false;
+      if (ws.item && !STD.cwes.has((f.cwe || '').toUpperCase())) return false;
       if (ws.fnew === 'new' && !f.is_new) return false;
       if (ws.fnew === 'fp' && !f.fp_hint) return false;
       if (ws.hideAudited && f.audit) return false;
@@ -434,6 +447,7 @@
     const p = new URLSearchParams({ page: LG.page + 1, size: LG.size });
     if (ws.sev) p.set('severity', ws.sev);
     if (ws.audit && ws.audit !== 'all') p.set('audit', ws.audit);
+    if (ws.std) { p.set('std', ws.std); if (ws.item) p.set('item', ws.item); }
     const q = el('q').value.trim(); if (q) p.set('q', q);
     return p.toString();
   }
@@ -494,7 +508,7 @@
 
     const key = ws.group;
     const groups = new Map();
-    for (const f of items) { const k = key === 'category' ? (CAT_LABEL[f.category || 'flow'] || f.category) : (f[key] || '(없음)'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+    for (const f of items) { const k = key === 'category' ? (CAT_LABEL[f.category || 'flow'] || f.category) : key === 'std_item' ? stdLabel(f) : (f[key] || '(없음)'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
     const keys = [...groups.keys()].sort((a, b) => key === 'severity' ? (SEV_ORDER[a] ?? 9) - (SEV_ORDER[b] ?? 9) : groups.get(b).length - groups.get(a).length);
     let html = items.length ? '' : '<div class="empty">조건에 맞는 이슈가 없습니다.</div>';
     for (const k of keys) {
@@ -851,6 +865,50 @@
   el('hideAudited').onchange = () => { ws.hideAudited = el('hideAudited').checked; saveWS(); renderTree(); };
   el('faudit').onchange = () => { ws.audit = el('faudit').value; saveWS(); renderTree(); };
 
+  // ---------- 점검 기준 ----------
+  // 기준은 스캔이 아니라 "볼 때" 고르는 축이다. 서버에서 항목별 집계를 받아 채우고,
+  // 선택한 항목의 CWE 집합으로만 거른다(같은 결과를 발주처 기준으로 다시 묶어 보는 것).
+  const STD = { items: [], byCwe: new Map(), cwes: new Set() };
+  function stdLabel(f) {
+    const it = STD.byCwe.get((f.cwe || '').toUpperCase());
+    return it ? `${it.code} ${it.name}` : (ws.std ? '기준 미매핑' : '(기준 미선택)');
+  }
+  function stdSuffix() { return ws.std ? ('?std=' + ws.std) : ''; }
+  function applyStdLinks() {
+    for (const [id, url] of [['dl-report', REPORT_URL], ['dl-xlsx', XLSX_URL]]) {
+      const a = el(id); if (a) a.href = url + stdSuffix();
+    }
+  }
+  function loadStandard() {
+    const sel = el('fitem');
+    STD.items = []; STD.byCwe = new Map(); STD.cwes = new Set();
+    applyStdLinks();
+    if (!ws.std) {
+      sel.innerHTML = '<option value="">점검항목 전체</option>'; sel.disabled = true;
+      ws.item = ''; saveWS(); renderTree(); return;
+    }
+    sel.disabled = true;
+    fetch(`/scan/${SCAN_PK}/api/standard?std=${encodeURIComponent(ws.std)}`).then(r => r.json()).then(d => {
+      STD.items = d.items || [];
+      for (const it of STD.items) for (const c of it.cwes) STD.byCwe.set(c, it);
+      const hit = STD.items.filter(i => i.n > 0);
+      sel.innerHTML = `<option value="">점검항목 전체 (위반 ${d.violated}/${d.total_items})</option>`
+        + hit.map(i => `<option value="${i.code}">${i.code} ${esc(i.name)} (${i.n})</option>`).join('');
+      if (ws.item && !hit.some(i => i.code === ws.item)) ws.item = '';
+      sel.value = ws.item || '';
+      sel.disabled = false;
+      setItemCwes();
+      saveWS(); renderTree();
+    }).catch(() => { sel.disabled = false; });
+  }
+  function setItemCwes() {
+    STD.cwes = new Set();
+    const it = STD.items.find(i => i.code === ws.item);
+    if (it) for (const c of it.cwes) STD.cwes.add(c);
+  }
+  el('fstd').onchange = () => { ws.std = el('fstd').value; ws.item = ''; saveWS(); loadStandard(); };
+  el('fitem').onchange = () => { ws.item = el('fitem').value; setItemCwes(); saveWS(); renderTree(); };
+
   // 상단 안내 배너 닫기 — 스캔별로 기억해 다음에 안 뜬다(다시 보려면 새 스캔이거나 localStorage 삭제)
   document.querySelectorAll('.notice').forEach(n => {
     const key = `cpguard.notice.${SCAN_PK}.${n.dataset.notice}`;
@@ -868,6 +926,7 @@
 
   applyWS();
   renderTree();
+  loadStandard();          // 저장된 기준 선택 복원(없으면 즉시 반환)
   const wanted = Number((location.hash.match(/^#f(\d+)$/) || [])[1]);
   if (LARGE) {
     // 대량 모드도 #f<id> 딥링크 지원(프로젝트 홈·리포트에서 특정 이슈로 바로 이동).

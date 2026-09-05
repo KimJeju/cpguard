@@ -62,6 +62,12 @@
 - **프로젝트 포트폴리오** (`/projects/`) — 전 프로젝트의 최신 스캔을 한 표에서 검색·정렬·필터.
 - **대량 산출물 배부** — 프로젝트를 골라 각 프로젝트의 PDF 보고서와 xlsx 를 담은 ZIP 하나로 내려받아 개발자에게 전달.
 
+**발주처가 요구하는 기준으로 판정**
+- 판정 레퍼런스를 골라서 봅니다: **행정안전부 소프트웨어 개발보안 가이드**(공공 점검항목 48개) · **OWASP Top 10 (2021)** · **CWE**.
+- 연결 고리가 CWE 라 **스캔은 한 번, 기준은 볼 때 선택**합니다 — 기준을 바꾸려고 다시 스캔할 일이 없습니다.
+- 취약점 검토 화면에서 점검항목으로 필터·그룹핑하고, 산출물도 그대로 따라갑니다. PDF 의 *진단 항목* 절이 그 기준의 점검표 전체(항목별 취약/양호 판정)로 바뀌고, xlsx 에는 *점검항목 결과* 시트가 추가됩니다. 걸리지 않은 항목도 '양호'로 표에 남습니다 — 그게 무엇을 점검했는지에 대한 증빙입니다.
+- 선택한 기준에 매핑되지 않는 탐지는 숨기지 않고 따로 보고합니다.
+
 **LLM 트리아지**
 - Claude · ChatGPT(OpenAI) · Gemini. 도달 가능성 재검증과 설명, 프로바이더·모델 선택 가능. Gemini 무료 티어로 바로 시험해 볼 수 있다.
 
@@ -127,6 +133,9 @@ cpguard --help
 ```bash
 # CLI 스캔 (SARIF·분석목록표 산출)
 cpguard scan ./project --sarif out.sarif --xlsx out.xlsx
+
+# 점검 기준 적용 (mois | owasp | cwe)
+cpguard scan ./project --standard mois --xlsx out.xlsx
 
 # LLM 트리아지로 오탐 재검증
 cpguard scan ./project --triage --provider gemini

@@ -348,10 +348,11 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
 
 
 def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
-                    meta: dict | None = None) -> None:
+                    meta: dict | None = None, standard: str = "") -> None:
     """합본 진단 결과 보고서 — 표지·개정이력·목차·개요·요약·항목·상세·총평·부록.
 
-    meta: 설정의 보고서 정보(author/org/client/tester/period/version). 비면 기본값."""
+    meta: 설정의 보고서 정보(author/org/client/tester/period/version). 비면 기본값.
+    standard: 점검 기준 id(mois/owasp/cwe). 주면 '3. 진단 항목'이 그 기준의 점검표가 된다."""
     _register_font()
     st = _styles()
     en = lang == "en"
@@ -524,25 +525,74 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
 
     # ── 3. 진단 항목 ──
     story.append(Paragraph(T("3. 진단 항목"), st["h1"]))
-    story.append(Paragraph(T(
-        "이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다."), st["body"]))
-    story.append(Spacer(1, 2 * mm))
-    by_rule: dict = {}
-    for f in findings:
-        r = f["rule_id"]
-        d = by_rule.setdefault(r, {"cwe": f.get("cwe", ""), "n": 0})
-        d["n"] += 1
-    irows = [[T("점검 항목"), "CWE", T("탐지")]]
-    for r, d in sorted(by_rule.items(), key=lambda x: -x[1]["n"]):
-        irows.append([r, d["cwe"] or "-", str(d["n"])])
-    it = Table(irows, colWidths=[124 * mm, 32 * mm, 18 * mm], repeatRows=1)
-    it.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
-                            ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
-                            ("ALIGN", (2, 0), (2, -1), "CENTER"),
-                            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    from .. import standards as _std_mod
+    std = _std_mod.get(standard)
+
+    if std is None:
+        story.append(Paragraph(T(
+            "이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다."), st["body"]))
+        story.append(Spacer(1, 2 * mm))
+        by_rule: dict = {}
+        for f in findings:
+            r = f["rule_id"]
+            d = by_rule.setdefault(r, {"cwe": f.get("cwe", ""), "n": 0})
+            d["n"] += 1
+        irows = [[T("점검 항목"), "CWE", T("탐지")]]
+        for r, d in sorted(by_rule.items(), key=lambda x: -x[1]["n"]):
+            irows.append([r, d["cwe"] or "-", str(d["n"])])
+        widths = [124 * mm, 32 * mm, 18 * mm]
+        body_align = None
+    else:
+        # 기준을 골랐으면 그 기준의 점검표 전체를 싣는다. 걸리지 않은 항목까지 '양호'로
+        # 남겨야 산출물이 "무엇을 점검했는가"의 증빙이 된다.
+        cwe_counts: dict[str, int] = {}
+        for f in findings:
+            c = (f.get("cwe") or "").strip().upper()
+            if c:
+                cwe_counts[c] = cwe_counts.get(c, 0) + 1
+        rows_std = _std_mod.coverage(std, cwe_counts)
+        violated = sum(1 for r in rows_std if r["n"])
+        name = std.name_en if en else std.name
+        intro = (f"Assessed against {name} ({std.source}). "
+                 f"{violated} of {len(rows_std)} check items were violated."
+                 if en else
+                 f"점검 기준은 {name}({std.source})이며, 전체 {len(rows_std)}개 점검항목 중 "
+                 f"{violated}개 항목에서 위반이 확인되었다. 위반이 없는 항목은 양호로 표기한다.")
+        story.append(Paragraph(intro, st["body"]))
+        story.append(Spacer(1, 2 * mm))
+        irows = [[T("분류"), T("항목"), T("점검 항목"), T("판정"), T("탐지")]]
+        for r in rows_std:
+            verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
+            irows.append([r["group_en"] if en else r["group"], r["code"],
+                          r["name_en"] if en else r["name"], verdict, str(r["n"]) if r["n"] else "-"])
+        widths = [30 * mm, 16 * mm, 92 * mm, 18 * mm, 18 * mm]
+        body_align = True
+
+
+    style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+             ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+    if body_align:
+        style += [("ALIGN", (1, 0), (1, -1), "CENTER"), ("ALIGN", (3, 0), (-1, -1), "CENTER")]
+        for i, r in enumerate(rows_std, 1):
+            if r["n"]:
+                style.append(("TEXTCOLOR", (3, i), (3, i), colors.HexColor("#b3261e")))
+                style.append(("FONTNAME", (3, i), (3, i), _FONT_B))
+    else:
+        style.append(("ALIGN", (2, 0), (2, -1), "CENTER"))
+    it = Table(irows, colWidths=widths, repeatRows=1)
+    it.setStyle(TableStyle(style))
     story.append(it)
+    if std is not None and (um := _std_mod.unmapped(std, cwe_counts)):
+        story.append(Spacer(1, 2 * mm))
+        lead = ("Findings outside this standard's mapping: "
+                if en else "이 기준의 점검항목에 매핑되지 않은 탐지: ")
+        story.append(Paragraph(
+            lead + ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1])),
+            st["small"]))
     story.append(PageBreak())
 
     # ── 4. 상세 진단 결과 ──

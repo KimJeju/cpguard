@@ -92,6 +92,9 @@ REMEDIATION_EN_XLSX = {
 }
 # 요약/시트 라벨
 LABELS_EN = {
+    "점검항목 결과": "Check items", "점검 기준": "Standard", "근거": "Source",
+    "분류": "Group", "항목": "Code", "점검 항목": "Check item", "판정": "Result",
+    "탐지 건수": "Findings", "기준 미매핑 탐지": "Findings outside the standard",
     "요약": "Summary", "분석목록표": "Analysis Sheet",
     "소스코드 취약점 진단 분석목록표": "Source Code Vulnerability Analysis Sheet",
     "프로젝트": "Project", "생성 일시": "Generated", "총 탐지 건수": "Total findings",
@@ -167,7 +170,8 @@ def to_rows(findings: list[Finding], base: str | Path | None = None,
 
 def write_workbook(findings: list[Finding], out_path: str | Path,
                    project: str = "결과", base: str | Path | None = None,
-                   audit: dict[str, str] | None = None, lang: str = "ko") -> Path:
+                   audit: dict[str, str] | None = None, lang: str = "ko",
+                   standard: str = "") -> Path:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
@@ -241,6 +245,45 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
         ws.column_dimensions[col].width = w
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(cols))}{max(ws.max_row, 1)}"
+
+    # ---- 점검항목 결과 (기준을 골랐을 때만) ----
+    # 14컬럼 분석목록표는 제출 형식이 고정이라 건드리지 않고 시트를 하나 더 만든다.
+    # 걸리지 않은 항목까지 '양호'로 남겨야 "무엇을 점검했는가"의 증빙이 된다.
+    from .. import standards as _std_mod
+    std = _std_mod.get(standard)
+    if std is not None:
+        cwe_counts: dict[str, int] = {}
+        for f in findings:
+            c = (f.cwe or "").strip().upper()
+            if c:
+                cwe_counts[c] = cwe_counts.get(c, 0) + 1
+        cs = wb.create_sheet(L("점검항목 결과"))
+        cs.append([L("점검 기준"), std.name_en if en else std.name])
+        cs.append([L("근거"), std.source])
+        cs.append([])
+        head = ([L("분류"), L("항목"), L("점검 항목"), L("판정"), L("탐지 건수"), "CWE"])
+        cs.append(head)
+        for c in cs[cs.max_row]:
+            c.font, c.fill, c.border, c.alignment = header_font, header_fill, header_border, header_align
+        for r in _std_mod.coverage(std, cwe_counts):
+            verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
+            cs.append([r["group_en"] if en else r["group"], r["code"],
+                       r["name_en"] if en else r["name"], verdict, r["n"], ", ".join(r["cwes"])])
+            rn = cs.max_row
+            for c in cs[rn]:
+                c.font, c.border, c.alignment = data_font, data_border, data_align
+            for col in (2, 4, 5):
+                cs.cell(rn, col).alignment = center
+            if r["n"]:
+                cs.cell(rn, 4).fill = PatternFill(fill_type="solid", fgColor=SEVERITY_FILL["high"])
+        um = _std_mod.unmapped(std, cwe_counts)
+        if um:
+            cs.append([])
+            cs.append([L("기준 미매핑 탐지"),
+                       ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1]))])
+        for col, w in {"A": 26, "B": 9, "C": 46, "D": 9, "E": 11, "F": 34}.items():
+            cs.column_dimensions[col].width = w
+        cs.freeze_panes = "A5"
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

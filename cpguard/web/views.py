@@ -32,6 +32,15 @@ def _lang(request) -> str:
     UI 는 클라이언트 사전으로 번역하지만 룰 메시지·PDF 는 서버 생성이라 여기서 고른다."""
     return "en" if (request.GET.get("lang") or request.COOKIES.get("cpguard_lang")) == "en" else "ko"
 
+def _std(request) -> str:
+    """점검 기준 id — `?std=` (mois/owasp/cwe). 없거나 모르는 값이면 "" = 기준 미적용.
+
+    기준은 스캔이 아니라 볼 때 고르는 축이다. 같은 결과를 발주처가 요구하는 기준으로
+    다시 묶어 보여줄 뿐이므로, 기준을 바꾸려고 다시 스캔할 이유가 없다."""
+    std = _standard(request)
+    return std.id if std else ""
+
+
 # 코드 뷰어용 원본 보관 한도 (DB 비대화 방지)
 # 원본 보관 상한 — 대형 프로젝트(수천 파일에 탐지)에서도 뷰어가 원본을 보여줄 수 있게
 # 넉넉히. 파일당 1MB, 총 64MB. 대량 모드에서는 페이지에 임베드하지 않고 이슈 선택 시
@@ -481,6 +490,7 @@ def portfolio_export(request):
 
     from . import config as appcfg
     lang = _lang(request)
+    std = _std(request)
     meta = appcfg.report_meta()
     ids = [int(x) for x in (request.GET.get("ids") or "").split(",") if x.strip().isdigit()]
     ids = ids[:300]                                  # 폭주 방지 상한
@@ -498,7 +508,7 @@ def portfolio_export(request):
             if kind in ("report", "both"):
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "r.pdf"
                 try:
-                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta)
+                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standard=std)
                     zf.writestr(f"{folder}/{safe}_report.pdf", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -507,7 +517,7 @@ def portfolio_export(request):
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "s.xlsx"
                 try:
                     excel.write_workbook(findings, tmp, project=Path(scan.name).stem,
-                                         audit=scan.audit, lang=lang)
+                                         audit=scan.audit, lang=lang, standard=std)
                     zf.writestr(f"{folder}/{safe}_analysis-sheet.xlsx", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -541,7 +551,7 @@ def _attachment(fname: str) -> str:
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(fname)}"
 
 
-def _pdf_response(scan, kind: str, lang: str = "ko"):
+def _pdf_response(scan, kind: str, lang: str = "ko", standard: str = ""):
     from ..report import pdf as pdfmod
     from . import config as appcfg
     meta = appcfg.report_meta()          # 설정의 보고서 정보(작성자·기관·발주처·기간·버전)
@@ -551,7 +561,7 @@ def _pdf_response(scan, kind: str, lang: str = "ko"):
             pdfmod.remediation_guide(scan, tmp, lang=lang, meta=meta)
             suffix = "remediation-guide" if lang == "en" else "조치가이드"
         else:
-            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta)
+            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standard=standard)
             suffix = "assessment-report" if lang == "en" else "진단결과보고서"
         data = tmp.read_bytes()
     finally:
@@ -564,7 +574,7 @@ def _pdf_response(scan, kind: str, lang: str = "ko"):
 @never_cache
 def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
-    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined", _lang(request))
+    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined", _lang(request), _std(request))
 
 
 @never_cache
@@ -597,6 +607,35 @@ def scan_summary_api(request, pk: int):
     })
 
 
+def _standard(request):
+    from .. import standards
+    return standards.get(request.GET.get("std"))
+
+
+def scan_standard_api(request, pk: int):
+    """선택한 기준의 점검항목별 결과. 항목 하나도 숨기지 않고 '양호'까지 함께 준다 —
+    점검했는데 안 걸린 항목이 보여야 산출물이 점검표 구실을 한다."""
+    from django.db.models import Count
+
+    from .. import standards
+    from .models import FindingRow
+    get_object_or_404(Scan, pk=pk)
+    std = _standard(request)
+    if std is None:
+        return JsonResponse({"standards": [{"id": s.id, "name": s.name, "name_en": s.name_en}
+                                           for s in standards.STANDARDS.values()]})
+    counts = {r["cwe"]: r["n"] for r in FindingRow.objects.filter(scan_id=pk)
+              .exclude(cwe="").values("cwe").annotate(n=Count("id"))}
+    items = standards.coverage(std, counts)
+    return JsonResponse({
+        "id": std.id, "name": std.name, "name_en": std.name_en, "source": std.source,
+        "items": items,
+        "violated": sum(1 for i in items if i["n"]),
+        "total_items": len(items),
+        "unmapped": standards.unmapped(std, counts),
+    })
+
+
 def scan_findings_api(request, pk: int):
     """필터·정렬·페이지네이션된 finding 목록(JSON). 분석 화면 가상 스크롤용."""
     from django.db.models import Case, IntegerField, Q, When
@@ -616,6 +655,14 @@ def scan_findings_api(request, pk: int):
             qs = qs.filter(idx__in=[int(k) for k, v in audit.items() if v == a])
     if rule := request.GET.get("rule"):
         qs = qs.filter(rule_id=rule)
+    # 점검 기준 필터: std=기준, item=그 기준의 점검항목 코드
+    if std := _standard(request):
+        item_code = request.GET.get("item")
+        if item_code:
+            it = next((i for i in std.items if i.code == item_code), None)
+            qs = qs.filter(cwe__in=list(it.cwes)) if it else qs.none()
+        elif request.GET.get("only_std") == "1":
+            qs = qs.filter(cwe__in=sorted(std.cwes))
     if f := request.GET.get("file"):
         qs = qs.filter(file=f)
     if q := (request.GET.get("q") or "").strip():
@@ -1201,7 +1248,8 @@ def export_xlsx(request, pk: int):
     findings = _findings_from_scan(scan)
     tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "out.xlsx"
     try:
-        excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit, lang=lang)
+        excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit,
+                             lang=lang, standard=_std(request))
         data = tmp.read_bytes()
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)
