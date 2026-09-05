@@ -1,0 +1,89 @@
+id: cpp.buffer-overflow
+message: 사용자 입력이 길이 검사 없는 버퍼 복사 함수로 흘러 들어갑니다 (버퍼 오버플로).
+severity: critical
+cwe: CWE-120
+owasp: A03:2021-Injection
+languages:
+- cpp
+sources:
+- pattern: name
+  name:
+  - argv
+  - getenv
+  - gets
+  - fgets
+  - scanf
+  - fscanf
+  - sscanf
+  - read
+  - recv
+  - recvfrom
+  - fread
+  - getchar
+  - cin
+  - std::cin
+  - getline
+  - std::getline
+  - readline
+  - gets_s
+  - GetCommandLine
+  - GetCommandLineA
+  - GetEnvironmentVariable
+  - GetEnvironmentVariableA
+  - ReadFile
+  - recvmsg
+  - WSARecv
+  - getpass
+  - getopt
+- pattern: member
+  object: argv
+sinks:
+- pattern: call
+  callee:
+  - strcpy
+  - strcat
+  - sprintf
+  - vsprintf
+  - gets
+  - memcpy
+  - strncpy
+  - wcscpy
+  - wcscat
+  - lstrcpy
+  - lstrcpyA
+  - lstrcat
+  - StrCpy
+  - StrCat
+  - stpcpy
+  - memmove
+  - bcopy
+  - _tcscpy
+  - _tcscat
+  - wsprintf
+  - wsprintfA
+  - strcpyA
+  - strcatA
+sanitizers:
+- callee:
+  - strtol
+  - strtoul
+  - strtoll
+  - atoi
+  - atol
+  - realpath
+  - PathCanonicalize
+  - PathCanonicalizeA
+  - canonicalize_file_name
+  - std::stoi
+  - stoi
+  - std::stol
+  - stol
+  - mysql_real_escape_string
+  - sqlite3_mprintf
+  - PQescapeString
+  - PQescapeLiteral
+  - std::filesystem::canonical
+  - canonical
+  - basename
+  - std::regex_match
+  - regex_match

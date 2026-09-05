@@ -33,7 +33,10 @@ LANG_BY_EXT = {
     ".ts": "TypeScript", ".tsx": "TypeScript", ".php": "PHP", ".phtml": "PHP", ".inc": "PHP",
     ".py": "Python", ".sql": "SQL", ".xml": "XML", ".yml": "YAML", ".yaml": "YAML",
     ".json": "JSON", ".properties": "Properties", ".env": "Config", ".ini": "Config",
-    ".java": "Java", ".kt": "Kotlin", ".cs": "C#", ".go": "Go",
+    ".java": "Java", ".kt": "Kotlin", ".kts": "Kotlin", ".cs": "C#", ".go": "Go",
+    ".rb": "Ruby", ".rake": "Ruby", ".swift": "Swift",
+    ".cpp": "C++", ".cc": "C++", ".cxx": "C++", ".hpp": "C++", ".hh": "C++", ".hxx": "C++",
+    ".c": "C", ".h": "C/C++",
 }
 
 # 규칙 접두 → 표준 이슈 의견. 담당자에게 '왜'와 '어떻게'를 같은 문장으로 준다.

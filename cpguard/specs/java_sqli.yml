@@ -1,0 +1,66 @@
+id: java.sqli
+message: 사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입).
+severity: critical
+cwe: CWE-89
+owasp: A03:2021-Injection
+languages:
+- java
+sources:
+- pattern: member
+  object: request
+  property: &id001
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+- pattern: member
+  object: req
+  property: *id001
+- pattern: member
+  object: httpRequest
+  property: *id001
+- pattern: member
+  object: servletRequest
+  property: *id001
+- pattern: name
+  name:
+  - System.getenv
+  - args
+sinks:
+- pattern: call
+  callee:
+  - executeQuery
+  - executeUpdate
+  - execute
+  - prepareStatement
+  - createQuery
+  - createNativeQuery
+  - createSQLQuery
+  - addBatch
+  - queryForList
+  - queryForObject
+  - update
+sanitizers:
+- callee:
+  - escapeHtml4
+  - escapeHtml
+  - encodeForHTML
+  - encodeForSQL
+  - htmlEscape
+  - Integer.parseInt
+  - parseInt
+  - parseLong
+  - Long.parseLong
+  - matches
+  - isNumeric
+  - normalize
+  - getCanonicalPath
+  - URLEncoder.encode

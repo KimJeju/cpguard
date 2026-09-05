@@ -1,0 +1,182 @@
+id: swift.webview-xss
+message: 사용자 입력이 WebView 로드/스크립트 실행으로 흘러 들어갑니다 (WebView XSS).
+severity: high
+cwe: CWE-79
+owasp: A03:2021-Injection
+languages:
+- swift
+sources:
+- pattern: member
+  object: req
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: request
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlRequest
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: components
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlComponents
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: textField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: textView
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: inputField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: urlField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchBar
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: nameField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: emailField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: userInput
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: input
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: name
+  name:
+  - CommandLine.arguments
+  - ProcessInfo.processInfo.environment
+  - ProcessInfo.processInfo.arguments
+  - readLine
+  - UIPasteboard.general.string
+sinks:
+- pattern: call
+  callee:
+  - loadHTMLString
+  - evaluateJavaScript
+  - callAsyncJavaScript
+  - stringByEvaluatingJavaScript
+  - loadRequest
+  - loadFileURL
+  - addUserScript
+  - WKUserScript
+  - JSContext.evaluateScript
+  - evaluateScript
+sanitizers:
+- callee:
+  - addingPercentEncoding
+  - Int
+  - Double
+  - Float
+  - Int64
+  - escapingHTML
+  - standardizingPath
+  - standardized
+  - resolvingSymlinksInPath
+  - lastPathComponent
+  - NSRegularExpression
+  - percentEncoded

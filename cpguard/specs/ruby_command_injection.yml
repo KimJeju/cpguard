@@ -1,0 +1,60 @@
+id: ruby.command-injection
+message: 사용자 입력이 명령 실행 함수로 흘러 들어갑니다 (명령 주입).
+severity: critical
+cwe: CWE-78
+owasp: A03:2021-Injection
+languages:
+- ruby
+sources:
+- pattern: member
+  object: params
+- pattern: member
+  object: request
+- pattern: member
+  object: cookies
+- pattern: member
+  object: session
+- pattern: name
+  name:
+  - ARGV
+  - ENV
+  - gets
+  - STDIN.gets
+  - STDIN.read
+sinks:
+- pattern: call
+  callee:
+  - system
+  - exec
+  - spawn
+  - popen
+  - IO.popen
+  - Open3.capture2
+  - Open3.capture2e
+  - Open3.capture3
+  - Open3.popen3
+  - Open3.popen2
+  - Kernel.open
+  - Kernel.system
+  - Kernel.exec
+  - Process.spawn
+sanitizers:
+- callee:
+  - sanitize
+  - h
+  - html_escape
+  - ERB::Util.html_escape
+  - escape_html
+  - Shellwords.escape
+  - shellescape
+  - to_i
+  - Integer
+  - Float
+  - quote
+  - sanitize_sql
+  - sanitize_sql_array
+  - sanitize_sql_like
+  - strip_tags
+  - CGI.escapeHTML
+  - File.basename
+  - basename

@@ -1,0 +1,85 @@
+id: cpp.sqli
+message: 사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입).
+severity: critical
+cwe: CWE-89
+owasp: A03:2021-Injection
+languages:
+- cpp
+sources:
+- pattern: name
+  name:
+  - argv
+  - getenv
+  - gets
+  - fgets
+  - scanf
+  - fscanf
+  - sscanf
+  - read
+  - recv
+  - recvfrom
+  - fread
+  - getchar
+  - cin
+  - std::cin
+  - getline
+  - std::getline
+  - readline
+  - gets_s
+  - GetCommandLine
+  - GetCommandLineA
+  - GetEnvironmentVariable
+  - GetEnvironmentVariableA
+  - ReadFile
+  - recvmsg
+  - WSARecv
+  - getpass
+  - getopt
+- pattern: member
+  object: argv
+sinks:
+- pattern: call
+  callee:
+  - mysql_query
+  - mysql_real_query
+  - sqlite3_exec
+  - sqlite3_prepare
+  - sqlite3_prepare_v2
+  - sqlite3_prepare_v3
+  - PQexec
+  - PQexecParams
+  - SQLExecDirect
+  - SQLExecDirectA
+  - SQLExecDirectW
+  - SQLPrepare
+  - executeQuery
+  - executeUpdate
+  - mysql_stmt_prepare
+  - OCIStmtPrepare
+  - OCIStmtPrepare2
+  - sqlite3_get_table
+  - PQsendQuery
+sanitizers:
+- callee:
+  - strtol
+  - strtoul
+  - strtoll
+  - atoi
+  - atol
+  - realpath
+  - PathCanonicalize
+  - PathCanonicalizeA
+  - canonicalize_file_name
+  - std::stoi
+  - stoi
+  - std::stol
+  - stol
+  - mysql_real_escape_string
+  - sqlite3_mprintf
+  - PQescapeString
+  - PQescapeLiteral
+  - std::filesystem::canonical
+  - canonical
+  - basename
+  - std::regex_match
+  - regex_match

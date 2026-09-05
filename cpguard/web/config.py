@@ -23,6 +23,24 @@ EXTRA_ENV = [
     ("anthropic_workspace", "ANTHROPIC_WORKSPACE_ID", "Claude 워크스페이스 ID (신원 연동 키만)"),
 ]
 
+# 보고서 메타 — PDF 표지·개정이력에 들어가는 입력값. (키, 표시이름, 플레이스홀더)
+# config.json 의 "report" 객체에 저장한다. 비우면 PDF 는 기본값(CPGuard 등)을 쓴다.
+REPORT_FIELDS = [
+    ("author", "작성자", "예: 홍길동 (보안팀)"),
+    ("org", "수행 기관/회사", "예: ○○시큐어"),
+    ("client", "발주처/고객", "예: ○○공사 정보보안팀"),
+    ("tester", "진단 담당자", "예: 홍길동, 김철수"),
+    ("period", "진단 수행 기간", "예: 2026.08.01 ~ 2026.08.20"),
+    ("version", "보고서 버전", "예: 1.0"),
+]
+
+
+def report_meta() -> dict:
+    """저장된 보고서 메타(빈 값은 제외)."""
+    r = load().get("report") or {}
+    return {k: (r.get(k) or "").strip() for k, _l, _p in REPORT_FIELDS if (r.get(k) or "").strip()}
+
+
 # 설정 화면 모델 선택 후보(자유 입력도 허용). 빈 값 = 프로바이더 기본 모델.
 MODEL_OPTIONS = {
     "claude": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5"],

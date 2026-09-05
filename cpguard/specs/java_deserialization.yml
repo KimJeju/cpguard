@@ -1,0 +1,61 @@
+id: java.deserialization
+message: 사용자 입력이 역직렬화 함수로 흘러 들어갑니다 (안전하지 않은 역직렬화).
+severity: critical
+cwe: CWE-502
+owasp: A08:2021-Software and Data Integrity Failures
+languages:
+- java
+sources:
+- pattern: member
+  object: request
+  property: &id001
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+- pattern: member
+  object: req
+  property: *id001
+- pattern: member
+  object: httpRequest
+  property: *id001
+- pattern: member
+  object: servletRequest
+  property: *id001
+- pattern: name
+  name:
+  - System.getenv
+  - args
+sinks:
+- pattern: call
+  callee:
+  - readObject
+  - XMLDecoder
+  - fromXML
+  - Yaml.load
+  - readValue
+  - readUnshared
+sanitizers:
+- callee:
+  - escapeHtml4
+  - escapeHtml
+  - encodeForHTML
+  - encodeForSQL
+  - htmlEscape
+  - Integer.parseInt
+  - parseInt
+  - parseLong
+  - Long.parseLong
+  - matches
+  - isNumeric
+  - normalize
+  - getCanonicalPath
+  - URLEncoder.encode

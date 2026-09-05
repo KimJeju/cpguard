@@ -1,0 +1,66 @@
+id: java.ssrf
+message: 사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF).
+severity: high
+cwe: CWE-918
+owasp: A10:2021-SSRF
+languages:
+- java
+sources:
+- pattern: member
+  object: request
+  property: &id001
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+- pattern: member
+  object: req
+  property: *id001
+- pattern: member
+  object: httpRequest
+  property: *id001
+- pattern: member
+  object: servletRequest
+  property: *id001
+- pattern: name
+  name:
+  - System.getenv
+  - args
+sinks:
+- pattern: call
+  callee:
+  - URL
+  - URI
+  - openConnection
+  - HttpClient.send
+  - getForObject
+  - getForEntity
+  - postForObject
+  - exchange
+  - HttpGet
+  - HttpPost
+  - URI.create
+sanitizers:
+- callee:
+  - escapeHtml4
+  - escapeHtml
+  - encodeForHTML
+  - encodeForSQL
+  - htmlEscape
+  - Integer.parseInt
+  - parseInt
+  - parseLong
+  - Long.parseLong
+  - matches
+  - isNumeric
+  - normalize
+  - getCanonicalPath
+  - URLEncoder.encode

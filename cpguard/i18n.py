@@ -85,6 +85,15 @@ MSG: dict[str, str] = {
     "쿠키에 httpOnly/secure 플래그가 꺼져 있습니다.": "The cookie's httpOnly/secure flags are disabled.",
     "휴대폰번호 형식의 값이 소스에 있습니다.": "A value in mobile phone-number format is present.",
     "민감한 파일명/확장자입니다 — 저장소에 있으면 안 되는 파일일 수 있습니다.": "A sensitive filename/extension — this file probably should not be in the repository.",
+    # 다국어 확장(Java·Kotlin·Go·Ruby·C/C++·Swift·C#) 신규 유형
+    "사용자 입력이 역직렬화 함수로 흘러 들어갑니다 (안전하지 않은 역직렬화).": "User input flows into a deserialization function (insecure deserialization).",
+    "사용자 입력이 길이 검사 없는 버퍼 복사 함수로 흘러 들어갑니다 (버퍼 오버플로).": "User input flows into an unbounded buffer-copy function (buffer overflow).",
+    "사용자 입력이 포맷 문자열 인자로 흘러 들어갑니다 (포맷 스트링).": "User input flows into a format-string argument (format string vulnerability).",
+    "사용자 입력이 LDAP 질의로 흘러 들어갑니다 (LDAP 주입).": "User input flows into an LDAP query (LDAP injection).",
+    "사용자 입력이 XPath 질의로 흘러 들어갑니다 (XPath 주입).": "User input flows into an XPath query (XPath injection).",
+    "사용자 입력이 WebView 로드/스크립트 실행으로 흘러 들어갑니다 (WebView XSS).": "User input flows into a WebView load / script execution (WebView XSS).",
+    "사용자 입력이 Intent 실행으로 흘러 들어갑니다 (Intent 리다이렉션).": "User input flows into an Intent launch (Intent redirection).",
+    "사용자 입력이 라이브러리 로드 경로로 흘러 들어갑니다 (라이브러리 주입).": "User input flows into a library load path (library injection).",
 }
 
 # ── PDF 문서 챔버(제목·표머리·라벨·정적 문단) ──────────────────────────────
@@ -114,7 +123,48 @@ PDF_UI: dict[str, str] = {
     "탐지 유형": "Types detected",
     "설명": "Explanation", "조치 방법": "Remediation", "안전 예시:": "Safe example:",
     "해당 위치": "Locations", "조치 가이드": "Remediation Guide",
+    # 고도화 보고서 섹션
+    "문서 개정 이력": "Document Revision History",
+    "버전": "Version", "일자": "Date", "내용": "Description", "작성": "Author",
+    "최초 작성": "Initial draft", "결과 반영·보완": "Findings incorporated / revised",
+    "목차": "Contents",
+    "1. 진단 개요": "1. Assessment Overview",
+    "1.1 진단 배경 및 목적": "1.1 Background & Objective",
+    "1.2 진단 대상 범위": "1.2 Assessment Scope",
+    "1.3 진단 방법 및 기준": "1.3 Methodology & Criteria",
+    "2. 진단 결과 요약": "2. Results Summary",
+    "3. 진단 항목": "3. Checklist",
+    "4. 상세 진단 결과": "4. Detailed Findings",
+    "5. 종합 의견": "5. Overall Assessment",
+    "부록 A. 위험도 판정 기준": "Appendix A. Severity Rating Criteria",
+    "프로젝트": "Project", "대상 파일 수": "Source files", "탐지 이슈 수": "Total findings",
+    "분석 언어": "Languages", "진단 도구": "Tool", "진단 기준": "Standards", "진단 일시": "Date",
+    "대상": "Target", "항목": "Item", "값": "Value",
+    "위험도 분포": "Severity Distribution", "취약점 유형(CWE) 상위": "Top Vulnerability Types (CWE)",
+    "점검 항목": "Check item", "규칙": "Rule", "탐지": "Found",
+    "취약점": "Vulnerability", "데이터 흐름": "Data Flow", "영향": "Impact",
+    "조치 방안": "Remediation", "안전한 코드 예시": "Safe Code Example", "참고": "References",
+    "판정": "Rating", "기준": "Criteria", "조치 우선순위": "Priority",
+    "발주처/고객": "Client", "수행 기관/회사": "Assessed by", "진단 담당자": "Assessor",
+    "진단 수행 기간": "Assessment period", "보고서 버전": "Report version",
+    "CPGuard (CPG 기반 taint 분석 + 패턴)": "CPGuard (CPG-based taint analysis + patterns)",
+    "본 보고서는 대상 소스코드에 대해 CPGuard 정적 분석(데이터 흐름 taint 분석 + 패턴 점검)을 "
+    "수행하여 도출한 보안약점과 그 조치 방안을 기술한다. 각 취약점은 CWE·OWASP 기준으로 분류하고, "
+    "위험도에 따라 조치 우선순위를 제시한다.":
+        "This report describes the security weaknesses found in the target source code by CPGuard "
+        "static analysis (data-flow taint analysis + pattern checks) and their remediation. Each "
+        "weakness is classified by CWE and OWASP, with a remediation priority by severity.",
+    "이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다.":
+        "The check items (rules) detected in this assessment, with their classification and counts, are listed below.",
+    "즉시 조치": "Immediate", "우선 조치": "High priority", "계획 조치": "Planned",
+    "참고 개선": "Advisory", "정보성": "Informational",
 }
+
+# 데이터 흐름 단계 라벨(SARIF kind)
+STEP_LABEL = {"source": "입력(Source)", "sink": "위험지점(Sink)", "propagation": "전파(Propagation)",
+              "sanitizer": "정제(Sanitizer)", "match": "탐지 지점"}
+STEP_LABEL_EN = {"source": "Source", "sink": "Sink", "propagation": "Propagation",
+                 "sanitizer": "Sanitizer", "match": "Match"}
 
 SEV_EN = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low", "info": "Info"}
 

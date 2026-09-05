@@ -72,6 +72,9 @@ def normalize(tree: Tree, file: str = "<memory>", language: str = "javascript") 
     if language == "python":
         from .normalize_py import normalize_py
         return normalize_py(tree, file)
+    if language in ("java", "kotlin", "go", "ruby", "cpp", "c", "swift", "csharp"):
+        from .normalize_cfam import normalize_cfam
+        return normalize_cfam(tree, file, language)
     root = tree.root_node
     return ir.Module(loc=loc_of(root, file), body=_block(root.named_children, file))
 

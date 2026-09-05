@@ -1,0 +1,58 @@
+id: java.command-injection
+message: 사용자 입력이 명령 실행 함수로 흘러 들어갑니다 (명령 주입).
+severity: critical
+cwe: CWE-78
+owasp: A03:2021-Injection
+languages:
+- java
+sources:
+- pattern: member
+  object: request
+  property: &id001
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+- pattern: member
+  object: req
+  property: *id001
+- pattern: member
+  object: httpRequest
+  property: *id001
+- pattern: member
+  object: servletRequest
+  property: *id001
+- pattern: name
+  name:
+  - System.getenv
+  - args
+sinks:
+- pattern: call
+  callee:
+  - exec
+  - ProcessBuilder
+  - command
+sanitizers:
+- callee:
+  - escapeHtml4
+  - escapeHtml
+  - encodeForHTML
+  - encodeForSQL
+  - htmlEscape
+  - Integer.parseInt
+  - parseInt
+  - parseLong
+  - Long.parseLong
+  - matches
+  - isNumeric
+  - normalize
+  - getCanonicalPath
+  - URLEncoder.encode

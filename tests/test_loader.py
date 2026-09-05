@@ -22,5 +22,7 @@ def test_language_name_for():
 
 def test_unsupported_ext():
     import pytest
+    # .rb 는 이제 Ruby 로 지원된다 — 정말 모르는 확장자로 검사
+    assert loader.language_name_for("foo.rb") == "ruby"
     with pytest.raises(loader.UnsupportedLanguage):
-        loader.language_name_for("foo.rb")
+        loader.language_name_for("foo.zzz")

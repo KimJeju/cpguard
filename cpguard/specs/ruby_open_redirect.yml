@@ -1,0 +1,49 @@
+id: ruby.open-redirect
+message: 사용자 입력이 리다이렉트 위치로 흘러 들어갑니다 (오픈 리다이렉트).
+severity: medium
+cwe: CWE-601
+owasp: A01:2021-Broken Access Control
+languages:
+- ruby
+sources:
+- pattern: member
+  object: params
+- pattern: member
+  object: request
+- pattern: member
+  object: cookies
+- pattern: member
+  object: session
+- pattern: name
+  name:
+  - ARGV
+  - ENV
+  - gets
+  - STDIN.gets
+  - STDIN.read
+sinks:
+- pattern: call
+  callee:
+  - redirect_to
+  - redirect_back
+  - redirect
+sanitizers:
+- callee:
+  - sanitize
+  - h
+  - html_escape
+  - ERB::Util.html_escape
+  - escape_html
+  - Shellwords.escape
+  - shellescape
+  - to_i
+  - Integer
+  - Float
+  - quote
+  - sanitize_sql
+  - sanitize_sql_array
+  - sanitize_sql_like
+  - strip_tags
+  - CGI.escapeHTML
+  - File.basename
+  - basename

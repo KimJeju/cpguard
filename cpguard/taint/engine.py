@@ -63,6 +63,10 @@ def path_of(node: ir.Node) -> str | None:
             return None
         # a[expr] 는 인덱스를 특정할 수 없어 베이스와 동일 취급(과대근사)
         return base if node.computed else f"{base}.{node.prop}"
+    if isinstance(node, ir.Call):
+        # Runtime.getRuntime().exec(x) / foo().bar() — 호출 결과를 리시버로 쓰는 체인.
+        # 호출 대상 경로를 베이스로 이어야 'exec' 같은 sink 접미가 매칭된다.
+        return path_of(node.callee)
     return None
 
 

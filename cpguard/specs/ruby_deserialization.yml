@@ -1,0 +1,57 @@
+id: ruby.deserialization
+message: 사용자 입력이 역직렬화 함수로 흘러 들어갑니다 (안전하지 않은 역직렬화).
+severity: critical
+cwe: CWE-502
+owasp: A08:2021-Software and Data Integrity Failures
+languages:
+- ruby
+sources:
+- pattern: member
+  object: params
+- pattern: member
+  object: request
+- pattern: member
+  object: cookies
+- pattern: member
+  object: session
+- pattern: name
+  name:
+  - ARGV
+  - ENV
+  - gets
+  - STDIN.gets
+  - STDIN.read
+sinks:
+- pattern: call
+  callee:
+  - Marshal.load
+  - Marshal.restore
+  - YAML.load
+  - YAML.load_file
+  - YAML.unsafe_load
+  - Oj.load
+  - Oj.object_load
+  - JSON.load
+  - JSON.restore
+  - Psych.load
+  - Psych.unsafe_load
+sanitizers:
+- callee:
+  - sanitize
+  - h
+  - html_escape
+  - ERB::Util.html_escape
+  - escape_html
+  - Shellwords.escape
+  - shellescape
+  - to_i
+  - Integer
+  - Float
+  - quote
+  - sanitize_sql
+  - sanitize_sql_array
+  - sanitize_sql_like
+  - strip_tags
+  - CGI.escapeHTML
+  - File.basename
+  - basename

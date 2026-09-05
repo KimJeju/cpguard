@@ -1,0 +1,69 @@
+id: ruby.path-traversal
+message: 사용자 입력이 파일 경로로 흘러 들어갑니다 (경로 조작).
+severity: high
+cwe: CWE-22
+owasp: A01:2021-Broken Access Control
+languages:
+- ruby
+sources:
+- pattern: member
+  object: params
+- pattern: member
+  object: request
+- pattern: member
+  object: cookies
+- pattern: member
+  object: session
+- pattern: name
+  name:
+  - ARGV
+  - ENV
+  - gets
+  - STDIN.gets
+  - STDIN.read
+sinks:
+- pattern: call
+  callee:
+  - File.open
+  - File.read
+  - File.new
+  - File.write
+  - File.readlines
+  - File.delete
+  - File.foreach
+  - IO.read
+  - IO.readlines
+  - IO.write
+  - Dir.glob
+  - Dir.entries
+  - Dir.children
+  - send_file
+  - send_data
+  - Pathname.new
+  - FileUtils.rm
+  - FileUtils.rm_rf
+  - FileUtils.cp
+  - FileUtils.mv
+  - load
+  - require
+  - require_relative
+sanitizers:
+- callee:
+  - sanitize
+  - h
+  - html_escape
+  - ERB::Util.html_escape
+  - escape_html
+  - Shellwords.escape
+  - shellescape
+  - to_i
+  - Integer
+  - Float
+  - quote
+  - sanitize_sql
+  - sanitize_sql_array
+  - sanitize_sql_like
+  - strip_tags
+  - CGI.escapeHTML
+  - File.basename
+  - basename

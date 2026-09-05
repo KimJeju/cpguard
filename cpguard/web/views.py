@@ -347,6 +347,9 @@ def settings_page(request):
                     cfg[env] = v
                     os.environ[env] = v
         cfg["models"] = mdls
+        # 보고서 메타(작성자·기관·발주처·담당자·기간·버전) — PDF 표지/개정이력용
+        cfg["report"] = {k: (request.POST.get(f"report_{k}") or "").strip()
+                         for k, _l, _p in appcfg.REPORT_FIELDS}
         appcfg.save(cfg)
         return redirect("settings")
 
@@ -354,6 +357,9 @@ def settings_page(request):
     defaults = {name: cls.default_model for name, cls in PROVIDERS.items()}
     cfg = appcfg.load()
     mdls = cfg.get("models") or {}
+    rep = cfg.get("report") or {}
+    report_fields = [{"key": k, "label": l, "placeholder": p, "value": rep.get(k, "")}
+                     for k, l, p in appcfg.REPORT_FIELDS]
     rows = []
     for _cid, env, label, pname in appcfg.KEYS:
         stored = cfg.get(env) or os.environ.get(env, "")
@@ -369,7 +375,8 @@ def settings_page(request):
         extras.append({"env": env, "label": label,
                        "value": stored, "set": bool(stored)})
     return render(request, "settings.html",
-                  {"rows": rows, "extras": extras, "providers": available()})
+                  {"rows": rows, "extras": extras, "providers": available(),
+                   "report_fields": report_fields})
 
 
 def compare(request):
@@ -472,7 +479,9 @@ def portfolio_export(request):
     from ..report import excel
     from ..report import pdf as pdfmod
 
+    from . import config as appcfg
     lang = _lang(request)
+    meta = appcfg.report_meta()
     ids = [int(x) for x in (request.GET.get("ids") or "").split(",") if x.strip().isdigit()]
     ids = ids[:300]                                  # 폭주 방지 상한
     kind = request.GET.get("kind", "both")           # report | xlsx | both
@@ -489,7 +498,7 @@ def portfolio_export(request):
             if kind in ("report", "both"):
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "r.pdf"
                 try:
-                    pdfmod.combined_report(scan, tmp, lang=lang)
+                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta)
                     zf.writestr(f"{folder}/{safe}_report.pdf", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -510,13 +519,15 @@ def portfolio_export(request):
 
 def _pdf_response(scan, kind: str, lang: str = "ko"):
     from ..report import pdf as pdfmod
+    from . import config as appcfg
+    meta = appcfg.report_meta()          # 설정의 보고서 정보(작성자·기관·발주처·기간·버전)
     tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "out.pdf"
     try:
         if kind == "guide":
-            pdfmod.remediation_guide(scan, tmp, lang=lang)
+            pdfmod.remediation_guide(scan, tmp, lang=lang, meta=meta)
             suffix = "remediation-guide" if lang == "en" else "조치가이드"
         else:
-            pdfmod.combined_report(scan, tmp, lang=lang)
+            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta)
             suffix = "assessment-report" if lang == "en" else "진단결과보고서"
         data = tmp.read_bytes()
     finally:

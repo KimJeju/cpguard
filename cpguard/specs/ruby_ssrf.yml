@@ -1,0 +1,62 @@
+id: ruby.ssrf
+message: 사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF).
+severity: high
+cwe: CWE-918
+owasp: A10:2021-SSRF
+languages:
+- ruby
+sources:
+- pattern: member
+  object: params
+- pattern: member
+  object: request
+- pattern: member
+  object: cookies
+- pattern: member
+  object: session
+- pattern: name
+  name:
+  - ARGV
+  - ENV
+  - gets
+  - STDIN.gets
+  - STDIN.read
+sinks:
+- pattern: call
+  callee:
+  - Net::HTTP.get
+  - Net::HTTP.get_response
+  - Net::HTTP.post
+  - Net::HTTP.start
+  - URI.open
+  - RestClient.get
+  - RestClient.post
+  - HTTParty.get
+  - HTTParty.post
+  - Faraday.get
+  - Faraday.post
+  - URI.parse
+  - Typhoeus.get
+  - Excon.get
+  - HTTP.get
+  - Net::HTTP.new
+sanitizers:
+- callee:
+  - sanitize
+  - h
+  - html_escape
+  - ERB::Util.html_escape
+  - escape_html
+  - Shellwords.escape
+  - shellescape
+  - to_i
+  - Integer
+  - Float
+  - quote
+  - sanitize_sql
+  - sanitize_sql_array
+  - sanitize_sql_like
+  - strip_tags
+  - CGI.escapeHTML
+  - File.basename
+  - basename

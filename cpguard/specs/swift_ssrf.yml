@@ -1,0 +1,186 @@
+id: swift.ssrf
+message: 사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF).
+severity: high
+cwe: CWE-918
+owasp: A10:2021-SSRF
+languages:
+- swift
+sources:
+- pattern: member
+  object: req
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: request
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlRequest
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: components
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlComponents
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: textField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: textView
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: inputField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: urlField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchBar
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: nameField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: emailField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: userInput
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: input
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: name
+  name:
+  - CommandLine.arguments
+  - ProcessInfo.processInfo.environment
+  - ProcessInfo.processInfo.arguments
+  - readLine
+  - UIPasteboard.general.string
+sinks:
+- pattern: call
+  callee:
+  - dataTask
+  - downloadTask
+  - uploadTask
+  - URLRequest
+  - NSURLRequest
+  - dataTaskPublisher
+  - webSocketTask
+  - NSURLConnection
+  - sendSynchronousRequest
+  - sendAsynchronousRequest
+  - AF.request
+  - Alamofire.request
+  - URLSession.shared.data
+  - URLSession.shared.dataTask
+sanitizers:
+- callee:
+  - addingPercentEncoding
+  - Int
+  - Double
+  - Float
+  - Int64
+  - escapingHTML
+  - standardizingPath
+  - standardized
+  - resolvingSymlinksInPath
+  - lastPathComponent
+  - NSRegularExpression
+  - percentEncoded

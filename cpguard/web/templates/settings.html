@@ -91,6 +91,20 @@
     </div>
     {% endfor %}
 
+    <div class="keyrow" style="margin-top:22px">
+      <div class="top">
+        <span class="name">보고서 정보</span>
+        <span class="note" style="margin:0 0 0 6px;font-size:12px">PDF 표지·개정이력에 들어갑니다. 비우면 기본값(CPGuard)</span>
+      </div>
+      {% for f in report_fields %}
+      <div class="modelrow">
+        <label style="width:110px">{{ f.label }}</label>
+        <input type="text" name="report_{{ f.key }}" value="{{ f.value }}" autocomplete="off" spellcheck="false"
+               placeholder="{{ f.placeholder }}" style="font-family:inherit">
+      </div>
+      {% endfor %}
+    </div>
+
     <div style="display:flex;gap:10px;align-items:center;margin-top:16px">
       <button class="btn" type="submit">저장</button>
       <a class="btn ghost" href="/">홈으로</a>

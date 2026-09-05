@@ -1,0 +1,199 @@
+id: kotlin.path-traversal
+message: 사용자 입력이 파일 경로로 흘러 들어갑니다 (경로 조작).
+severity: high
+cwe: CWE-22
+owasp: A01:2021-Broken Access Control
+languages:
+- kotlin
+sources:
+- pattern: member
+  object: request
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: member
+  object: req
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: member
+  object: intent
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: member
+  object: call
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: member
+  object: ctx
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: member
+  object: activity
+  property:
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+  - getStringExtra
+  - getExtras
+  - getData
+  - dataString
+  - data
+  - queryParameters
+  - parameters
+  - receiveText
+  - receiveParameters
+  - query
+  - intent
+  - getIntent
+- pattern: name
+  name:
+  - System.getenv
+sinks:
+- pattern: call
+  callee:
+  - File
+  - FileInputStream
+  - FileOutputStream
+  - openFileInput
+  - openFileOutput
+  - Paths.get
+  - Files.readAllBytes
+  - readText
+  - readBytes
+  - writeText
+sanitizers:
+- callee:
+  - escapeHtml4
+  - escapeHtml
+  - htmlEscape
+  - toInt
+  - toIntOrNull
+  - toLong
+  - toLongOrNull
+  - matches
+  - Uri.encode
+  - URLEncoder.encode
+  - canonicalPath

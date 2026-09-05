@@ -10,7 +10,9 @@ CPG 기반 taint 분석 + LLM 트리아지를 결합한 정적 보안 분석(SAS
 
 - **데이터 흐름(taint)** — 사용자 입력(source)이 위험한 지점(sink)까지 흘러가는지 추적합니다.
   SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) ·
-  SSRF(918) · 오픈 리다이렉트(601). 지원 언어: JavaScript · TypeScript · PHP · Python.
+  SSRF(918) · 오픈 리다이렉트(601) · 역직렬화(502) · 버퍼 오버플로(120) · 포맷 스트링(134) ·
+  LDAP/XPath 주입(90/643) · WebView XSS · Intent 리다이렉션(926).
+  지원 언어: JavaScript · TypeScript · PHP · Python · **Java · Kotlin · Go · Ruby · C/C++ · Swift · C#**.
 - **패턴(단일 지점)** — 전 언어 대상. 하드코딩 비밀정보·API 키 · 개인정보(PII) ·
   TLS 검증 비활성 · 취약 암호/해시 · 디버그 코드 · 설정 위생.
 

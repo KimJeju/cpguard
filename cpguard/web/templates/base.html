@@ -107,7 +107,7 @@
   .v-false_positive{background:color-mix(in srgb,var(--low) 15%,transparent);color:var(--low)}
   .v-uncertain{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--muted)}
   .btn{display:inline-block;background:var(--accent);color:var(--on-accent);border:0;border-radius:0;
-       padding:8px 15px;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-.005em;transition:filter .12s,background .12s}
+       padding:8px 15px;font-weight:600;cursor:pointer;font-size:13px;letter-spacing:-.005em;white-space:nowrap;transition:filter .12s,background .12s}
   .btn:hover{filter:brightness(1.08)}
   .btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
   .btn.ghost:hover{background:var(--hover);filter:none}
@@ -473,6 +473,7 @@
       "배치 진단 진행 중": "Batch scan in progress", "배치 진단 완료 ✓": "Batch scan complete ✓",
       "대기 중…": "Waiting…", "포트폴리오로 이동 →": "Go to portfolio →", "새 스캔": "New scan",
       "상태": "Status", "열기": "Open", "오류": "Error", "대기": "Pending",
+      "전체 지우기": "Clear all", "제거": "Remove",
       "여러 프로젝트를 한 번에: zip 여러 개를 선택하거나, 프로젝트 zip 들을 담은 zip 하나를 올리면 각각 진단합니다.":
         "Scan many projects at once: select multiple zips, or upload one zip that contains project zips — each is scanned separately.",
       // ── 대시보드/업로드 추가 ──
@@ -544,6 +545,7 @@
       [/^(.+) 홈$/, "$1 home"],
       [/^(\d+)개 프로젝트 · 프로젝트별 최신 스캔$/, "$1 projects · latest scan each"],
       [/^(\d+)개 선택$/, "$1 selected"],
+      [/^선택한 파일 (\d+)개 · (.+)$/, "$1 files selected · $2"],
       [/^심각 (\d+)$/, "Critical $1"], [/^높음 (\d+)$/, "High $1"],
       [/^중간 (\d+)$/, "Medium $1"], [/^낮음 (\d+)$/, "Low $1"],
       [/^완료 (\d+) · 실패 (\d+) · 경과 (\d+)초$/, "Done $1 · Failed $2 · Elapsed $3s"],

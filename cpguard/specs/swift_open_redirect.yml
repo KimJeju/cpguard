@@ -1,0 +1,178 @@
+id: swift.open-redirect
+message: 사용자 입력이 리다이렉트 위치로 흘러 들어갑니다 (오픈 리다이렉트).
+severity: medium
+cwe: CWE-601
+owasp: A01:2021-Broken Access Control
+languages:
+- swift
+sources:
+- pattern: member
+  object: req
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: request
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlRequest
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: components
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlComponents
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: textField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: textView
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: inputField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: urlField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchBar
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: nameField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: emailField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: userInput
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: input
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: name
+  name:
+  - CommandLine.arguments
+  - ProcessInfo.processInfo.environment
+  - ProcessInfo.processInfo.arguments
+  - readLine
+  - UIPasteboard.general.string
+sinks:
+- pattern: call
+  callee:
+  - UIApplication.shared.open
+  - shared.open
+  - openURL
+  - canOpenURL
+  - NSWorkspace.shared.open
+  - SFSafariViewController
+sanitizers:
+- callee:
+  - addingPercentEncoding
+  - Int
+  - Double
+  - Float
+  - Int64
+  - escapingHTML
+  - standardizingPath
+  - standardized
+  - resolvingSymlinksInPath
+  - lastPathComponent
+  - NSRegularExpression
+  - percentEncoded

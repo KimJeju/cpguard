@@ -1,0 +1,184 @@
+id: swift.sqli
+message: 사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입).
+severity: critical
+cwe: CWE-89
+owasp: A03:2021-Injection
+languages:
+- swift
+sources:
+- pattern: member
+  object: req
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: request
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlRequest
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: components
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: urlComponents
+  property:
+  - query
+  - parameters
+  - body
+  - headers
+  - content
+  - url
+  - queryItems
+  - allHTTPHeaderFields
+  - httpBody
+  - pathComponents
+  - absoluteString
+- pattern: member
+  object: textField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: textView
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: inputField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: urlField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchBar
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: searchField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: nameField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: emailField
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: userInput
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: member
+  object: input
+  property:
+  - text
+  - attributedText
+  - string
+  - stringValue
+- pattern: name
+  name:
+  - CommandLine.arguments
+  - ProcessInfo.processInfo.environment
+  - ProcessInfo.processInfo.arguments
+  - readLine
+  - UIPasteboard.general.string
+sinks:
+- pattern: call
+  callee:
+  - sqlite3_exec
+  - sqlite3_prepare_v2
+  - sqlite3_prepare
+  - sqlite3_prepare_v3
+  - executeQuery
+  - executeUpdate
+  - executeStatements
+  - executeSQL
+  - rawQuery
+  - executeQueryWithFormat
+  - executeUpdateWithFormat
+  - SQLRequest
+sanitizers:
+- callee:
+  - addingPercentEncoding
+  - Int
+  - Double
+  - Float
+  - Int64
+  - escapingHTML
+  - standardizingPath
+  - standardized
+  - resolvingSymlinksInPath
+  - lastPathComponent
+  - NSRegularExpression
+  - percentEncoded

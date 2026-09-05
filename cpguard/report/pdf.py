@@ -8,6 +8,7 @@ from __future__ import annotations
 import datetime as _dt
 from pathlib import Path
 
+from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
@@ -15,10 +16,13 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import (PageBreak, Paragraph, SimpleDocTemplate, Spacer,
+from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether, PageBreak,
+                                PageTemplate, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
+from reportlab.platypus.tableofcontents import TableOfContents
 
-from ..i18n import DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, tr
+from ..i18n import (DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, STEP_LABEL,
+                    STEP_LABEL_EN, tr)
 
 # ---- 폰트 등록 (한글) ----
 _FONT = "Helvetica"
@@ -122,12 +126,56 @@ def _rule_key(rule_id: str) -> str:
 def _styles():
     ss = getSampleStyleSheet()
     body = ParagraphStyle("body", parent=ss["Normal"], fontName=_FONT, fontSize=9.5, leading=15)
-    h1 = ParagraphStyle("h1", parent=ss["Heading1"], fontName=_FONT_B, fontSize=15, spaceBefore=10, spaceAfter=8)
+    # h1 = 대단원(TOC L0), h2sec = 중단원(TOC L1). afterFlowable 가 이 스타일명으로 목차를 만든다.
+    h1 = ParagraphStyle("h1", parent=ss["Heading1"], fontName=_FONT_B, fontSize=15, spaceBefore=14, spaceAfter=8,
+                        textColor=colors.HexColor("#1a2740"))
+    h2sec = ParagraphStyle("h2sec", parent=ss["Heading2"], fontName=_FONT_B, fontSize=11.5, spaceBefore=10, spaceAfter=4,
+                          textColor=colors.HexColor("#2a3a55"))
     h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName=_FONT_B, fontSize=12, spaceBefore=10, spaceAfter=5)
     small = ParagraphStyle("small", parent=body, fontSize=8.5, textColor=colors.HexColor("#555"))
-    code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8.5, textColor=colors.HexColor("#0a3"),
-                          backColor=colors.HexColor("#f4f4f4"), borderPadding=4)
-    return {"body": body, "h1": h1, "h2": h2, "small": small, "code": code}
+    lbl = ParagraphStyle("lbl", parent=body, fontName=_FONT_B, fontSize=9, textColor=colors.HexColor("#333"))
+    cardt = ParagraphStyle("cardt", parent=body, fontName=_FONT_B, fontSize=10.5, textColor=colors.white, leading=14)
+    code = ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8, textColor=colors.HexColor("#0a3"),
+                          backColor=colors.HexColor("#f4f4f4"), borderPadding=4, leading=11)
+    flow = ParagraphStyle("flow", parent=body, fontName="Courier", fontSize=8, leading=12,
+                          textColor=colors.HexColor("#333"))
+    return {"body": body, "h1": h1, "h2": h2, "h2sec": h2sec, "small": small,
+            "lbl": lbl, "cardt": cardt, "code": code, "flow": flow}
+
+
+def _sev_chart(counts, sevmap):
+    """위험도 분포 가로 막대(간단 Drawing)."""
+    order = SEV_ORDER
+    mx = max([counts.get(s, 0) for s in order] + [1])
+    row_h, bar_w = 20, 300
+    d = Drawing(460, row_h * len(order) + 6)
+    y = row_h * (len(order) - 1) + 3
+    for s in order:
+        n = counts.get(s, 0)
+        w = max(1.0, (n / mx) * bar_w)
+        d.add(String(2, y + 3, sevmap[s], fontName=_FONT, fontSize=9, fillColor=colors.HexColor("#333")))
+        d.add(Rect(78, y, bar_w, 12, fillColor=colors.HexColor("#eee"), strokeColor=None))
+        d.add(Rect(78, y, w, 12, fillColor=SEV_COLOR[s], strokeColor=None))
+        d.add(String(78 + bar_w + 8, y + 3, str(n), fontName=_FONT_B, fontSize=9, fillColor=colors.HexColor("#333")))
+        y -= row_h
+    return d
+
+
+def _kv_table(rows, T, col0=50 * mm, col1=124 * mm):
+    """항목/값 2열 표(개요·범위·방법)."""
+    data = [[T(k), v] for k, v in rows]
+    t = Table(data, colWidths=[col0, col1])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("FONTNAME", (0, 0), (0, -1), _FONT_B),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f3f5f8")),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#334")),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    return t
 
 
 def _cover(story, st, title, subtitle, meta_rows):
@@ -139,7 +187,7 @@ def _cover(story, st, title, subtitle, meta_rows):
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(subtitle, ParagraphStyle("c2", parent=center, fontName=_FONT, fontSize=13, textColor=colors.HexColor("#444"))))
     story.append(Spacer(1, 30 * mm))
-    t = Table([[k, v] for k, v in meta_rows], colWidths=[45 * mm, 90 * mm])
+    t = Table([[k, v] for k, v in meta_rows], colWidths=[50 * mm, 124 * mm])
     t.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#666")),
@@ -154,7 +202,7 @@ def _severity_table(story, st, counts, sevmap, T):
     total = sum(counts.get(s, 0) for s in SEV_ORDER)
     head = [T("위험도")] + [sevmap[s] for s in SEV_ORDER] + [T("합계")]
     row = [T("개수")] + [str(counts.get(s, 0)) for s in SEV_ORDER] + [str(total)]
-    t = Table([head, row], colWidths=[24 * mm] + [22 * mm] * 5 + [22 * mm])
+    t = Table([head, row], colWidths=[30 * mm] + [24 * mm] * 5 + [24 * mm])
     style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ccc")),
              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
@@ -166,8 +214,92 @@ def _severity_table(story, st, counts, sevmap, T):
     story.append(t)
 
 
-def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko") -> None:
-    """합본 진단 결과 보고서."""
+def _esc(s: str) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _cwe_ref(cwe: str) -> str:
+    """CWE-89 → mitre 링크 마크업."""
+    import re
+    m = re.search(r"(\d+)", cwe or "")
+    if not m:
+        return _esc(cwe or "-")
+    return f'<link href="https://cwe.mitre.org/data/definitions/{m.group(1)}.html" color="#2a5db0">{_esc(cwe)}</link>'
+
+
+# 위험도별 조치 우선순위(부록·상세 요약용)
+_PRIORITY = {"critical": "즉시 조치", "high": "우선 조치", "medium": "계획 조치",
+             "low": "참고 개선", "info": "정보성"}
+_CRITERIA = {
+    "critical": "인증우회·원격코드실행·중요정보 유출 등 즉각적 피해가 가능",
+    "high": "권한상승·주입 등 공격 성공 시 영향이 큼",
+    "medium": "제한된 조건에서 악용 가능하거나 정보 노출 소지",
+    "low": "직접 피해는 낮으나 보안 위생상 개선 권고",
+    "info": "취약점은 아니나 참고할 정보",
+}
+_CRITERIA_EN = {
+    "critical": "Immediate impact possible — auth bypass, RCE, sensitive data exposure",
+    "high": "High impact if exploited — privilege escalation, injection",
+    "medium": "Exploitable under limited conditions, or information exposure",
+    "low": "Low direct impact; recommended as security hygiene",
+    "info": "Not a vulnerability; informational",
+}
+
+
+def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
+    """취약점 1건을 카드형(제목 바 + 항목별 상세)으로."""
+    sev = f["severity"]
+    color = SEV_COLOR.get(sev, colors.black)
+    cwe = f.get("cwe") or ""
+    owasp = f.get("owasp") or ""
+    title_tail = f'  ({_esc(cwe)}{" · " + _esc(owasp) if owasp else ""})' if cwe or owasp else ""
+    title = Paragraph(f'[{SEV.get(sev, sev)}] {idx}. {_esc(f["rule_id"])}{title_tail}', st["cardt"])
+
+    rk = _rule_key(f["rule_id"])
+    rem = REM.get(rk, DFT)
+    body = st["body"]
+    rows = [[title],
+            [Paragraph(f'<b>{T("대상")}</b>  <font face="Courier" size=8>{_esc(f["file"])}:{f["line"]}</font>', body)],
+            [Paragraph(f'<b>{T("설명")}</b>  {_esc(T(f.get("message", "")))}', body)]]
+
+    steps = f.get("steps") or []
+    if steps:
+        slabel = STEP_LABEL_EN if en else STEP_LABEL
+        parts = []
+        for s in steps[:12]:
+            k = slabel.get(s.get("kind", ""), s.get("kind", ""))
+            parts.append(f'<b>[{_esc(k)}]</b> {_esc(s.get("file", ""))}:{s.get("line", "")}  {_esc((s.get("code") or "").strip())[:160]}')
+        rows.append([Paragraph(f'<b>{T("데이터 흐름")}</b>', body)])
+        rows.append([Paragraph("<br/>".join(parts), st["flow"])])
+
+    rows.append([Paragraph(f'<b>{T("영향")}</b>  {_esc(rem[1])}', body)])
+    rows.append([Paragraph(f'<b>{T("조치 방안")}</b>  {_esc(rem[2])}', body)])
+    if rem[3]:
+        rows.append([Paragraph(f'<b>{T("안전한 코드 예시")}</b>', body)])
+        rows.append([Paragraph(_esc(rem[3]), st["code"])])
+    ref = _cwe_ref(cwe) + (f' · OWASP {_esc(owasp)}' if owasp else "")
+    rows.append([Paragraph(f'<b>{T("참고")}</b>  {ref}', st["small"])])
+
+    w = 174 * mm
+    t = Table(rows, colWidths=[w])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), _FONT),
+        ("BACKGROUND", (0, 0), (0, 0), color),
+        ("TOPPADDING", (0, 0), (0, 0), 5), ("BOTTOMPADDING", (0, 0), (0, 0), 5),
+        ("BOX", (0, 0), (-1, -1), 0.7, color),
+        ("LINEBELOW", (0, 0), (0, 0), 0.7, color),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 1), (-1, -1), 3), ("BOTTOMPADDING", (0, 1), (-1, -1), 3),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    return [KeepTogether(t) if len(rows) <= 8 else t, Spacer(1, 4 * mm)]
+
+
+def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
+                    meta: dict | None = None) -> None:
+    """합본 진단 결과 보고서 — 표지·개정이력·목차·개요·요약·항목·상세·총평·부록.
+
+    meta: 설정의 보고서 정보(author/org/client/tester/period/version). 비면 기본값."""
     _register_font()
     st = _styles()
     en = lang == "en"
@@ -175,82 +307,193 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko") -> No
     SEV = SEV_EN if en else SEV_KR
     REM = REMEDIATION_EN if en else REMEDIATION
     DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
+    CRIT = _CRITERIA_EN if en else _CRITERIA
+    meta = meta or {}
+    author = meta.get("author") or author
+    version = meta.get("version") or "1.0"
     findings = scan.findings
     counts = scan.severity_counts
+    total = len(findings)
     project = scan.project or Path(scan.name).stem
-    story = []
+    today = _dt.date.today().strftime("%Y-%m-%d")
+    order = {s: i for i, s in enumerate(SEV_ORDER)}
+    story: list = []
 
+    # ── 표지 ── (설정에 있는 항목만 추가로 표기)
+    cover_rows = [(T("프로젝트"), project), (T("대상"), scan.name)]
+    if meta.get("client"):
+        cover_rows.append((T("발주처/고객"), meta["client"]))
+    if meta.get("org"):
+        cover_rows.append((T("수행 기관/회사"), meta["org"]))
+    cover_rows += [(T("분석 도구"), T("CPGuard (CPG 기반 taint 분석)")),
+                   (T("분석 일시"), scan.created_at.strftime("%Y-%m-%d %H:%M"))]
+    if meta.get("period"):
+        cover_rows.append((T("진단 수행 기간"), meta["period"]))
+    cover_rows += [(T("소스 파일 수"), str(scan.file_count)), (T("총 이슈"), str(total)),
+                   (T("작성일"), today), (T("작성자"), author)]
+    if meta.get("tester"):
+        cover_rows.append((T("진단 담당자"), meta["tester"]))
+    cover_rows.append((T("보고서 버전"), version))
     _cover(story, st, f"{project}\n" + T("소스코드 취약점 진단 결과 보고서"),
-           T("SAST 진단 · CPGuard"),
-           [(T("프로젝트"), project), (T("대상"), scan.name),
-            (T("분석 도구"), T("CPGuard (CPG 기반 taint 분석)")),
-            (T("분석 일시"), scan.created_at.strftime("%Y-%m-%d %H:%M")),
-            (T("소스 파일 수"), str(scan.file_count)), (T("총 이슈"), str(len(findings))),
-            (T("작성일"), _dt.date.today().strftime("%Y-%m-%d")), (T("작성자"), author)])
+           T("SAST 진단 · CPGuard"), cover_rows)
 
+    # ── 문서 개정 이력 ──
+    story.append(Paragraph(T("문서 개정 이력"), st["h2sec"]))
+    rev = [[T("버전"), T("일자"), T("내용"), T("작성")],
+           [version, today, T("최초 작성"), author]]
+    rt = Table(rev, colWidths=[20 * mm, 30 * mm, 96 * mm, 28 * mm])
+    rt.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+        ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+        ("ALIGN", (0, 0), (1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    story.append(rt)
+    story.append(PageBreak())
+
+    # ── 목차 ──
+    story.append(Paragraph(T("목차"), st["h1"]))
+    toc = TableOfContents()
+    toc.levelStyles = [
+        ParagraphStyle("toc0", fontName=_FONT_B, fontSize=10.5, leading=20, textColor=colors.HexColor("#22314f")),
+        ParagraphStyle("toc1", fontName=_FONT, fontSize=9.5, leading=16, leftIndent=14, textColor=colors.HexColor("#444")),
+    ]
+    story.append(toc)
+    story.append(PageBreak())
+
+    # ── 1. 진단 개요 ──
     story.append(Paragraph(T("1. 진단 개요"), st["h1"]))
+    story.append(Paragraph(T("1.1 진단 배경 및 목적"), st["h2sec"]))
     story.append(Paragraph(T(
-        "본 보고서는 CPGuard 정적 분석(데이터 흐름 taint + 패턴)을 통해 대상 소스코드의 "
-        "보안약점을 도출한 결과이다. 각 이슈는 CWE·OWASP 로 분류되며, 유형별 조치 방법은 "
-        "별도의 조치 가이드를 참조한다."), st["body"]))
-    story.append(Spacer(1, 4 * mm))
+        "본 보고서는 대상 소스코드에 대해 CPGuard 정적 분석(데이터 흐름 taint 분석 + 패턴 점검)을 "
+        "수행하여 도출한 보안약점과 그 조치 방안을 기술한다. 각 취약점은 CWE·OWASP 기준으로 분류하고, "
+        "위험도에 따라 조치 우선순위를 제시한다."), st["body"]))
+    story.append(Spacer(1, 3 * mm))
+    langs = ", ".join(sorted({Path(f["file"]).suffix.lstrip(".").lower() for f in findings if f.get("file")}) or ["-"])
+    story.append(Paragraph(T("1.2 진단 대상 범위"), st["h2sec"]))
+    story.append(_kv_table([
+        ("프로젝트", project), ("대상", scan.name),
+        ("대상 파일 수", str(scan.file_count)), ("탐지 이슈 수", str(total)),
+        ("분석 언어", langs),
+    ], T))
+    story.append(Spacer(1, 3 * mm))
+    story.append(Paragraph(T("1.3 진단 방법 및 기준"), st["h2sec"]))
+    story.append(_kv_table([
+        ("진단 도구", T("CPGuard (CPG 기반 taint 분석 + 패턴)")),
+        ("진단 기준", "CWE · OWASP Top 10"),
+        ("진단 일시", scan.created_at.strftime("%Y-%m-%d %H:%M")),
+    ], T))
+    if scan.integrity_note:
+        note = ("* Partial coverage — some files could not be fully analyzed; results may not "
+                "represent the whole." if en else "* " + scan.integrity_note)
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(f'<font color="#a33">{_esc(note)}</font>', st["small"]))
+    story.append(PageBreak())
 
-    story.append(Paragraph(T("2. 위험도별 진단 결과"), st["h1"]))
+    # ── 2. 진단 결과 요약 ──
+    story.append(Paragraph(T("2. 진단 결과 요약"), st["h1"]))
     _severity_table(story, st, counts, SEV, T)
-    story.append(Spacer(1, 5 * mm))
-
-    story.append(Paragraph(T("3. 레퍼런스별(CWE) 집계"), st["h1"]))
+    story.append(Spacer(1, 4 * mm))
+    story.append(Paragraph(T("위험도 분포"), st["h2sec"]))
+    story.append(_sev_chart(counts, SEV))
+    story.append(Spacer(1, 4 * mm))
+    # CWE 상위
     cwe_c: dict = {}
-    for f in findings:
-        cwe_c[f.get("cwe") or "-"] = cwe_c.get(f.get("cwe") or "-", 0) + 1
-    rows = [["CWE", T("규칙 예"), T("개수")]]
     seen: dict = {}
     for f in findings:
-        seen.setdefault(f.get("cwe") or "-", f.get("rule_id"))
-    for cwe, n in sorted(cwe_c.items(), key=lambda x: -x[1]):
+        c = f.get("cwe") or "-"
+        cwe_c[c] = cwe_c.get(c, 0) + 1
+        seen.setdefault(c, f.get("rule_id"))
+    story.append(Paragraph(T("취약점 유형(CWE) 상위"), st["h2sec"]))
+    rows = [["CWE", T("규칙 예"), T("개수")]]
+    for cwe, n in sorted(cwe_c.items(), key=lambda x: -x[1])[:12]:
         rows.append([cwe, seen.get(cwe, ""), str(n)])
-    t = Table(rows, colWidths=[35 * mm, 75 * mm, 20 * mm])
-    t.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
-                           ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ccc")),
-                           ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
-                           ("ALIGN", (2, 0), (2, -1), "CENTER"),
-                           ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
-    story.append(t)
+    ct = Table(rows, colWidths=[36 * mm, 118 * mm, 20 * mm])
+    ct.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
+                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+                            ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+                            ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    story.append(ct)
     story.append(PageBreak())
 
-    story.append(Paragraph(T("4. 상세 결과"), st["h1"]))
-    order = {s: i for i, s in enumerate(SEV_ORDER)}
-    for i, f in enumerate(sorted(findings, key=lambda x: order.get(x["severity"], 9)), 1):
-        sev = f["severity"]
-        story.append(Paragraph(
-            f'<font color="{SEV_COLOR.get(sev, colors.black)}"><b>[{SEV.get(sev, sev)}]</b></font> '
-            f'{i}. {f["rule_id"]} <font size=8 color="#888">({f.get("cwe","")}{" · " + f["owasp"] if f.get("owasp") else ""})</font>',
-            st["h2"]))
-        story.append(Paragraph(f'{T("위치")}: <font face="Courier">{f["file"]}:{f["line"]}</font>', st["small"]))
-        story.append(Paragraph(T(f.get("message", "")), st["body"]))
-        rk = _rule_key(f["rule_id"])
-        rem = REM.get(rk, DFT)
-        story.append(Paragraph(f'<b>{T("조치")}:</b> {rem[2]}', st["body"]))
-        story.append(Spacer(1, 3 * mm))
-
+    # ── 3. 진단 항목 ──
+    story.append(Paragraph(T("3. 진단 항목"), st["h1"]))
+    story.append(Paragraph(T(
+        "이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다."), st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    by_rule: dict = {}
+    for f in findings:
+        r = f["rule_id"]
+        d = by_rule.setdefault(r, {"cwe": f.get("cwe", ""), "n": 0})
+        d["n"] += 1
+    irows = [[T("점검 항목"), "CWE", T("탐지")]]
+    for r, d in sorted(by_rule.items(), key=lambda x: -x[1]["n"]):
+        irows.append([r, d["cwe"] or "-", str(d["n"])])
+    it = Table(irows, colWidths=[124 * mm, 32 * mm, 18 * mm], repeatRows=1)
+    it.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+                            ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+                            ("ALIGN", (2, 0), (2, -1), "CENTER"),
+                            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+    story.append(it)
     story.append(PageBreak())
-    story.append(Paragraph(T("5. 총평"), st["h1"]))
+
+    # ── 4. 상세 진단 결과 ──
+    story.append(Paragraph(T("4. 상세 진단 결과"), st["h1"]))
+    CAP = 200
+    ordered = sorted(findings, key=lambda x: (order.get(x["severity"], 9), x.get("file", ""), x.get("line", 0)))
+    shown = ordered[:CAP]
+    if total > CAP:
+        note = (f"Showing the top {CAP} findings by severity; see the analysis sheet (xlsx) for all {total}."
+                if en else f"위험도 상위 {CAP}건을 상세 기술하며, 전체 {total}건은 분석목록표(xlsx)를 참조한다.")
+        story.append(Paragraph(f'<font color="#a33">* {note}</font>', st["small"]))
+        story.append(Spacer(1, 2 * mm))
+    for i, f in enumerate(shown, 1):
+        for fl in _finding_card(i, f, SEV, REM, DFT, T, st, en):
+            story.append(fl)
+
+    # ── 5. 종합 의견 ──
+    story.append(PageBreak())
+    story.append(Paragraph(T("5. 종합 의견"), st["h1"]))
     ch = counts.get("critical", 0) + counts.get("high", 0)
     if en:
-        summary = (f"A total of {len(findings)} security weaknesses were identified, of which "
-                   f"{ch} are Critical/High severity requiring immediate action. Prioritize "
-                   f"Critical/High items, and per the remediation guide apply input validation, "
-                   f"output encoding, secret separation, and safe algorithms.")
+        summary = (f"A total of {total} security weaknesses were identified, of which {ch} are "
+                   f"Critical/High severity requiring immediate action. Prioritize Critical/High "
+                   f"items, then apply input validation, output encoding, secret separation and "
+                   f"safe algorithms per the remediation for each type.")
     else:
-        summary = (f"총 {len(findings)}건의 보안약점이 도출되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 "
-                   f"등급이 {ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 가이드에 따라 "
+        summary = (f"총 {total}건의 보안약점이 도출되었으며, 이 중 즉시 조치가 필요한 매우위험·위험 "
+                   f"등급이 {ch}건이다. 매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 "
                    f"입력 검증·출력 인코딩·비밀정보 분리·안전한 알고리즘 적용을 권고한다.")
     story.append(Paragraph(summary, st["body"]))
 
-    _build(story, path, f"{project} " + T("진단 결과 보고서"))
+    # ── 부록 A. 위험도 판정 기준 ──
+    story.append(Spacer(1, 6 * mm))
+    story.append(Paragraph(T("부록 A. 위험도 판정 기준"), st["h1"]))
+    arows = [[T("판정"), T("기준"), T("조치 우선순위")]]
+    for s in SEV_ORDER:
+        arows.append([SEV.get(s, s), CRIT[s], T(_PRIORITY[s])])
+    at = Table(arows, colWidths=[28 * mm, 118 * mm, 28 * mm])
+    astyle = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
+              ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+              ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+              ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+              ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+              ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]
+    for i, s in enumerate(SEV_ORDER, 1):
+        astyle.append(("TEXTCOLOR", (0, i), (0, i), SEV_COLOR[s]))
+        astyle.append(("FONTNAME", (0, i), (0, i), _FONT_B))
+    at.setStyle(TableStyle(astyle))
+    story.append(at)
+
+    _build_report(story, path, f"{project} " + T("진단 결과 보고서"))
 
 
-def remediation_guide(scan, path, lang: str = "ko") -> None:
+def remediation_guide(scan, path, lang: str = "ko", meta: dict | None = None) -> None:
     """유형별 조치 가이드 — 스캔에 등장한 규칙 유형별 설명·조치·예시."""
     _register_font()
     st = _styles()
@@ -258,6 +501,7 @@ def remediation_guide(scan, path, lang: str = "ko") -> None:
     T = lambda s: tr(s, lang)                       # noqa: E731
     REM = REMEDIATION_EN if en else REMEDIATION
     DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
+    meta = meta or {}
     findings = scan.findings
     project = scan.project or Path(scan.name).stem
 
@@ -269,9 +513,16 @@ def remediation_guide(scan, path, lang: str = "ko") -> None:
         by_rule[f["rule_id"]]["files"].append(f'{f["file"]}:{f["line"]}')
 
     story = []
-    _cover(story, st, f"{project}\n" + T("보안약점 조치 가이드"), T("유형별 설명 · 조치 방법 · 안전 예시"),
-           [(T("프로젝트"), project), (T("대상"), scan.name), (T("작성일"), _dt.date.today().strftime("%Y-%m-%d")),
-            (T("탐지 유형"), f"{len(by_rule)} types" if en else f"{len(by_rule)}종"), (T("총 이슈"), str(len(findings)))])
+    grows = [(T("프로젝트"), project), (T("대상"), scan.name)]
+    if meta.get("client"):
+        grows.append((T("발주처/고객"), meta["client"]))
+    if meta.get("org"):
+        grows.append((T("수행 기관/회사"), meta["org"]))
+    grows += [(T("작성일"), _dt.date.today().strftime("%Y-%m-%d")),
+              (T("탐지 유형"), f"{len(by_rule)} types" if en else f"{len(by_rule)}종"),
+              (T("총 이슈"), str(len(findings))),
+              (T("작성자"), meta.get("author") or "CPGuard")]
+    _cover(story, st, f"{project}\n" + T("보안약점 조치 가이드"), T("유형별 설명 · 조치 방법 · 안전 예시"), grows)
 
     for idx, (rid, info) in enumerate(sorted(by_rule.items(), key=lambda x: -len(x[1]["files"])), 1):
         rk = _rule_key(rid)
@@ -295,12 +546,38 @@ def remediation_guide(scan, path, lang: str = "ko") -> None:
 
 
 def _footer(canvas, doc):
+    if doc.page <= 1:          # 표지엔 쪽번호 없음
+        return
     canvas.saveState()
     canvas.setFont(_FONT, 8)
     canvas.setFillColor(colors.HexColor("#999"))
     canvas.drawRightString(A4[0] - 18 * mm, 12 * mm, f"{doc.page}")
     canvas.drawString(18 * mm, 12 * mm, "CPGuard")
     canvas.restoreState()
+
+
+class _SectionDoc(BaseDocTemplate):
+    """h1/h2sec 문단을 목차 항목으로 등록하는 문서(TableOfContents 용). multiBuild 필요."""
+
+    def __init__(self, filename, title):
+        frame = Frame(18 * mm, 18 * mm, A4[0] - 36 * mm, A4[1] - 36 * mm, id="body")
+        super().__init__(filename, pagesize=A4, title=title,
+                         leftMargin=18 * mm, rightMargin=18 * mm,
+                         topMargin=18 * mm, bottomMargin=18 * mm)
+        self.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=_footer)])
+
+    def afterFlowable(self, flowable):
+        if isinstance(flowable, Paragraph):
+            name = flowable.style.name
+            if name == "h1":
+                self.notify("TOCEntry", (0, flowable.getPlainText(), self.page))
+            elif name == "h2sec":
+                self.notify("TOCEntry", (1, flowable.getPlainText(), self.page))
+
+
+def _build_report(story, path, title):
+    """목차 쪽번호를 위해 두 번 빌드(multiBuild)."""
+    _SectionDoc(str(path), title).multiBuild(story)
 
 
 def _build(story, path, title):
