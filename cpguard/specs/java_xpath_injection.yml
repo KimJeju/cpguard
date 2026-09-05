@@ -41,6 +41,10 @@ sinks:
   - XPath.evaluate
   - selectNodes
   - selectSingleNode
+  - evaluate
+  - xpath.compile
+  - xPath.compile
+  - xp.compile
 sanitizers:
 - callee:
   - escapeHtml4

@@ -1,0 +1,77 @@
+id: java.xss
+message: 사용자 입력이 정제 없이 HTML 응답으로 흘러 들어갑니다 (XSS).
+severity: high
+cwe: CWE-79
+owasp: A03:2021-Injection
+languages:
+- java
+sources:
+- pattern: member
+  object: request
+  property: &id001
+  - getParameter
+  - getParameterValues
+  - getParameterMap
+  - getHeader
+  - getHeaders
+  - getQueryString
+  - getCookies
+  - getInputStream
+  - getReader
+  - getRequestURI
+  - getPathInfo
+  - getRequestURL
+- pattern: member
+  object: req
+  property: *id001
+- pattern: member
+  object: httpRequest
+  property: *id001
+- pattern: member
+  object: servletRequest
+  property: *id001
+- pattern: name
+  name:
+  - System.getenv
+  - args
+sinks:
+- pattern: call
+  callee:
+  - getWriter.println
+  - getWriter.print
+  - getWriter.printf
+  - getWriter.write
+  - getWriter.format
+  - getWriter.append
+  - getOutputStream.write
+  - getOutputStream.print
+  - writer.println
+  - writer.print
+  - writer.printf
+  - writer.write
+  - writer.format
+  - writer.append
+sanitizers:
+- callee:
+  - encodeForHTML
+  - encodeForHTMLAttribute
+  - encodeForJavaScript
+  - encodeForURL
+  - escapeHtml
+  - escapeHtml3
+  - escapeHtml4
+  - escapeEcmaScript
+  - StringEscapeUtils.escapeHtml
+  - Encode.forHtml
+  - Encode.forHtmlAttribute
+  - Encode.forHtmlContent
+  - Encode.forJavaScript
+  - htmlEscape
+  - HtmlUtils.htmlEscape
+  - Integer.parseInt
+  - parseInt
+  - Long.parseLong
+  - parseLong
+  - Integer.valueOf
+  - URLEncoder.encode
+  - isNumeric

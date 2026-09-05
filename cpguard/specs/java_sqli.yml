@@ -41,6 +41,9 @@ sinks:
   - executeUpdate
   - execute
   - prepareStatement
+  - prepareCall
+  - executeLargeUpdate
+  - executeBatch
   - createQuery
   - createNativeQuery
   - createSQLQuery
