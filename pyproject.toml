@@ -2,6 +2,10 @@
 name = "cpguard"
 version = "0.1.5"
 description = "CPG-based taint analysis SAST with LLM triage"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Kimjeju" }]
 requires-python = ">=3.11"
 dependencies = [
     "tree-sitter>=0.25",
@@ -38,7 +42,7 @@ gemini = ["google-genai>=1.0"]
 all-llm = ["anthropic>=0.40", "openai>=1.40", "google-genai>=1.0"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
