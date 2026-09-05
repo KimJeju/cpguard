@@ -513,8 +513,32 @@ def portfolio_export(request):
                     shutil.rmtree(tmp.parent, ignore_errors=True)
     resp = HttpResponse(buf.getvalue(), content_type="application/zip")
     fname = "cpguard-deliverables.zip"
-    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    resp["Content-Disposition"] = _attachment(fname)
     return resp
+
+
+def _download_name(stem: str, suffix: str, ext: str, budget: int = 180) -> str:
+    """다운로드 파일명 — 프로젝트명이 길어도 OS 한계(대개 255바이트)를 넘지 않게 자른다.
+
+    한글은 UTF-8 로 3바이트라 글자 수가 아니라 바이트로 센다. 경로 구분자·따옴표 등
+    파일명에 못 쓰는 문자는 함께 정리한다(Content-Disposition 헤더도 깨지지 않게)."""
+    import re
+    stem = re.sub(r'[\\/:*?"<>|\r\n\t]+', "_", stem or "").strip(" .") or "scan"
+    tail = f"_{suffix}.{ext}"
+    room = max(16, budget - len(tail.encode("utf-8")))
+    cut = stem.encode("utf-8")[:room].decode("utf-8", "ignore") or "scan"
+    return f"{cut}{tail}"
+
+
+def _attachment(fname: str) -> str:
+    """Content-Disposition 값. 비-ASCII 파일명은 RFC 5987(filename*)로 싣는다.
+
+    헤더 값에 한글이 그대로 들어가면 Django 가 헤더 전체를 RFC 2047 encoded-word
+    (=?utf-8?q?...)로 감싸는데, 브라우저는 Content-Disposition 에서 그걸 해석하지
+    않아 파일명이 깨진다. 헤더를 ASCII 로 유지하고 원래 이름은 filename* 로 준다."""
+    from urllib.parse import quote
+    ascii_name = fname.encode("ascii", "ignore").decode("ascii").strip(" _") or "download"
+    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(fname)}"
 
 
 def _pdf_response(scan, kind: str, lang: str = "ko"):
@@ -533,7 +557,7 @@ def _pdf_response(scan, kind: str, lang: str = "ko"):
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)
     resp = HttpResponse(data, content_type="application/pdf")
-    resp["Content-Disposition"] = f'attachment; filename="{Path(scan.name).stem}_{suffix}.pdf"'
+    resp["Content-Disposition"] = _attachment(_download_name(Path(scan.name).stem, suffix, "pdf"))
     return resp
 
 
@@ -1117,7 +1141,7 @@ def sarif_download(request, pk: int):
     else:
         body = scan.sarif_json
     resp = HttpResponse(body, content_type="application/json")
-    resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.sarif"'
+    resp["Content-Disposition"] = _attachment(f"cpguard-scan-{pk}.sarif")
     return resp
 
 
@@ -1128,7 +1152,7 @@ def export_csv(request, pk: int):
     lang = _lang(request)
     audit = scan.audit
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
-    resp["Content-Disposition"] = f'attachment; filename="cpguard-scan-{pk}.csv"'
+    resp["Content-Disposition"] = _attachment(f"cpguard-scan-{pk}.csv")
     resp.write("﻿")  # 엑셀 한글 깨짐 방지
     w = csv.writer(resp)
     if lang == "en":
@@ -1182,10 +1206,10 @@ def export_xlsx(request, pk: int):
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)
     stem = Path(scan.name).stem
-    fname = f"{stem}_analysis-sheet.xlsx" if lang == "en" else f"{stem}_소스코드_취약점진단_분석목록표.xlsx"
+    fname = _download_name(stem, "analysis-sheet" if lang == "en" else "소스코드_취약점진단_분석목록표", "xlsx")
     resp = HttpResponse(
         data, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    resp["Content-Disposition"] = _attachment(fname)
     return resp
 
 

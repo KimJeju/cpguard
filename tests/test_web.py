@@ -454,3 +454,33 @@ def test_portfolio_export_zip_of_deliverables():
     names = zf.namelist()
     assert any(n.endswith("_report.pdf") for n in names)
     assert any(n.endswith("_analysis-sheet.xlsx") for n in names)
+
+
+# ---- 다운로드 파일명 (긴 프로젝트명·한글) ----
+
+def test_download_name_truncates_and_sanitizes():
+    from cpguard.web.views import _download_name
+    n = _download_name("a" * 300, "소스코드_취약점진단_분석목록표", "xlsx")
+    assert len(n.encode("utf-8")) <= 255          # OS 파일명 한계
+    assert n.endswith("_소스코드_취약점진단_분석목록표.xlsx")
+    # 경로 구분자·따옴표·개행은 헤더/파일명을 깨므로 제거
+    bad = _download_name('x"y\r\nz/w', "진단결과보고서", "pdf")
+    assert not set(bad) & set('"/\\r\n')
+    assert _download_name("", "진단결과보고서", "pdf").startswith("scan_")
+
+
+def test_download_headers_are_ascii_rfc5987():
+    """한글 파일명을 헤더에 그대로 넣으면 Django 가 RFC 2047 로 통째 인코딩해
+    브라우저에서 파일명이 깨진다. filename* 로 실어 헤더는 ASCII 로 유지한다."""
+    from urllib.parse import unquote
+    c = Client()
+    z = _zip_bytes({"a/i.js": "app.get('/x',(req,res)=>{eval(req.query.q)})"})
+    z.name = ("p" * 200) + ".zip"
+    c.post("/scan/", {"archive": z})
+    from cpguard.web.models import Scan
+    pk = Scan.objects.order_by("-id").first().pk
+    for url in (f"/scan/{pk}/report.pdf", f"/scan/{pk}/export.xlsx", f"/scan/{pk}/export.csv"):
+        cd = c.get(url)["Content-Disposition"]
+        assert cd.isascii() and not cd.startswith("=?"), f"{url}: {cd[:40]}"
+        assert "filename*=UTF-8''" in cd
+        assert len(unquote(cd.split("filename*=UTF-8''")[1]).encode("utf-8")) <= 255
