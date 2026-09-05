@@ -4,8 +4,8 @@
 <h1 align="center">CPGuard</h1>
 
 <p align="center">
-  Open-source <b>SAST</b> combining <b>CPG-based taint analysis</b> with <b>LLM triage</b><br/>
-  <sub>A desktop security review tool — the pipeline of Fortify, the review ergonomics of Ghidra, offline by default</sub>
+  <b>Air-gapped security assessment, from source code to the finished report</b><br/>
+  <sub>CPG-based taint analysis · LLM triage · audit deliverables generated for you — a desktop tool that never phones home</sub>
 </p>
 
 <p align="center">
@@ -14,12 +14,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0078D6" alt="Windows / macOS / Linux">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
-  <img src="https://img.shields.io/badge/taint%20rules-77-4da3ff" alt="77 taint rules">
-  <img src="https://img.shields.io/badge/tests-217%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/DVWA-recall%20100%25%20·%20precision%2080%25-2e7d32" alt="DVWA benchmark">
+  <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
+  <img src="https://img.shields.io/badge/tests-220%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.595-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -96,7 +97,7 @@ then hands the result to a three-pane review screen where a human confirms the v
 
 ## 📦 Install
 
-### Installer (recommended — no Python needed)
+### Installer — Windows (recommended, no Python needed)
 
 Download `CPGuard-Setup-0.1.5.exe` from [Releases](https://github.com/KimJeju/cpguard/releases) and run it.
 It installs per-user (no admin rights) and installs the WebView2 runtime if missing.
@@ -109,12 +110,17 @@ powershell -ExecutionPolicy Bypass -File packaging/build.ps1
 
 It also runs portable — copy the `dist/CPGuard` folder and run `CPGuard.exe`.
 
-### From source (development)
+### From source — Windows · macOS · Linux
 
 ```bash
 pip install .
 cpguard --help
 ```
+
+The engine, the web UI and every report format are pure Python and run on all three platforms.
+Only the packaged installer and the native desktop window (WebView2) are Windows-specific.
+Korean text in PDF reports needs a Korean font: Windows and macOS have one out of the box, on
+Linux install `fonts-nanum`, or point `CPGUARD_PDF_FONT` at any TrueType font you prefer.
 
 ## 🚀 Usage
 
@@ -181,7 +187,17 @@ Stack: Python 3.11+ · tree-sitter (11 languages) · Django (SSR) · reportlab (
 
 ## 📊 Accuracy
 
-Measured against DVWA's labelled vulnerable/safe pairs: **recall 100% · precision 80% · F1 0.889** on the per-file measurable data-flow modules (N=4). Methodology and limitations are disclosed in [`bench/README.md`](bench/README.md) — the labelled set is small, and sanitizer recognition is the next improvement.
+Measured against **OWASP Benchmark v1.2** (Java, labelled vulnerable/safe pairs) over the six data-flow categories, **N = 1,572**:
+
+| Recall | Precision | F1 | False-positive rate | Benchmark score |
+|---:|---:|---:|---:|---:|
+| 56.0% | 63.5% | 0.595 | 35.1% | **0.210** |
+
+Score = recall − false-positive rate (the official OWASP metric; random guessing = 0.000). Config-only categories (`weakrand`, `crypto`, `hash`, `securecookie`, `trustbound` — 1,168 cases) are not data-flow problems and are excluded rather than counted as free wins.
+
+**Where the false positives come from, measured:** 347 of the 753 safe cases (46%) kill the vulnerable path with a condition that is constant at compile time (`if ((7 * 42) - num > 200) bar = "constant"; else bar = param;`). CPGuard is path-insensitive by design, so it reports both branches. **Constant propagation is the single biggest lever** on the false-positive rate, and it is the next planned engine change.
+
+A second measurement on a real application (DVWA, PHP) is also published. Full methodology, per-category tables and limitations: [`bench/README.md`](bench/README.md).
 
 ## 📈 Large codebases
 
@@ -194,11 +210,12 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] Finding DB table + server-side pagination · virtual scrolling for large results
 - [x] Sink pre-filtering · multiprocessing · parse/summary caches · triage clustering
 - [x] CI/CD — GitHub Action · SARIF → Code Scanning · severity gate
-- [x] Accuracy benchmark (DVWA) published — recall 100% · precision 80% ([details](bench/README.md))
+- [x] Accuracy benchmark published — OWASP Benchmark v1.2, N=1,572, F1 0.595 ([details](bench/README.md))
 - [x] 11 languages — Java, Kotlin, Go, Ruby, C/C++, Swift, C# added
 - [x] Batch scanning, project portfolio and bulk deliverables for hundreds of projects
-- [ ] Stronger sanitizer recognition · OWASP Benchmark coverage
+- [ ] Constant propagation (path sensitivity) to cut the false-positive rate
+- [ ] Stronger sanitizer recognition · framework-aware entry points (Spring, JPA)
 
 ## 📄 License
 
-An open-source project for education and research (capstone). A license file will be added.
+[Apache License 2.0](LICENSE). Free to use, modify and redistribute, commercially included, provided the notice and license are preserved. Includes an express patent grant.

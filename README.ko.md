@@ -4,8 +4,8 @@
 <h1 align="center">CPGuard</h1>
 
 <p align="center">
-  <b>CPG 기반 Taint 분석 + LLM 트리아지</b>를 결합한 오픈소스 정적 보안 분석 도구<br/>
-  <sub>Fortify 급 분석 파이프라인에 Ghidra 결의 검토 화면을 얹은 데스크톱 보안 도구 · 완전 오프라인 동작</sub>
+  <b>망분리 환경에서 소스코드부터 진단 산출물까지 한 번에</b><br/>
+  <sub>CPG 기반 Taint 분석 · LLM 트리아지 · 진단결과보고서와 분석목록표 자동 생성 — 외부로 아무것도 내보내지 않는 데스크톱 도구</sub>
 </p>
 
 <p align="center">
@@ -14,12 +14,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0078D6" alt="Windows / macOS / Linux">
+  <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
-  <img src="https://img.shields.io/badge/taint%20rules-77-4da3ff" alt="taint 규칙 77개">
-  <img src="https://img.shields.io/badge/tests-217%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/DVWA-recall%20100%25%20·%20precision%2080%25-2e7d32" alt="DVWA 벤치마크">
+  <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
+  <img src="https://img.shields.io/badge/tests-220%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.595-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -96,7 +97,7 @@
 
 ## 📦 다운로드 / 설치
 
-### 설치본 (권장 · 파이썬 불필요)
+### 설치본 — Windows (권장 · 파이썬 불필요)
 
 [Releases](https://github.com/KimJeju/cpguard/releases) 에서 `CPGuard-Setup-0.1.5.exe` 를 받아 실행합니다.
 사용자 영역 설치라 관리자 권한이 필요 없고, WebView2 런타임이 없으면 자동 설치합니다.
@@ -109,12 +110,17 @@ powershell -ExecutionPolicy Bypass -File packaging/build.ps1
 
 무설치 이동식으로도 쓸 수 있습니다 — `dist/CPGuard` 폴더를 통째로 복사해 `CPGuard.exe` 실행.
 
-### 소스에서 (개발)
+### 소스에서 — Windows · macOS · Linux
 
 ```bash
 pip install .
 cpguard --help
 ```
+
+분석 엔진·웹 UI·모든 산출물 포맷은 순수 파이썬이라 세 플랫폼에서 동일하게 동작합니다.
+설치본과 네이티브 데스크톱 창(WebView2)만 Windows 전용입니다. PDF 보고서의 한글 출력에는
+한글 폰트가 필요한데, Windows·macOS 는 기본 탑재이고 Linux 는 `fonts-nanum` 을 설치하거나
+`CPGUARD_PDF_FONT` 환경변수로 원하는 TrueType 폰트를 지정하면 됩니다.
 
 ## 🚀 사용법
 
@@ -183,10 +189,25 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 ## 📊 정확도
 
-DVWA 의 라벨된 취약/안전 쌍 기준: per-file 측정 가능한 데이터 흐름 모듈에서
-**재현율 100% · 정밀도 80% · F1 0.889** (N=4). 방법론과 한계는
-[`bench/README.md`](bench/README.md) 에 그대로 공개했습니다 — 표본이 작고,
-sanitizer 인식 강화가 다음 과제입니다.
+**OWASP Benchmark v1.2**(Java, 취약/안전 쌍이 라벨된 정답지)의 데이터 흐름 6개 유형,
+**표본 1,572건** 기준 측정 결과입니다.
+
+| 재현율 | 정밀도 | F1 | 오탐률 | 점수 |
+|---:|---:|---:|---:|---:|
+| 56.0% | 63.5% | 0.595 | 35.1% | **0.210** |
+
+점수 = 재현율 − 오탐률 (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000).
+설정 점검 성격의 유형(`weakrand`·`crypto`·`hash`·`securecookie`·`trustbound`, 1,168건)은
+데이터 흐름 문제가 아니므로 공짜 점수로 넣지 않고 지표에서 제외했습니다.
+
+**오탐의 원인을 측정했습니다.** 안전 케이스 753건 중 **347건(46%)** 이
+`if ((7 * 42) - num > 200) bar = "상수"; else bar = param;` 처럼 컴파일 시점에 결과가
+정해지는 조건으로 취약 경로를 죽입니다. CPGuard 는 설계상 경로 민감도가 없어 양쪽 분기를
+모두 가능하다고 보므로 이런 케이스를 오탐으로 냅니다. **상수 전파(constant propagation)가
+오탐률을 낮출 가장 큰 단일 지렛대**이며, 다음 엔진 과제로 잡았습니다.
+
+실제 앱(DVWA, PHP) 기준 보조 측정도 함께 공개합니다. 전체 방법론·유형별 표·한계는
+[`bench/README.md`](bench/README.md) 참조.
 
 ## 📈 대규모 코드베이스
 
@@ -201,11 +222,13 @@ sanitizer 인식 강화가 다음 과제입니다.
 - [x] Finding DB 테이블화 + 서버측 페이지네이션 · 가상 스크롤(대량 탐지)
 - [x] 싱크 사전 필터링 · 멀티프로세스 · 파싱/요약 캐시 · 트리아지 클러스터링
 - [x] CI/CD 통합 — GitHub Action · SARIF → Code Scanning · 등급 게이트
-- [x] 정확도 벤치마크(DVWA) 공개 — 재현율 100% · 정밀도 80% ([상세](bench/README.md))
+- [x] 정확도 벤치마크 공개 — OWASP Benchmark v1.2, 표본 1,572건, F1 0.595 ([상세](bench/README.md))
 - [x] 11개 언어 — Java · Kotlin · Go · Ruby · C/C++ · Swift · C# 추가
 - [x] 다건 배치 진단 · 프로젝트 포트폴리오 · 대량 산출물 배부
-- [ ] sanitizer 인식 강화 · OWASP Benchmark 확장
+- [ ] 상수 전파(경로 민감도) 도입으로 오탐률 감소
+- [ ] sanitizer 인식 강화 · 프레임워크 인지 진입점(Spring·JPA)
 
 ## 📄 라이선스
 
-교육·연구용 오픈소스 프로젝트(졸업작품). 별도 라이선스 파일을 추가할 예정입니다.
+[Apache License 2.0](LICENSE). 상업적 이용을 포함해 자유롭게 사용·수정·재배포할 수 있으며,
+저작권 고지와 라이선스 전문을 유지하면 됩니다. 명시적 특허 사용 허락 조항을 포함합니다.
