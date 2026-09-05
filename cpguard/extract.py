@@ -60,10 +60,27 @@ def safe_extract_zip(zip_path: str | Path, dest: str | Path) -> int:
     return len(infos)
 
 
+LONG_PREFIX = "\\\\?\\"
+
+
 def _longpath(p: Path) -> str:
     r"""Windows 260자 경로 한계(MAX_PATH) 우회. 깊게 중첩된 대형 프로젝트를 풀 때
-    한 파일의 긴 경로가 해제 전체를 crash 시키던 문제를 막는다(\\?\ 확장 경로)."""
+    한 파일의 긴 경로가 해제 전체를 crash 시키던 문제를 막는다(\\?\ 확장 경로).
+
+    쓰기뿐 아니라 '탐색'에도 필요하다 — 접두 없이 rglob 하면 260자 넘는 파일은
+    아예 열거되지 않아 조용히 누락된다(scanner.iter_* 참고)."""
     s = os.path.abspath(str(p))
-    if os.name == "nt" and not s.startswith("\\\\?\\"):
-        s = "\\\\?\\" + s
+    if os.name == "nt" and not s.startswith(LONG_PREFIX):
+        s = LONG_PREFIX + s
     return s
+
+
+def longpath(p) -> str:
+    r"""공개 별칭 — \\?\ 확장 경로 문자열."""
+    return _longpath(Path(p))
+
+
+def strip_longpath(s) -> str:
+    r"""\\?\ 접두 제거. 저장·표시용 경로에 확장 접두가 새어 나가지 않게."""
+    s = str(s)
+    return s[len(LONG_PREFIX):] if s.startswith(LONG_PREFIX) else s

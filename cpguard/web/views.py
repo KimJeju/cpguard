@@ -18,7 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 
-from ..extract import UnsafeArchive, safe_extract_zip
+from ..extract import UnsafeArchive, safe_extract_zip, strip_longpath
 from ..i18n import tr
 from ..report.finding import Finding
 from ..report.sarif import to_sarif
@@ -658,6 +658,9 @@ def _project_of(filename: str) -> str:
 
 
 def _rel(path: str, base: Path) -> str:
+    # Windows 긴 경로 탐색용 \\?\ 접두는 저장·표시 경로에 남기지 않는다.
+    path = strip_longpath(path)
+    base = Path(strip_longpath(base))
     try:
         return str(Path(path).resolve().relative_to(base)).replace("\\", "/")
     except Exception:

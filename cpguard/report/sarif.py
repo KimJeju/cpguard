@@ -14,12 +14,13 @@ _LEVEL = {"critical": "error", "high": "error", "medium": "warning", "low": "not
 
 
 def _location(step, base: Path | None):
-    uri = step.loc.file
+    from ..extract import strip_longpath
+    uri = strip_longpath(step.loc.file)   # Windows 긴 경로 탐색용 \\?\ 접두 제거
     if base is not None:
         try:
-            uri = str(Path(step.loc.file).resolve().relative_to(base)).replace("\\", "/")
+            uri = str(Path(uri).resolve().relative_to(Path(strip_longpath(base)))).replace("\\", "/")
         except Exception:
-            uri = Path(step.loc.file).name
+            uri = Path(uri).name
     return {
         "physicalLocation": {
             "artifactLocation": {"uri": uri},

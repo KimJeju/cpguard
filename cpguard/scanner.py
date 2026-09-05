@@ -31,6 +31,7 @@ def _parse_cache_dir() -> Path:
 from . import ir
 from .cpg.callgraph import collect_functions
 from .parse import loader, normalize
+from .extract import longpath
 from .patterns import (PatternRule, is_text_candidate, load_pattern_rules,
                        read_text_lenient, rules_for, scan_filename, scan_text)
 from .report.finding import Finding
@@ -117,10 +118,20 @@ def _excluded(p: Path, excludes: set[str]) -> bool:
     return any(part in excludes for part in p.parts) or p.name.startswith("~$")
 
 
+def _walk_root(root: Path) -> Path:
+    r"""탐색용 루트. Windows 에서 \\?\ 접두를 붙여야 260자 넘는 경로가 열거된다.
+
+    접두 없이 rglob 하면 긴 경로 파일은 조용히 빠지고 무결성 보고에도 안 남는다
+    (= "0건"이 안전으로 보이는 최악의 실패). 열거된 경로는 I/O 에도 그대로 쓴다."""
+    if os.name != "nt":
+        return root
+    return Path(longpath(root))
+
+
 def iter_source_files(root: str | Path, excludes: set[str] | None = None,
                       report: "ScanReport | None" = None):
     """파서가 있는 언어의 소스 파일."""
-    root = Path(root)
+    root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
         if not p.is_file() or _excluded(p, excludes):
@@ -139,7 +150,7 @@ def iter_source_files(root: str | Path, excludes: set[str] | None = None,
 
 def iter_text_files(root: str | Path, excludes: set[str] | None = None):
     """패턴 축이 볼 모든 텍스트 파일 (바이너리·잠금파일·미니파이 제외)."""
-    root = Path(root)
+    root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
         if not p.is_file() or _excluded(p, excludes):

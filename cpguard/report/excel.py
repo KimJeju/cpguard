@@ -119,10 +119,12 @@ def _source_text(f: Finding) -> str:
 
 
 def _rel(path: str, base: Path | None) -> str:
+    from ..extract import strip_longpath
+    path = strip_longpath(path)          # Windows 긴 경로 탐색용 \\?\ 접두 제거
     if base is None:
         return path
     try:
-        return str(Path(path).resolve().relative_to(base)).replace("\\", "/")
+        return str(Path(path).resolve().relative_to(Path(strip_longpath(base)))).replace("\\", "/")
     except Exception:
         return Path(path).name
 

@@ -52,3 +52,31 @@ def test_long_path_extract(tmp_path):
     assert safe_extract_zip(z, out) == 1
     # 존재 확인도 확장 경로로 — 일반 경로의 exists() 자체가 260자 한계에 걸린다.
     assert os.path.exists(_longpath(out / deep))
+
+
+def test_long_path_file_is_found_and_scanned(tmp_path):
+    r"""Windows MAX_PATH(260자) 넘는 파일이 탐색에서 조용히 빠지지 않는다.
+
+    추출은 \?\ 확장 경로로 쓰면서 탐색(rglob)은 안 써서, 긴 경로 파일이
+    스캔되지도 않고 무결성 보고에도 안 남던 회귀를 막는다("0건"=안전 오인).
+    """
+    import io
+    import zipfile
+
+    from cpguard.extract import safe_extract_zip
+    from cpguard.scanner import scan_path
+
+    deep = "/".join(["b" * 40] * 4)                     # 상대 경로만 240자 이상
+    inner = f"{deep}/{'c' * 80}.js"
+    assert len(inner) > 240
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(inner, "app.get('/x',(req,res)=>{eval(req.query.q)})")
+    (tmp_path / "u.zip").write_bytes(buf.getvalue())
+
+    assert safe_extract_zip(tmp_path / "u.zip", tmp_path / "src") == 1
+    findings, report = scan_path(tmp_path / "src")
+    assert report.scanned == 1, f"긴 경로 파일이 탐색에서 누락됨: {report.summary()}"
+    assert any(f.rule_id == "js.code-injection" for f in findings)
+    # 저장·표시 경로에 \?\ 접두가 새어 나가지 않는다
+    assert not str(findings[0].sink.loc.file).startswith("\\?\\")
