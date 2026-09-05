@@ -422,7 +422,6 @@ class _Worker:
 
     def _decl(self, node: TSNode) -> ir.Node:
         s = self.s
-        kids = self._named(node)
         name = self._unwrap(self._fld(node, s.decl_name)) if s.decl_name else None
         if name is None:
             name = self._first_ident(node)

@@ -15,7 +15,6 @@ import datetime as _dt
 from pathlib import Path
 
 from docx import Document
-from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
@@ -104,7 +103,7 @@ def _table(doc, rows, widths_cm, *, header=True, sizes=9, aligns=None):
             p = cell.paragraphs[0]
             p.paragraph_format.space_after = Pt(1)
             p.paragraph_format.space_before = Pt(1)
-            if aligns and aligns[ci] is not None and (ri or not header):
+            if aligns and aligns[ci] is not None:
                 p.alignment = aligns[ci]
             txt, color, bold = val if isinstance(val, tuple) else (val, S.INK, False)
             _set_font(p.add_run(str(txt)), size=sizes,
@@ -300,10 +299,10 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
             nv = sum(1 for r in crows if r["verdict"] == _sm.VIOLATED)
             nn = sum(1 for r in crows if r["verdict"] == _sm.NOT_COVERED)
             _heading(doc, std.name_en if en else std.name, 2)
-            intro = (f"Assessed against {std.source}. {nv} of the {len(crows)} weaknesses below "
+            intro = (f"Assessed against {std.source_for(lang)}. {nv} of the {len(crows)} weaknesses below "
                      f"were found."
                      if en else
-                     f"점검 기준은 {std.source}이며, 아래 {len(crows)}개 보안약점 중 "
+                     f"점검 기준은 {std.source_for(lang)}이며, 아래 {len(crows)}개 보안약점 중 "
                      f"{nv}개 항목에서 위반이 확인되었다.")
             if nn:
                 intro += (f" {nn} items are outside static analysis and are marked "
@@ -419,7 +418,7 @@ def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:
         for run in r.cells[0].paragraphs[0].runs:
             run.font.bold = True
     # 데이터 흐름·코드 예시는 고정폭으로 (줄 맞춤이 의미를 갖는다)
-    for r, (k, _v) in zip(t.rows, rows):
+    for r, (k, _v) in zip(t.rows, rows, strict=True):
         if k in (T("데이터 흐름"), T("안전한 코드 예시")):
             for run in r.cells[1].paragraphs[0].runs:
                 run.font.name = _FONT_MONO

@@ -11,7 +11,6 @@
 """
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 
 # 파일 전체가 자동생성임을 나타내는 흔한 헤더 표현

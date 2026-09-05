@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
-  <img src="https://img.shields.io/badge/tests-231%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-247%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -45,7 +45,7 @@ then hands the result to a three-pane review screen where a human confirms the v
 ## ✨ Features
 
 **Two detection axes**
-- **Data flow (taint)** — **11 languages**: JavaScript · TypeScript · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C# (27 file extensions, **77 rules**).
+- **Data flow (taint)** — **11 languages**: JavaScript · TypeScript · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C# (27 file extensions, **78 rules**).
   SQL injection (CWE-89) · command injection (78) · code injection (94) · XSS (79) · path traversal (22) · file inclusion (98) · SSRF (918) · open redirect (601) · insecure deserialization (502) · buffer overflow (120) · format string (134) · LDAP (90) / XPath (643) injection · WebView XSS · Intent redirection (926) · library injection (114).
 - **Patterns (single point)** — every language. Hardcoded secrets and vendor keys (798) · PII · TLS verification disabled (295) · weak hash/cipher (327) · predictable RNG (338) · cookie flags (1004) · debug code.
 

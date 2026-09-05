@@ -399,6 +399,27 @@
       "위험도 전체": "All severities", "유형 전체": "All types", "위험도별": "By severity", "규칙별": "By rule",
       "파일별": "By file", "유형별": "By type", "전체": "All", "신규만": "New only", "오탐힌트만": "FP hints only",
       "감사 완료 숨기기": "Hide audited", "감사 전체": "All audit states", "감사 상태": "Audit state",
+      "이 이슈에 대한 판단 근거·메모를 적으세요 (평문)":
+        "Record the rationale or a note for this finding (plain text)",
+      "무결성: 이상 없음": "Integrity: no issues",
+      "트리아지: 미실행 또는 정상": "Triage: not run or clean",
+      // 점검 기준 · 산출물 내보내기
+      "점검 기준": "Standard", "기준 미적용": "No standard", "점검항목": "Check item",
+      "점검항목별": "By check item", "점검항목 전체": "All check items",
+      "진단 대상 아님": "Not assessed",
+      "점검 기준 — 어떤 레퍼런스로 판정할지": "Standard — which reference the findings are judged by",
+      "점검 기준 — 어떤 레퍼런스로 판정할지 (복수 선택)":
+        "Standards — which references the findings are judged by (multiple)",
+      "산출물 ▾": "Exports ▾", "산출물 내보내기 — 점검 기준 선택": "Export — choose the standards to include",
+      "점검 기준 — 산출물에 실을 점검표를 고릅니다": "Standards — pick the checklists the export carries",
+      "보고서 (Word)": "Report (Word)", "보고서 (PDF)": "Report (PDF)",
+      "분석목록표 (xlsx)": "Analysis sheet (xlsx)", "조치 가이드": "Remediation guide",
+      "합본 진단 결과 보고서 — 편집 가능한 Word 원본": "Assessment report — editable Word master",
+      "합본 진단 결과 보고서 — 제출용 PDF": "Assessment report — PDF for submission",
+      "고객 제출용 14컬럼 분석목록표 + 점검항목 시트":
+        "Client-facing 14-column analysis sheet + check-items sheet",
+      "스캔은 기준과 무관하게 한 번만 돕니다. 기준은 결과를 어떤 점검표로 묶어 보고할지를 정하며, 진단 후 검토 화면에서 바꿀 수도 있습니다.":
+        "The scan runs once regardless of the standards. A standard only decides which checklist the results are reported against, and you can change it later on the review screen.",
       "경로 복사": "Copy path", "줄 이동": "Go to line",
       "AI 분석": "AI analysis", "데이터 흐름": "Data flow", "로그": "Log", "상세": "Details",
       "위험도": "Severity", "규칙": "Rule", "유형": "Type", "위치": "Location", "신뢰도": "Confidence",
@@ -547,6 +568,9 @@
       [/^(\d+)개 프로젝트 · 프로젝트별 최신 스캔$/, "$1 projects · latest scan each"],
       [/^(\d+)개 선택$/, "$1 selected"],
       [/^선택한 파일 (\d+)개 · (.+)$/, "$1 files selected · $2"],
+      [/^산출물 · 기준 (\d+) ▾$/, "Exports · $1 standard(s) ▾"],
+      [/^scan #(\d+) · (\d+)건 · 보관 소스 (\d+)파일$/, "scan #$1 · $2 findings · $3 stored sources"],
+      [/^점검항목 전체 \(위반 (\d+)\/(\d+)\)$/, "All check items (violated $1/$2)"],
       [/^심각 (\d+)$/, "Critical $1"], [/^높음 (\d+)$/, "High $1"],
       [/^중간 (\d+)$/, "Medium $1"], [/^낮음 (\d+)$/, "Low $1"],
       [/^완료 (\d+) · 실패 (\d+) · 경과 (\d+)초$/, "Done $1 · Failed $2 · Elapsed $3s"],

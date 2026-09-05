@@ -745,8 +745,14 @@
   }
   el('presets').querySelectorAll('[data-preset]').forEach(b => b.onclick = () => askAI(b.dataset.preset));
   el('askform').onsubmit = e => { e.preventDefault(); const q = el('askq').value.trim(); if (q) askAI('explain', q); };
-  el('log').textContent = [`scan #${SCAN_PK} · ${FINDINGS.length}건 · 보관 소스 ${Object.keys(SOURCES).length}파일`,
-    `{{ scan.integrity_note|default:"무결성: 이상 없음"|escapejs }}`, `{{ scan.triage_note|default:"트리아지: 미실행 또는 정상"|escapejs }}`].join('\n');
+  // 줄마다 별개 노드로 넣는다 — 세 줄을 한 텍스트 노드에 담으면 i18n 이 통째로 찾다가
+  // 어느 항목과도 안 맞아 영어 모드에서 그대로 한글로 남는다.
+  el('log').textContent = '';
+  for (const line of [`scan #${SCAN_PK} · ${FINDINGS.length}건 · 보관 소스 ${Object.keys(SOURCES).length}파일`,
+                      `{{ scan.integrity_note|default:"무결성: 이상 없음"|escapejs }}`,
+                      `{{ scan.triage_note|default:"트리아지: 미실행 또는 정상"|escapejs }}`]) {
+    const d = document.createElement('div'); d.textContent = line; el('log').appendChild(d);
+  }
 
   // ---------- 코드 마커 hover 툴팁 ----------
   function showTip(e, f) {

@@ -541,3 +541,21 @@ def test_pdf_report_is_grayscale():
     non_gray = [c for c in colors
                 if abs(c[0] - c[1]) > 0.02 or abs(c[1] - c[2]) > 0.02]
     assert not non_gray, f"회색이 아닌 색이 남아 있다: {sorted(non_gray)}"
+
+
+def test_readme_counts_match_reality():
+    """README 가 광고하는 숫자와 실제가 어긋나면 첫인상부터 신뢰를 잃는다.
+
+    규칙을 추가할 때마다 손으로 고치다 보니 실제로 두 번 어긋났다."""
+    import re
+
+    from cpguard.parse import loader
+    from cpguard.taint.spec import load_rules
+    rules, exts = len(load_rules()), len(loader.SUPPORTED_EXTENSIONS)
+    root = Path(__file__).resolve().parent.parent
+    for name in ("README.md", "README.ko.md"):
+        txt = (root / name).read_text(encoding="utf-8")
+        badge = re.search(r"badge/taint%20rules-(\d+)-", txt)
+        assert badge and int(badge.group(1)) == rules, f"{name} 배지: {badge and badge.group(1)} != {rules}"
+        assert f"**{rules} rules**" in txt or f"**규칙 {rules}개**" in txt, f"{name} 본문 규칙 수"
+        assert f"{exts} file extensions" in txt or f"확장자 {exts}종" in txt, f"{name} 확장자 수"

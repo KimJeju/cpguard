@@ -281,7 +281,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             connection.close()
 
 
-def _base_context() -> dict:
+def _base_context(lang: str = "ko") -> dict:
     from ..triage import available
     scans = list(Scan.objects.all()[:60])
     # 프로젝트별 최신 스캔만 — 홈 목록은 프로젝트 단위로 보여준다
@@ -325,14 +325,18 @@ def _base_context() -> dict:
     sev_rows = [{"key": k, "label": lb, "n": agg[k]} for k, lb in sev_labels]
     return {"scans": scans[:30], "projects": list(latest.values()),
             "providers": available(), "stats": stats, "sev_rows": sev_rows,
-            "standards": _standard_choices()}
+            "standards": _standard_choices(lang=lang)}
 
 
-def _standard_choices(selected: list[str] | None = None) -> list[dict]:
-    """업로드 폼의 기준 체크박스. 기본은 행안부 — 국내 진단의 표준 축이다."""
+def _standard_choices(selected: list[str] | None = None, lang: str = "ko") -> list[dict]:
+    """업로드 폼·산출물 패널의 기준 체크박스. 기본은 행안부 — 국내 진단의 표준 축이다.
+
+    이름·근거는 서버가 만드는 문자열이라 클라이언트 사전이 손대지 못한다. 언어에 맞는
+    표기를 여기서 골라 넘긴다."""
     from .. import standards as _sm
+    en = lang == "en"
     sel = set(selected) if selected is not None else {_sm.DEFAULT}
-    return [{"id": s.id, "name": s.name, "source": s.source,
+    return [{"id": s.id, "name": s.name_en if en else s.name, "source": s.source_for(lang),
              "count": len(s.items), "checked": s.id in sel}
             for s in _sm.STANDARDS.values()]
 
@@ -653,8 +657,10 @@ def scan_summary_api(request, pk: int):
 
 
 def _standard(request):
+    """필터용 단일 기준. 산출물 링크는 `?std=a,b` 형태를 쓰므로 목록이 와도 첫 값을 받는다."""
     from .. import standards
-    return standards.get(request.GET.get("std"))
+    raw = request.GET.get("std") or ""
+    return next((s for s in (standards.get(x) for x in raw.split(",")) if s), None)
 
 
 def scan_standard_api(request, pk: int):
@@ -667,14 +673,21 @@ def scan_standard_api(request, pk: int):
     get_object_or_404(Scan, pk=pk)
     std = _standard(request)
     if std is None:
+        lang = _lang(request)
         return JsonResponse({"standards": [
-            {"id": s.id, "name": s.name, "name_en": s.name_en, "source": s.source,
-             "count": len(s.items)} for s in standards.STANDARDS.values()]})
+            {"id": s.id, "name": s.name_en if lang == "en" else s.name, "name_en": s.name_en,
+             "source": s.source_for(lang), "count": len(s.items)}
+            for s in standards.STANDARDS.values()]})
     counts = {r["cwe"]: r["n"] for r in FindingRow.objects.filter(scan_id=pk)
               .exclude(cwe="").values("cwe").annotate(n=Count("id"))}
     items = standards.coverage(std, counts)
+    # 항목명·유형은 서버가 만드는 문자열이라 클라이언트 사전이 손대지 못한다 — 여기서 고른다.
+    if _lang(request) == "en":
+        for it in items:
+            it["name"], it["group"] = it["name_en"], it["group_en"]
     return JsonResponse({
-        "id": std.id, "name": std.name, "name_en": std.name_en, "source": std.source,
+        "id": std.id, "name": std.name_en if _lang(request) == "en" else std.name,
+        "name_en": std.name_en, "source": std.source_for(_lang(request)),
         "show_code": std.show_code,
         "items": items,
         "violated": sum(1 for i in items if i["n"]),
@@ -838,7 +851,7 @@ def _collect_sources(findings: list[Finding], base: Path) -> dict[str, str]:
 
 
 def index(request):
-    ctx = _base_context()
+    ctx = _base_context(_lang(request))
     ctx["secrets_mode"] = request.GET.get("mode") == "secrets"
     return render(request, "index.html", ctx)
 
@@ -927,7 +940,7 @@ def upload(request):
     ups = request.FILES.getlist("archive")
     if not ups:
         return render(request, "index.html",
-                      {**_base_context(), "error": "zip 파일을 선택하세요."})
+                      {**_base_context(_lang(request)), "error": "zip 파일을 선택하세요."})
 
     _job_prune()
     # (표시 이름, workdir) 목록으로 프로젝트를 모은다. 배치 zip 은 내부 zip 으로 펼친다.
@@ -950,7 +963,7 @@ def upload(request):
 
     if not projects:
         msg = "zip 파일만 지원합니다." + (f" (건너뜀: {', '.join(skipped)})" if skipped else "")
-        return render(request, "index.html", {**_base_context(), "error": msg})
+        return render(request, "index.html", {**_base_context(_lang(request)), "error": msg})
 
     do_triage = bool(request.POST.get("triage"))
     provider = request.POST.get("provider", "")
@@ -980,7 +993,7 @@ def upload(request):
         _run_scan_job(*args)
         job = _job_get(job_id)
         if job.get("status") == "error":
-            return render(request, "index.html", {**_base_context(), "error": job.get("error", "스캔 실패")})
+            return render(request, "index.html", {**_base_context(_lang(request)), "error": job.get("error", "스캔 실패")})
         return redirect("detail", pk=job["pk"])
 
     # 다건 — 배치로 묶어 순차 처리
@@ -1117,7 +1130,7 @@ def detail(request, pk: int):
         "shown": len(findings),
         "truncated": truncated,
         # 진단 시 고른 기준 — 검토 화면의 기준 셀렉트를 여기에 맞춘다
-        "scan_standards": _standard_choices(scan.standard_ids),
+        "scan_standards": _standard_choices(scan.standard_ids, _lang(request)),
     })
 
 

@@ -34,9 +34,14 @@ class Standard:
     id: str
     name: str
     name_en: str
-    source: str                # 근거 문서
+    source: str                # 근거 문서 (한국어)
     items: tuple[Item, ...]
+    source_en: str = ""        # 근거 문서 영문 표기(비면 source)
     show_code: bool = True     # code 가 그 기준의 공식 코드인가(OWASP A01·CWE-89 = 참)
+
+    def source_for(self, lang: str) -> str:
+        """근거 문서 표기. EN 보고서에 한국어 근거가 그대로 실리지 않게 한다."""
+        return (self.source_en or self.source) if lang == "en" else self.source
 
     def item_for(self, cwe: str) -> Item | None:
         cwe = (cwe or "").strip().upper()
@@ -292,10 +297,14 @@ STANDARDS: dict[str, Standard] = {
     "mois": Standard("mois", "행정안전부 소프트웨어 개발보안 가이드",
                      "MOIS Secure Coding Guide (Korea)",
                      "행정안전부 「소프트웨어 개발보안 가이드」 보안약점", _mois(),
+                     source_en="MOIS Software Development Security Guide (Korea)",
                      show_code=False),
     "efs": Standard("efs", "전자금융감독규정 웹 취약점", "Electronic Financial Supervision (Korea)",
                     "전자금융감독규정 · KISA 「홈페이지 취약점 진단·제거 가이드」 점검항목",
-                    _efs(), show_code=False),
+                    _efs(),
+                    source_en=("Electronic Financial Supervision Regulation · KISA web "
+                               "vulnerability assessment checklist (Korea)"),
+                    show_code=False),
     "owasp": Standard("owasp", "OWASP Top 10 (2021)", "OWASP Top 10 (2021)",
                       "OWASP Top 10:2021", _owasp()),
     "cwe": Standard("cwe", "CWE", "CWE", "MITRE Common Weakness Enumeration", _cwe_items()),

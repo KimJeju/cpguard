@@ -174,3 +174,36 @@ def test_standards_chosen_at_scan_time_drive_the_deliverables():
     txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(
         c.get(f"/scan/{pk}/report.pdf", SERVER_NAME="127.0.0.1").content)).pages)
     assert "전자금융감독규정" in txt and "행정안전부" in txt and "진단 대상 아님" in txt
+
+
+def test_en_deliverables_contain_no_korean():
+    """영문 산출물에 한글이 새면 해외 제출본이 못 쓰게 된다.
+
+    기준 근거 문서·표 머리글처럼 서버에서 만드는 문자열은 클라이언트 사전이 손대지
+    못한다 — 실제로 std.source 가 한국어 그대로 실리고 있었다."""
+    import re
+
+    c = Client()
+    pk = _seed_multi(c)
+    han = re.compile(r"[가-힣]")
+
+    from pypdf import PdfReader
+    pdf = c.get(f"/scan/{pk}/report.pdf?lang=en&std=mois,efs,owasp,cwe",
+                SERVER_NAME="127.0.0.1").content
+    txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf)).pages)
+    assert not han.search(txt), f"PDF(en) 한글 잔존: {sorted(set(han.findall(txt)))[:20]}"
+
+    from docx import Document
+    doc = Document(io.BytesIO(c.get(f"/scan/{pk}/report.docx?lang=en&std=mois,efs",
+                                    SERVER_NAME="127.0.0.1").content))
+    parts = ([p.text for p in doc.paragraphs]
+             + [cl.text for t in doc.tables for r in t.rows for cl in r.cells])
+    joined = " ".join(parts)
+    assert not han.search(joined), f"Word(en) 한글 잔존: {sorted(set(han.findall(joined)))[:20]}"
+
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(
+        c.get(f"/scan/{pk}/export.xlsx?lang=en&std=mois,efs", SERVER_NAME="127.0.0.1").content))
+    cells = " ".join(str(cl.value) for ws in wb.worksheets
+                     for row in ws.iter_rows() for cl in row if cl.value)
+    assert not han.search(cells), f"xlsx(en) 한글 잔존: {sorted(set(han.findall(cells)))[:20]}"

@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .finding import Finding
+from .style import SEV_FILL_XLSX, VIOLATED_FILL_XLSX
 
 COLUMNS = [
     "ID", "위험도", "언어", "체커명", "라인", "파일명", "점검 대상(Y/N)", "함수", "경로",
@@ -26,8 +27,7 @@ COLUMN_WIDTHS = {
 }
 SEVERITY_KO = {"critical": "심각", "high": "높음", "medium": "중간", "low": "낮음", "info": "정보"}
 # 색이 아니라 명도로 구분한다(report/style.py) — 흑백 출력·복사본에서도 순서가 읽힌다.
-from .style import SEV_FILL_XLSX as SEVERITY_FILL  # noqa: E402
-from .style import VIOLATED_FILL_XLSX
+SEVERITY_FILL = SEV_FILL_XLSX
 LANG_BY_EXT = {
     ".js": "JavaScript", ".jsx": "JavaScript", ".mjs": "JavaScript", ".cjs": "JavaScript",
     ".ts": "TypeScript", ".tsx": "TypeScript", ".php": "PHP", ".phtml": "PHP", ".inc": "PHP",
@@ -93,7 +93,7 @@ REMEDIATION_EN_XLSX = {
 # 요약/시트 라벨
 LABELS_EN = {
     "점검항목 결과": "Check items", "점검 기준": "Standard", "근거": "Source",
-    "유형": "Category", "코드": "Code", "보안약점": "Weakness", "판정": "Result",
+    "분류": "Standard", "유형": "Category", "코드": "Code", "보안약점": "Weakness", "판정": "Result",
     "탐지 건수": "Findings", "기준 미매핑 탐지": "Findings outside the standard",
     "요약": "Summary", "분석목록표": "Analysis Sheet",
     "소스코드 취약점 진단 분석목록표": "Source Code Vulnerability Analysis Sheet",
@@ -229,7 +229,7 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     ws.row_dimensions[1].height = 20
 
     rows = to_rows(findings, base, audit, lang)
-    for r, f in zip(rows, findings):
+    for r, f in zip(rows, findings, strict=True):
         ws.append(r)
         rn = ws.max_row
         ws.row_dimensions[rn].height = min(15 * max(2, str(r[13]).count("\n") + 2), 120)

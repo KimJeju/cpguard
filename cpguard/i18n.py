@@ -100,11 +100,10 @@ MSG: dict[str, str] = {
 PDF_UI: dict[str, str] = {
     "소스코드 취약점 진단 결과 보고서": "Source Code Vulnerability Assessment Report",
     "SAST 진단 · CPGuard": "SAST Assessment · CPGuard",
-    "프로젝트": "Project", "대상": "Target", "분석 도구": "Analyzer",
+    "분석 도구": "Analyzer",
     "CPGuard (CPG 기반 taint 분석)": "CPGuard (CPG-based taint analysis)",
     "분석 일시": "Scan time", "소스 파일 수": "Source files", "총 이슈": "Total issues",
     "작성일": "Date", "작성자": "Author",
-    "1. 진단 개요": "1. Overview",
     "본 보고서는 CPGuard 정적 분석(데이터 흐름 taint + 패턴)을 통해 대상 소스코드의 "
     "보안약점을 도출한 결과이다. 각 이슈는 CWE·OWASP 로 분류되며, 유형별 조치 방법은 "
     "별도의 조치 가이드를 참조한다.":
@@ -142,6 +141,13 @@ PDF_UI: dict[str, str] = {
     "대상": "Target", "항목": "Item", "값": "Value",
     "위험도 분포": "Severity Distribution", "취약점 유형(CWE) 상위": "Top Vulnerability Types (CWE)",
     "점검 항목": "Check item", "규칙": "Rule", "탐지": "Found",
+    "유형": "Category", "보안약점": "Weakness", "코드": "Code",
+    "건수": "Count", "비율": "Share", "진단 방식": "Method",
+    "포함 확장자": "File extensions",
+    "정적 분석(SAST) — 데이터 흐름(taint) + 패턴 점검":
+        "Static analysis (SAST) — data-flow (taint) + pattern checks",
+    "목차를 갱신하려면 이 영역을 선택하고 F9 를 누르세요.":
+        "Select this area and press F9 to update the table of contents.",
     "취약점": "Vulnerability", "데이터 흐름": "Data Flow", "영향": "Impact",
     "조치 방안": "Remediation", "안전한 코드 예시": "Safe Code Example", "참고": "References",
     "판정": "Rating", "기준": "Criteria", "조치 우선순위": "Priority",

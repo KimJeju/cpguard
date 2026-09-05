@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
-  <img src="https://img.shields.io/badge/tests-231%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-247%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -45,7 +45,7 @@
 ## ✨ 주요 기능
 
 **탐지 두 축**
-- **데이터 흐름(taint)** — **11개 언어**: JavaScript · TypeScript · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C# (확장자 27종, **규칙 77개**).
+- **데이터 흐름(taint)** — **11개 언어**: JavaScript · TypeScript · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C# (확장자 27종, **규칙 78개**).
   SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601) · 안전하지 않은 역직렬화(502) · 버퍼 오버플로(120) · 포맷 스트링(134) · LDAP(90)/XPath(643) 주입 · WebView XSS · Intent 리다이렉션(926) · 라이브러리 주입(114).
 - **패턴(단일 지점)** — 전 언어. 하드코딩 비밀정보·벤더키(798) · 개인정보(PII) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 예측 가능 난수(338) · 쿠키 플래그(1004) · 디버그 코드.
 
