@@ -799,11 +799,21 @@
 
   // ---------- 선택 ----------
   function select(id) {
+    if (LARGE) {
+      // 대량 모드: 원본은 임베드돼 있지 않으므로, 아직 안 불러온 이슈면 먼저 가져온 뒤
+      // 다시 들어온다. 호출자(j/k·거터 점프·팔레트·컨텍스트 메뉴)마다 처리하지 않고
+      // 여기 한 곳에서 보장한다 — 안 그러면 "원본을 보관하지 않은 파일" 오탐이 뜬다.
+      const have = FINDINGS.find(x => x.id === id);
+      if (!have || !have._loaded) { ensureFinding(id).then(f => { if (f) select(f.id); }); return; }
+    }
     const f = FINDINGS.find(x => x.id === id); if (!f) return;
     sel = id; curStep = 0;
     if (LARGE) {
-      // 대량 모드: 목록을 다시 그리지 않고(스크롤 유지) 선택 행만 강조
-      el('tree').querySelectorAll('.issue').forEach(n => n.classList.toggle('sel', Number(n.dataset.id) === id));
+      // 대량 모드: 목록을 다시 그리지 않고(스크롤 유지) 선택 행만 강조 + 화면에 보이게
+      el('tree').querySelectorAll('.issue').forEach(n => {
+        const on = Number(n.dataset.id) === id; n.classList.toggle('sel', on);
+        if (on) n.scrollIntoView({ block: 'nearest' });
+      });
     } else {
       if (ws.view === 'table') { ws.view = 'tree'; applyWS(); saveWS(); }   // 표에서 고르면 조사 모드로
       renderTree();
@@ -820,9 +830,14 @@
     if (el('palette').classList.contains('on')) return;
     if (e.key === 'Escape') { if (inField) { e.target.blur(); return; } ws.bottom = !ws.bottom; applyWS(); saveWS(); return; }
     if (inField) { if (e.key === 'Enter' && e.target.id === 'q') { const v = visible(); if (v.length) select(v[0].id); } return; }
-    const items = visible(); if (!items.length) return;
+    // j/k 는 "화면에 보이는 목록" 순서를 탄다. 대량 모드의 좌측 목록은 서버 페이지(LG.rows)라
+    // 임베드 배열(visible())과 순서·내용이 다르다 — 그걸 타면 엉뚱한 이슈로 튄다.
+    const items = LARGE ? LG.rows.map(r => ({ id: r.idx })) : visible(); if (!items.length) return;
     const i = items.findIndex(x => x.id === sel);
-    if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); select(items[Math.min(i + 1, items.length - 1)].id); }
+    if (e.key === 'j' || e.key === 'ArrowDown') {
+      e.preventDefault(); select(items[Math.min(i + 1, items.length - 1)].id);
+      if (LARGE && i + 1 >= items.length - 3) renderLargeMore();     // 끝 근처면 다음 페이지 미리 로드
+    }
     else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); select(items[Math.max(i - 1, 0)].id); }
     else if (sel !== null && (e.key === 'n' || e.key === 'p')) { const f = FINDINGS.find(x => x.id === sel); gotoStep(f, e.key === 'n' ? Math.min(curStep + 1, f.steps.length - 1) : Math.max(curStep - 1, 0)); }
     else if (e.key === 'Enter' && sel !== null) { askAI('explain'); }
