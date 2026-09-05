@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}배치 진단 — CPGuard{% endblock %}
+
+{% block head %}
+<style>
+  .b-head { display:flex; align-items:baseline; gap:12px; margin-bottom:14px }
+  .b-head h1 { margin:0; font-size:20px }
+  .pbar { height:10px; background:var(--sunken); border:1px solid var(--line); overflow:hidden; margin:0 0 6px }
+  .pfill { height:100%; width:0; background:var(--accent); transition:width .3s ease }
+  .b-meta { color:var(--muted); font-size:12.5px; margin-bottom:16px }
+  table.bt { width:100%; border-collapse:collapse; font-size:12.5px }
+  table.bt th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--line) }
+  table.bt td { padding:8px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle }
+  .st { font-size:11px; font-weight:600; padding:2px 8px; border-radius:0; display:inline-block }
+  .st.queued { background:color-mix(in srgb,var(--muted) 15%,transparent); color:var(--muted) }
+  .st.running { background:color-mix(in srgb,var(--accent) 18%,transparent); color:var(--accent) }
+  .st.done { background:color-mix(in srgb,var(--low) 18%,transparent); color:var(--low) }
+  .st.error { background:color-mix(in srgb,var(--crit) 18%,transparent); color:var(--crit) }
+  .b-done { display:none; margin-top:18px; gap:10px }
+  .b-done.on { display:flex }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="b-head">
+  <h1 id="btitle">배치 진단 진행 중</h1>
+  <span class="b-meta" id="bcount">0 / {{ total }}</span>
+</div>
+<div class="pbar"><div class="pfill" id="pfill"></div></div>
+<div class="b-meta" id="bmeta">대기 중…</div>
+
+<table class="bt">
+  <thead><tr><th style="width:50%">프로젝트</th><th>상태</th><th style="text-align:right">탐지</th><th>열기</th></tr></thead>
+  <tbody id="brows"></tbody>
+</table>
+
+<div class="b-done" id="bdone">
+  <a class="btn" href="{% url 'portfolio' %}">포트폴리오로 이동 →</a>
+  <a class="btn ghost" href="{% url 'index' %}">새 스캔</a>
+</div>
+
+<script>
+(function () {
+  var BATCH = "{{ batch_id }}";
+  var url = "{% url 'batch_status' batch_id %}";
+  var rows = document.getElementById('brows');
+  var pfill = document.getElementById('pfill');
+  var bcount = document.getElementById('bcount');
+  var bmeta = document.getElementById('bmeta');
+  var btitle = document.getElementById('btitle');
+  var bdone = document.getElementById('bdone');
+  var STLABEL = { queued: '대기', running: '진행 중', done: '완료', error: '실패' };
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  function render(d) {
+    var total = d.total || 0, fin = d.finished || 0;
+    bcount.textContent = fin + ' / ' + total;
+    pfill.style.width = (total ? Math.round(fin / total * 100) : 0) + '%';
+    bmeta.textContent = '완료 ' + (d.done || 0) + ' · 실패 ' + (d.errored || 0)
+                        + ' · 경과 ' + (d.elapsed || 0) + '초';
+    var html = '';
+    (d.jobs || []).forEach(function (j) {
+      var st = j.status || 'queued';
+      var open = j.pk ? '<a href="/scan/' + j.pk + '/">작업대</a>'
+                      : (st === 'error' ? '<span class="muted" title="' + esc(j.error) + '">오류</span>' : '<span class="muted">—</span>');
+      html += '<tr><td>' + esc(j.name) + '</td>'
+            + '<td><span class="st ' + st + '">' + (STLABEL[st] || st)
+            + (st === 'running' && j.phase ? ' · ' + esc(j.phase) : '') + '</span></td>'
+            + '<td style="text-align:right;font-variant-numeric:tabular-nums">' + (j.findings || 0) + '</td>'
+            + '<td>' + open + '</td></tr>';
+    });
+    rows.innerHTML = html;
+    if (d.complete) {
+      btitle.textContent = '배치 진단 완료 ✓';
+      bdone.classList.add('on');
+      return true;
+    }
+    return false;
+  }
+
+  function poll() {
+    fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      if (render(d)) return;         // 완료면 폴링 종료
+      setTimeout(poll, 1200);
+    }).catch(function () { setTimeout(poll, 2000); });
+  }
+  poll();
+})();
+</script>
+{% endblock %}

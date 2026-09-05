@@ -25,6 +25,28 @@ class Scan(models.Model):
     project = models.CharField(max_length=255, blank=True, default="", db_index=True)
     new_count = models.IntegerField(default=0)        # 이전 스캔 대비 신규
     resolved_count = models.IntegerField(default=0)   # 이전 스캔에 있었으나 사라짐
+    # 위험도별 카운트 비정규화 — 포트폴리오(수백 프로젝트) 목록이 findings_json 을
+    # 역직렬화하지 않고 순수 DB 조회로 집계하도록. 저장 시 기록, 마이그레이션으로 백필.
+    sev_critical = models.IntegerField(default=0)
+    sev_high = models.IntegerField(default=0)
+    sev_medium = models.IntegerField(default=0)
+    sev_low = models.IntegerField(default=0)
+    sev_info = models.IntegerField(default=0)
+
+    def store_severity_counts(self, counts: dict[str, int] | None = None) -> None:
+        """위험도 카운트 컬럼을 채운다. counts 미지정 시 findings 에서 계산."""
+        c = counts if counts is not None else self.severity_counts
+        self.sev_critical = c.get("critical", 0)
+        self.sev_high = c.get("high", 0)
+        self.sev_medium = c.get("medium", 0)
+        self.sev_low = c.get("low", 0)
+        self.sev_info = c.get("info", 0)
+
+    @property
+    def sev_counts_fast(self) -> dict[str, int]:
+        """역직렬화 없이 컬럼에서 읽는 위험도 카운트(포트폴리오·대시보드용)."""
+        return {"critical": self.sev_critical, "high": self.sev_high, "medium": self.sev_medium,
+                "low": self.sev_low, "info": self.sev_info}
 
     def previous(self):
         """같은 프로젝트의 직전 스캔."""

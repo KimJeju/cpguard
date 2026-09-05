@@ -4,11 +4,13 @@ from __future__ import annotations
 import csv
 import json
 import os
+import queue
 import shutil
 import tempfile
 import threading
 import time
 import uuid
+import zipfile
 from pathlib import Path
 
 from django.http import HttpResponse, JsonResponse
@@ -74,6 +76,75 @@ def _async_scan() -> bool:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return False
     return os.environ.get("CPGUARD_SCAN_ASYNC", "1") != "0"
+
+
+# ---- 배치: 다건 프로젝트를 순차 처리하는 단일 워커 큐 ----
+# 담당자가 수백 프로젝트를 한 번에 올릴 때, 프로젝트마다 스레드를 띄우면 스캐너 내부
+# 멀티프로세싱과 CPU 가 과구독된다. 전역 FIFO 큐 + 워커 1개로 순차 처리한다.
+# ponytail: 인메모리 큐 + 워커 1. 다중 워커/영속 큐가 필요하면 DB·Celery 로.
+_QUEUE: "queue.Queue" = queue.Queue()
+_BATCHES: dict[str, dict] = {}
+_WORKER_STARTED = False
+_WORKER_LOCK = threading.Lock()
+
+
+def _batch_set(batch_id: str, **kw) -> None:
+    with _JOBS_LOCK:
+        _BATCHES.setdefault(batch_id, {}).update(kw)
+
+
+def _batch_get(batch_id: str) -> dict:
+    with _JOBS_LOCK:
+        return dict(_BATCHES.get(batch_id, {}))
+
+
+def _ensure_worker() -> None:
+    """큐 워커 스레드 1개를 lazy 하게 띄운다."""
+    global _WORKER_STARTED
+    with _WORKER_LOCK:
+        if _WORKER_STARTED:
+            return
+        _WORKER_STARTED = True
+        threading.Thread(target=_worker_loop, name="cpguard-scan-worker", daemon=True).start()
+
+
+def _worker_loop() -> None:
+    while True:
+        args = _QUEUE.get()
+        try:
+            _run_scan_job(*args)
+        except Exception:  # 워커는 죽지 않는다 — 개별 잡 오류는 _run_scan_job 이 기록
+            pass
+        finally:
+            _QUEUE.task_done()
+
+
+def _enqueue_scan(args: tuple) -> None:
+    _ensure_worker()
+    _QUEUE.put(args)
+
+
+def _split_batch_zip(zip_path: Path) -> list[tuple[str, Path]] | None:
+    """'zip 안에 프로젝트 zip 여러 개'(배치 zip)면 각 내부 zip 을 개별 프로젝트로 펼친다.
+
+    내부 .zip 멤버가 하나도 없으면 None(= 단일 프로젝트로 취급). 있으면 각 내부 zip 을
+    자체 workdir/upload.zip 으로 풀어 (이름, workdir) 목록을 돌려준다.
+    """
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            inner = [n for n in zf.namelist()
+                     if n.lower().endswith(".zip") and not n.endswith("/")]
+            if not inner:
+                return None
+            out: list[tuple[str, Path]] = []
+            for name in inner[:2000]:               # 폭주 방지 상한
+                wd = Path(tempfile.mkdtemp(prefix="cpguard_"))
+                with zf.open(name) as src, open(wd / "upload.zip", "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                out.append((Path(name).name, wd))
+            return out
+    except zipfile.BadZipFile:
+        return None
 
 
 def _job_prune() -> None:
@@ -157,6 +228,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         _job_set(job_id, status="running", phase="save", findings=len(findings))
         _job_log(job_id, "결과 집계·저장 중…")
         project = _project_of(zip_name)
+        from collections import Counter as _Counter
+        sevc = _Counter(f.severity for f in findings)
         scan = Scan.objects.create(
             name=zip_name, project=project,
             file_count=scan_report.scanned, finding_count=len(findings),
@@ -165,6 +238,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
             triage_note=triage_note, integrity_note=integrity_note,
+            sev_critical=sevc.get("critical", 0), sev_high=sevc.get("high", 0),
+            sev_medium=sevc.get("medium", 0), sev_low=sevc.get("low", 0), sev_info=sevc.get("info", 0),
         )
         # 인덱스된 Finding 행 적재(서버측 필터·집계·페이지네이션용, 대량 탐지 대응)
         from .models import FindingRow
@@ -205,18 +280,23 @@ def _base_context() -> dict:
             latest[key] = s
 
     # ---- 대시보드 집계 (프로젝트별 최신 스캔 기준) ----
+    # 위험도는 비정규화 컬럼에서, 상위 규칙은 FindingRow GROUP BY 에서 — findings_json
+    # 역직렬화 없이. 수백 프로젝트에서도 조회가 가볍다.
     sev_keys = ["critical", "high", "medium", "low", "info"]
     agg = {k: 0 for k in sev_keys}
     total = 0
     new_total = 0
-    rule_agg: dict[str, int] = {}
     for s in latest.values():
-        for k, v in s.severity_counts.items():
+        for k, v in s.sev_counts_fast.items():
             agg[k] = agg.get(k, 0) + v
         total += s.finding_count
         new_total += s.new_count
-        for rid, n in s.rule_counts:
-            rule_agg[rid] = rule_agg.get(rid, 0) + n
+    from django.db.models import Count
+    from .models import FindingRow
+    latest_ids = [s.id for s in latest.values()]
+    rule_agg = {r["rule_id"]: r["n"] for r in
+                FindingRow.objects.filter(scan_id__in=latest_ids)
+                .values("rule_id").annotate(n=Count("id")).order_by("-n")[:8]}
     stats = {
         "total": total,
         "sev": agg,
@@ -315,6 +395,117 @@ def compare(request):
 def reports(request):
     """리포트 — 스캔별 내보내기(SARIF/CSV/분석목록표/PDF) 바로가기."""
     return render(request, "reports.html", {"scans": list(Scan.objects.all()[:100])})
+
+
+# 무거운 JSON 컬럼 — 포트폴리오 목록엔 필요 없으니 defer 로 로드 안 한다(수백 프로젝트 대응)
+_HEAVY_COLS = ("findings_json", "sarif_json", "sources_json", "audit_json", "audit_notes_json")
+_SORTS = {
+    "recent": "-created_at", "oldest": "created_at",
+    "name": "project", "findings": "-finding_count",
+    "critical": "-sev_critical", "high": "-sev_high", "new": "-new_count",
+}
+
+
+def _latest_per_project():
+    """프로젝트별 최신 스캔만. findings_json 등 무거운 컬럼은 로드하지 않는다."""
+    latest: dict[str, Scan] = {}
+    for s in Scan.objects.defer(*_HEAVY_COLS).order_by("-created_at").iterator():
+        key = s.project or s.name
+        if key not in latest:      # order_by -created_at → 첫 등장이 최신
+            latest[key] = s
+    return latest
+
+
+def portfolio(request):
+    """프로젝트 포트폴리오 — 담당자가 수백 프로젝트를 한눈에. 검색·정렬·필터·다중선택.
+
+    위험도는 비정규화 컬럼에서 읽어 findings_json 역직렬화가 없다(대규모에서 즉답)."""
+    rows = list(_latest_per_project().values())
+
+    q = (request.GET.get("q") or "").strip().lower()
+    if q:
+        rows = [s for s in rows if q in (s.project or s.name).lower()]
+    sev = request.GET.get("sev") or ""
+    if sev in ("critical", "high", "medium", "low", "info"):
+        rows = [s for s in rows if getattr(s, f"sev_{sev}", 0) > 0]
+
+    sort = request.GET.get("sort", "critical")
+    key = _SORTS.get(sort, "-sev_critical")
+    reverse = key.startswith("-")
+    field = key.lstrip("-")
+    if field == "project":
+        rows.sort(key=lambda s: (s.project or s.name).lower())
+    else:
+        rows.sort(key=lambda s: getattr(s, field, 0), reverse=reverse)
+    # 위험도 정렬 시 2차 키로 high→medium→… 자연스럽게
+    if field in ("sev_critical", "sev_high"):
+        rows.sort(key=lambda s: (s.sev_critical, s.sev_high, s.sev_medium, s.finding_count), reverse=True)
+
+    total_projects = len(rows)
+    # 페이지네이션
+    try:
+        page = max(1, int(request.GET.get("page", 1)))
+    except ValueError:
+        page = 1
+    size = 50
+    pages = max(1, (total_projects + size - 1) // size)
+    page = min(page, pages)
+    page_rows = rows[(page - 1) * size: page * size]
+
+    # 전체 집계(필터 적용 후) — 헤더 요약
+    agg = {k: sum(getattr(s, f"sev_{k}") for s in rows) for k in
+           ("critical", "high", "medium", "low", "info")}
+    return render(request, "portfolio.html", {
+        "rows": page_rows, "total_projects": total_projects, "agg": agg,
+        "q": request.GET.get("q") or "", "sev": sev, "sort": sort,
+        "page": page, "pages": pages,
+        "page_ids": ",".join(str(s.pk) for s in page_rows),
+        "all_ids": ",".join(str(s.pk) for s in rows),
+    })
+
+
+@never_cache
+def portfolio_export(request):
+    """선택한 프로젝트들의 산출물(PDF 보고서 + xlsx 분석목록표)을 프로젝트별 폴더로
+    묶은 ZIP. 담당자가 배치로 골라 개발자에게 배부하는 용도."""
+    import io
+    from ..report import excel
+    from ..report import pdf as pdfmod
+
+    lang = _lang(request)
+    ids = [int(x) for x in (request.GET.get("ids") or "").split(",") if x.strip().isdigit()]
+    ids = ids[:300]                                  # 폭주 방지 상한
+    kind = request.GET.get("kind", "both")           # report | xlsx | both
+    scans = list(Scan.objects.filter(pk__in=ids))
+    if not scans:
+        return HttpResponse("선택된 프로젝트가 없습니다.", status=400)
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for scan in scans:
+            proj = (scan.project or Path(scan.name).stem)
+            safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in proj)[:80] or f"scan{scan.pk}"
+            folder = f"{safe}"
+            if kind in ("report", "both"):
+                tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "r.pdf"
+                try:
+                    pdfmod.combined_report(scan, tmp, lang=lang)
+                    zf.writestr(f"{folder}/{safe}_report.pdf", tmp.read_bytes())
+                finally:
+                    shutil.rmtree(tmp.parent, ignore_errors=True)
+            if kind in ("xlsx", "both"):
+                findings = _findings_from_scan(scan)
+                tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "s.xlsx"
+                try:
+                    excel.write_workbook(findings, tmp, project=Path(scan.name).stem,
+                                         audit=scan.audit, lang=lang)
+                    zf.writestr(f"{folder}/{safe}_analysis-sheet.xlsx", tmp.read_bytes())
+                finally:
+                    shutil.rmtree(tmp.parent, ignore_errors=True)
+    resp = HttpResponse(buf.getvalue(), content_type="application/zip")
+    fname = "cpguard-deliverables.zip"
+    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
 
 
 def _pdf_response(scan, kind: str, lang: str = "ko"):
@@ -582,43 +773,89 @@ def guide(request):
 
 
 def upload(request):
-    """zip 을 받아 workdir 에 저장하고, 스캔은 백그라운드 스레드로 넘긴 뒤
-    진행 페이지로 보낸다(스캔 도중 진행바·상태를 보여주기 위함)."""
+    """zip 을 하나 이상 받아 각 프로젝트를 workdir 에 저장하고 스캔을 큐에 넣는다.
+
+    - 파일 여러 개(multi-select): 각 zip 이 프로젝트 하나.
+    - zip 안에 프로젝트 zip 여러 개(배치 zip): 펼쳐서 각각 프로젝트.
+    여러 프로젝트면 배치 진행 페이지로, 하나면 기존 단일 진행 페이지로 보낸다."""
     if request.method != "POST":
         return redirect("index")
 
-    up = request.FILES.get("archive")
-    if not up:
+    ups = request.FILES.getlist("archive")
+    if not ups:
         return render(request, "index.html",
                       {**_base_context(), "error": "zip 파일을 선택하세요."})
-    if not up.name.lower().endswith(".zip"):
-        return render(request, "index.html",
-                      {**_base_context(), "error": "zip 파일만 지원합니다."})
 
     _job_prune()
-    workdir = Path(tempfile.mkdtemp(prefix="cpguard_"))
-    # 업로드 바이트는 요청 안에서 저장해야 한다(스레드는 request.FILES 에 못 접근).
-    with open(workdir / "upload.zip", "wb") as fh:
-        for chunk in up.chunks():
-            fh.write(chunk)
+    # (표시 이름, workdir) 목록으로 프로젝트를 모은다. 배치 zip 은 내부 zip 으로 펼친다.
+    projects: list[tuple[str, Path]] = []
+    skipped: list[str] = []
+    for up in ups:
+        if not up.name.lower().endswith(".zip"):
+            skipped.append(up.name)
+            continue
+        wd = Path(tempfile.mkdtemp(prefix="cpguard_"))
+        with open(wd / "upload.zip", "wb") as fh:
+            for chunk in up.chunks():
+                fh.write(chunk)
+        inner = _split_batch_zip(wd / "upload.zip")
+        if inner:
+            projects.extend(inner)
+            shutil.rmtree(wd, ignore_errors=True)   # 배치 컨테이너 자체는 스캔 안 함
+        else:
+            projects.append((up.name, wd))
 
-    job_id = uuid.uuid4().hex
-    _job_set(job_id, status="running", phase="준비", done=0, total=0, findings=0,
-             name=up.name, started=time.time())
-    args = (job_id, workdir, up.name,
-            bool(request.POST.get("triage")), request.POST.get("provider", ""),
-            bool(request.POST.get("secrets_only")), request.POST.get("model", ""))
+    if not projects:
+        msg = "zip 파일만 지원합니다." + (f" (건너뜀: {', '.join(skipped)})" if skipped else "")
+        return render(request, "index.html", {**_base_context(), "error": msg})
 
-    if _async_scan():
-        threading.Thread(target=_run_scan_job, args=args, daemon=True).start()
-        return redirect("scan_progress", job_id=job_id)
+    do_triage = bool(request.POST.get("triage"))
+    provider = request.POST.get("provider", "")
+    secrets_only = bool(request.POST.get("secrets_only"))
+    model = request.POST.get("model", "")
 
-    # 동기 실행 — 결과로 직행 (테스트/CLI 유사 환경)
-    _run_scan_job(*args)
-    job = _job_get(job_id)
-    if job.get("status") == "error":
-        return render(request, "index.html", {**_base_context(), "error": job.get("error", "스캔 실패")})
-    return redirect("detail", pk=job["pk"])
+    # 잡 생성
+    jobs = []   # (job_id, args)
+    for name, wd in projects:
+        job_id = uuid.uuid4().hex
+        args = (job_id, wd, name, do_triage, provider, secrets_only, model)
+        jobs.append((job_id, args))
+
+    async_ = _async_scan()
+
+    # 단일 프로젝트 — 기존 단일 진행 흐름 유지(하위호환)
+    if len(jobs) == 1:
+        job_id, args = jobs[0]
+        _job_set(job_id, status="running", phase="준비", done=0, total=0, findings=0,
+                 name=args[2], started=time.time())
+        if async_:
+            _enqueue_scan(args)
+            return redirect("scan_progress", job_id=job_id)
+        _run_scan_job(*args)
+        job = _job_get(job_id)
+        if job.get("status") == "error":
+            return render(request, "index.html", {**_base_context(), "error": job.get("error", "스캔 실패")})
+        return redirect("detail", pk=job["pk"])
+
+    # 다건 — 배치로 묶어 순차 처리
+    batch_id = uuid.uuid4().hex
+    job_ids = []
+    for job_id, args in jobs:
+        _job_set(job_id, status="queued", phase="대기", done=0, total=0, findings=0,
+                 name=args[2], batch=batch_id)
+        job_ids.append(job_id)
+    _batch_set(batch_id, job_ids=job_ids, total=len(job_ids),
+               started=time.time(), skipped=skipped)
+
+    if async_:
+        for _job_id, args in jobs:
+            _enqueue_scan(args)
+        return redirect("batch_progress", batch_id=batch_id)
+
+    # 동기(테스트) — 순서대로 실행
+    for _job_id, args in jobs:
+        _run_scan_job(*args)
+    return redirect("batch_progress", batch_id=batch_id)
 
 
 def scan_progress(request, job_id: str):
@@ -646,6 +883,42 @@ def scan_status(request, job_id: str):
         "error": job.get("error"),
         "elapsed": int(time.time() - started) if started else 0,
         "log": job.get("log", []),
+    })
+
+
+def batch_progress(request, batch_id: str):
+    """배치 진행 화면 — 프로젝트별 상태 행 + 전체 진행. 다건 업로드용."""
+    b = _batch_get(batch_id)
+    if not b:
+        return redirect("index")
+    return render(request, "batch.html", {"batch_id": batch_id, "total": b.get("total", 0)})
+
+
+def batch_status(request, batch_id: str):
+    """배치 상태 JSON (배치 진행 페이지가 폴링)."""
+    b = _batch_get(batch_id)
+    if not b:
+        return JsonResponse({"status": "unknown"}, status=404)
+    jobs = []
+    done = errored = 0
+    for jid in b.get("job_ids", []):
+        j = _job_get(jid)
+        st = j.get("status", "queued")
+        if st == "done":
+            done += 1
+        elif st == "error":
+            errored += 1
+        jobs.append({
+            "name": j.get("name", ""), "status": st, "phase": j.get("phase", ""),
+            "findings": j.get("findings", 0), "pk": j.get("pk"), "error": j.get("error"),
+        })
+    total = b.get("total", len(jobs))
+    finished = done + errored
+    return JsonResponse({
+        "total": total, "done": done, "errored": errored, "finished": finished,
+        "complete": finished >= total, "jobs": jobs,
+        "started": b.get("started"),
+        "elapsed": int(time.time() - b["started"]) if b.get("started") else 0,
     })
 
 

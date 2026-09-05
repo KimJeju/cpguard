@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}프로젝트 — CPGuard{% endblock %}
+
+{% block head %}
+<style>
+  .pf-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px }
+  .pf-head h1 { margin:0; font-size:20px }
+  .pf-sum { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-left:auto }
+  .pf-sum .badge { font-size:12px; padding:3px 9px }
+  .pf-bar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px }
+  .pf-bar input, .pf-bar select { background:var(--sunken); color:var(--fg); border:1px solid var(--line);
+    border-radius:0; padding:6px 10px; font-size:12.5px; font-family:inherit }
+  .pf-bar input.search { width:240px }
+  .pf-bar .spacer { flex:1 }
+  .pf-actions { display:flex; gap:8px; align-items:center }
+  table.pf { width:100%; border-collapse:collapse; font-size:12.5px }
+  table.pf th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px;
+    border-bottom:1px solid var(--line); white-space:nowrap; position:sticky; top:0; background:var(--bg) }
+  table.pf td { padding:8px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle }
+  table.pf tr:hover td { background:var(--hover) }
+  table.pf .pname { font-weight:600; color:var(--fg) }
+  table.pf .pname a { color:var(--fg) }
+  .sevcell { display:inline-flex; gap:8px; align-items:center; font-variant-numeric:tabular-nums }
+  .sevcell b { font-weight:600 } .sevcell .z { color:var(--ln) }
+  .sc-critical { color:var(--crit) } .sc-high { color:var(--high) } .sc-medium { color:var(--med) } .sc-low { color:var(--low) }
+  .rowact a { color:var(--muted); text-decoration:none; margin-right:8px; font-size:11.5px; border:1px solid var(--line); padding:2px 7px; border-radius:0 }
+  .rowact a:hover { color:var(--fg); border-color:var(--accent) }
+  .newtag { font-size:10px; font-weight:700; background:var(--accent); color:var(--on-accent); padding:1px 5px; margin-left:4px }
+  .pager { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:12px; font-size:12.5px; color:var(--muted) }
+  .pager a, .pager span.cur { border:1px solid var(--line); padding:4px 10px; color:var(--fg); text-decoration:none }
+  .pager span.cur { border-color:var(--accent); color:var(--accent) }
+  .empty { padding:40px; text-align:center; color:var(--muted) }
+  .selinfo { font-size:12px; color:var(--muted) }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pf-head">
+  <h1>프로젝트 포트폴리오</h1>
+  <span class="muted" style="font-size:13px">{{ total_projects }}개 프로젝트 · 프로젝트별 최신 스캔</span>
+  <div class="pf-sum">
+    <span class="badge critical">심각 {{ agg.critical }}</span>
+    <span class="badge high">높음 {{ agg.high }}</span>
+    <span class="badge medium">중간 {{ agg.medium }}</span>
+    <span class="badge low">낮음 {{ agg.low }}</span>
+  </div>
+</div>
+
+<form method="get" class="pf-bar">
+  <input class="search" type="text" name="q" value="{{ q }}" placeholder="프로젝트 이름 검색">
+  <select name="sev" onchange="this.form.submit()">
+    <option value="">위험도 전체</option>
+    <option value="critical" {% if sev == "critical" %}selected{% endif %}>심각 있음</option>
+    <option value="high" {% if sev == "high" %}selected{% endif %}>높음 있음</option>
+    <option value="medium" {% if sev == "medium" %}selected{% endif %}>중간 있음</option>
+    <option value="low" {% if sev == "low" %}selected{% endif %}>낮음 있음</option>
+  </select>
+  <select name="sort" onchange="this.form.submit()">
+    <option value="critical" {% if sort == "critical" %}selected{% endif %}>정렬: 위험도순</option>
+    <option value="findings" {% if sort == "findings" %}selected{% endif %}>정렬: 탐지 많은순</option>
+    <option value="new" {% if sort == "new" %}selected{% endif %}>정렬: 신규 많은순</option>
+    <option value="recent" {% if sort == "recent" %}selected{% endif %}>정렬: 최근순</option>
+    <option value="name" {% if sort == "name" %}selected{% endif %}>정렬: 이름순</option>
+  </select>
+  <button class="btn ghost" type="submit">검색</button>
+  <span class="spacer"></span>
+  <a class="btn ghost" href="{% url 'index' %}">+ 새 스캔</a>
+</form>
+
+<div class="pf-bar" style="margin-bottom:8px">
+  <label class="selinfo"><input type="checkbox" id="selpage"> 이 페이지 전체 선택</label>
+  <span class="selinfo" id="selcount">0개 선택</span>
+  <span class="spacer"></span>
+  <div class="pf-actions">
+    <select id="exkind">
+      <option value="both">보고서 PDF + 분석목록표</option>
+      <option value="report">보고서 PDF만</option>
+      <option value="xlsx">분석목록표(xlsx)만</option>
+    </select>
+    <button class="btn" id="exbtn" disabled>선택 산출물 ZIP 배부</button>
+  </div>
+</div>
+
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="pf">
+  <thead>
+    <tr>
+      <th style="width:28px"></th>
+      <th>프로젝트</th>
+      <th>최근 스캔</th>
+      <th style="text-align:right">파일</th>
+      <th style="text-align:right">탐지</th>
+      <th>위험도 (심/높/중/낮)</th>
+      <th>신규</th>
+      <th>액션</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in rows %}
+    <tr>
+      <td><input type="checkbox" class="rowchk" value="{{ s.pk }}"></td>
+      <td class="pname"><a href="{% if s.project %}{% url 'project_home' s.project %}{% else %}{% url 'detail' s.pk %}{% endif %}">{{ s.project|default:s.name }}</a></td>
+      <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">{{ s.file_count }}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">{{ s.finding_count }}</td>
+      <td>
+        <span class="sevcell">
+          <b class="{% if s.sev_critical %}sc-critical{% else %}z{% endif %}">{{ s.sev_critical }}</b>
+          <b class="{% if s.sev_high %}sc-high{% else %}z{% endif %}">{{ s.sev_high }}</b>
+          <b class="{% if s.sev_medium %}sc-medium{% else %}z{% endif %}">{{ s.sev_medium }}</b>
+          <b class="{% if s.sev_low %}sc-low{% else %}z{% endif %}">{{ s.sev_low }}</b>
+        </span>
+      </td>
+      <td>{% if s.new_count %}<span class="newtag">+{{ s.new_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="rowact">
+        <a href="{% url 'detail' s.pk %}">작업대</a>
+        <a download href="{% url 'export_pdf_report' s.pk %}">보고서</a>
+        <a download href="{% url 'export_xlsx' s.pk %}">xlsx</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="pager">
+  {% if page > 1 %}<a href="?q={{ q }}&sev={{ sev }}&sort={{ sort }}&page={{ page|add:'-1' }}">◀ 이전</a>{% endif %}
+  <span class="cur">{{ page }} / {{ pages }}</span>
+  {% if page < pages %}<a href="?q={{ q }}&sev={{ sev }}&sort={{ sort }}&page={{ page|add:'1' }}">다음 ▶</a>{% endif %}
+</div>
+{% else %}
+<div class="empty">조건에 맞는 프로젝트가 없습니다. <a href="{% url 'index' %}">새 스캔을 올려보세요.</a></div>
+{% endif %}
+
+<script>
+(function () {
+  var chks = function () { return [].slice.call(document.querySelectorAll('.rowchk')); };
+  var selpage = document.getElementById('selpage');
+  var exbtn = document.getElementById('exbtn');
+  var selcount = document.getElementById('selcount');
+  function selected() { return chks().filter(function (c) { return c.checked; }).map(function (c) { return c.value; }); }
+  function refresh() {
+    var n = selected().length;
+    selcount.textContent = n + '개 선택';
+    exbtn.disabled = n === 0;
+  }
+  if (selpage) selpage.addEventListener('change', function () {
+    chks().forEach(function (c) { c.checked = selpage.checked; }); refresh();
+  });
+  document.addEventListener('change', function (e) { if (e.target.classList.contains('rowchk')) refresh(); });
+  if (exbtn) exbtn.addEventListener('click', function () {
+    var ids = selected(); if (!ids.length) return;
+    var kind = document.getElementById('exkind').value;
+    // 다운로드는 GET 링크로 — 브라우저가 파일로 저장
+    window.location = "{% url 'portfolio_export' %}?kind=" + kind + "&ids=" + ids.join(',');
+  });
+  refresh();
+})();
+</script>
+{% endblock %}

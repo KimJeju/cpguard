@@ -181,6 +181,7 @@
     <button class="tbtn menu-btn" id="menu-btn" title="메뉴" aria-haspopup="true" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <div class="menu-pop" id="menu-pop" hidden>
       <a class="mi" href="/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/></svg></span>홈 · 새 스캔</a>
+      <a class="mi" href="/projects/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></span>프로젝트 포트폴리오</a>
       <a class="mi" href="/?mode=secrets"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.5" cy="8.5" r="4"/><path d="M11.5 11.5 20 20M17 17l2-2"/></svg></span>시크릿 빠른 점검</a>
       <a class="mi" href="/compare/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4 4 8l4 4M4 8h11a4 4 0 0 1 4 4M16 20l4-4-4-4M20 16H9a4 4 0 0 1-4-4"/></svg></span>스냅샷 비교</a>
       <a class="mi" href="/reports/"><span class="mi-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v4h4M9 13h6M9 16.5h6"/></svg></span>리포트</a>
@@ -456,6 +457,24 @@
       "— 위험도·규칙·CWE 분포와 전체 목록(필터·페이지네이션)": "— severity/rule/CWE distribution and full list (filter · pagination)",
       "상위 규칙": "Top rules", "(클릭 = 필터)": "(click to filter)", "종류": "Type", "흐름": "Flow",
       "◀ 이전": "◀ Prev", "다음 ▶": "Next ▶", "위험도 도넛": "Severity donut",
+      // ── 포트폴리오 ──
+      "프로젝트 포트폴리오": "Project portfolio", "프로젝트 이름 검색": "Search project name",
+      "심각 있음": "Has critical", "높음 있음": "Has high", "중간 있음": "Has medium", "낮음 있음": "Has low",
+      "정렬: 위험도순": "Sort: by severity", "정렬: 탐지 많은순": "Sort: most findings",
+      "정렬: 신규 많은순": "Sort: most new", "정렬: 최근순": "Sort: most recent", "정렬: 이름순": "Sort: by name",
+      "검색": "Search", "+ 새 스캔": "+ New scan", "이 페이지 전체 선택": "Select this page",
+      "보고서 PDF + 분석목록표": "Report PDF + analysis sheet", "보고서 PDF만": "Report PDF only",
+      "분석목록표(xlsx)만": "Analysis sheet (xlsx) only", "선택 산출물 ZIP 배부": "Export selected as ZIP",
+      "최근 스캔": "Last scan", "위험도 (심/높/중/낮)": "Severity (C/H/M/L)", "액션": "Actions",
+      "작업대": "Workbench", "조건에 맞는 프로젝트가 없습니다.": "No projects match.",
+      "새 스캔을 올려보세요.": "Upload a new scan.",
+      "개 프로젝트 · 프로젝트별 최신 스캔": "projects · latest scan each",
+      // ── 배치 진단 ──
+      "배치 진단 진행 중": "Batch scan in progress", "배치 진단 완료 ✓": "Batch scan complete ✓",
+      "대기 중…": "Waiting…", "포트폴리오로 이동 →": "Go to portfolio →", "새 스캔": "New scan",
+      "상태": "Status", "열기": "Open", "오류": "Error", "대기": "Pending",
+      "여러 프로젝트를 한 번에: zip 여러 개를 선택하거나, 프로젝트 zip 들을 담은 zip 하나를 올리면 각각 진단합니다.":
+        "Scan many projects at once: select multiple zips, or upload one zip that contains project zips — each is scanned separately.",
       // ── 대시보드/업로드 추가 ──
       "심각 Critical": "Critical", "높음 High": "High", "중간 Medium": "Medium", "낮음 Low": "Low", "정보 Info": "Info",
       "(데이터 흐름 + 패턴 두 축)": "(data-flow + pattern axes)", "신규 / 해결": "New / Resolved",
@@ -523,6 +542,12 @@
       [/^감사 완료\s+(\d+)\/(\d+)$/, "Audited $1/$2"],
       [/^LLM 사용 가능: (.+)$/, "LLM available: $1"],
       [/^(.+) 홈$/, "$1 home"],
+      [/^(\d+)개 프로젝트 · 프로젝트별 최신 스캔$/, "$1 projects · latest scan each"],
+      [/^(\d+)개 선택$/, "$1 selected"],
+      [/^심각 (\d+)$/, "Critical $1"], [/^높음 (\d+)$/, "High $1"],
+      [/^중간 (\d+)$/, "Medium $1"], [/^낮음 (\d+)$/, "Low $1"],
+      [/^완료 (\d+) · 실패 (\d+) · 경과 (\d+)초$/, "Done $1 · Failed $2 · Elapsed $3s"],
+      [/^진행 중 · (.+)$/, "Running · $1"],
       [/^이전 스캔\((.+)\) 대비$/, "vs previous scan ($1)"],
       [/^(\d{2}-\d{2} \d{2}:\d{2}) · (\d+)건$/, "$1 · $2 findings"],
       [/^스캔 무결성: 소스 (\d+)개 · 텍스트 (\d+)개 · 분석 실패 (\d+)개 · 구문오류로 부분분석 (\d+)개 · 크기 초과 제외 (\d+)개 — 결과가 전체를 대표하지 않을 수 있습니다\.$/,

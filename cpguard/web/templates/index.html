@@ -99,12 +99,13 @@
     <h2>{% if secrets_mode %}시크릿·설정 빠른 점검{% else %}프로젝트 업로드{% endif %}</h2>
     <p class="muted">소스 프로젝트를 zip 으로 올리면 자동으로 해제해 진단합니다.
        지원: <code>.js</code> <code>.jsx</code> <code>.ts</code> <code>.tsx</code> <code>.php</code> <code>.py</code>
-       {% if not secrets_mode %}(데이터 흐름 + 패턴 두 축){% else %}(패턴 축만 — 하드코딩 비밀정보·개인정보·설정 위생){% endif %}</p>
+       {% if not secrets_mode %}(데이터 흐름 + 패턴 두 축){% else %}(패턴 축만 — 하드코딩 비밀정보·개인정보·설정 위생){% endif %}
+       <br><span style="font-size:12px">여러 프로젝트를 한 번에: zip 여러 개를 선택하거나, 프로젝트 zip 들을 담은 zip 하나를 올리면 각각 진단합니다.</span></p>
 
     <form id="scanform" method="post" action="{% url 'upload' %}" enctype="multipart/form-data"
           style="display:flex;gap:12px;align-items:center;margin-top:14px">
       {% csrf_token %}
-      <input type="file" name="archive" accept=".zip" required style="color:var(--muted);flex:1">
+      <input type="file" name="archive" accept=".zip" multiple required style="color:var(--muted);flex:1">
       <button class="btn" type="submit">진단 시작</button>
     </form>
 

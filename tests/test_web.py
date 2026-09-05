@@ -3,6 +3,7 @@ import io
 import os
 import tempfile
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -369,3 +370,87 @@ def test_finding_rows_and_scale_apis():
 
     hi = c.get(f"/scan/{pk}/api/findings?severity=high").json()
     assert all(r["severity"] == "high" for r in hi["rows"])
+
+
+# ---- 다건 업로드 · 배치 · 포트폴리오 (담당자 300+ 프로젝트 시나리오) ----
+
+def _named_zip(name: str, files: dict[str, str]) -> io.BytesIO:
+    z = _zip_bytes(files)
+    z.name = name
+    return z
+
+
+def test_split_batch_zip_detects_nested():
+    from cpguard.web import views
+    inner = _zip_bytes({"a/x.js": "eval(req.query.q)"}).getvalue()
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("proj-one.zip", inner)
+        z.writestr("proj-two.zip", inner)
+    p = Path(tempfile.mkdtemp()) / "batch.zip"
+    p.write_bytes(outer.getvalue())
+    parts = views._split_batch_zip(p)
+    assert parts is not None and len(parts) == 2
+    assert {n for n, _ in parts} == {"proj-one.zip", "proj-two.zip"}
+    # 일반 프로젝트 zip(내부 zip 없음)은 None → 단일 프로젝트로 취급
+    plain = Path(tempfile.mkdtemp()) / "plain.zip"
+    plain.write_bytes(_zip_bytes({"a/x.js": "x=1"}).getvalue())
+    assert views._split_batch_zip(plain) is None
+
+
+def test_multi_file_upload_creates_batch():
+    from cpguard.web.models import Scan
+    c = Client()
+    before = Scan.objects.count()
+    z1 = _named_zip("alpha.zip", {"a/i.js": "app.get('/x',(req,res)=>{eval(req.query.q)})"})
+    z2 = _named_zip("beta.zip", {"b/m.js": "app.get('/y',(req,res)=>{eval(req.query.p)})"})
+    r = c.post("/scan/", {"archive": [z1, z2]})
+    assert r.status_code == 302 and "/scan/batch/" in r["Location"]
+    assert Scan.objects.count() - before == 2
+    bid = r["Location"].split("/batch/")[1].split("/")[0]
+    st = c.get(f"/scan/batch/{bid}/status").json()
+    assert st["total"] == 2 and st["complete"] is True and st["done"] == 2
+
+
+def test_nested_batch_zip_expands_to_projects():
+    from cpguard.web.models import Scan
+    c = Client()
+    inner = _zip_bytes({"a/x.js": "app.get('/x',(req,res)=>{eval(req.query.q)})"}).getvalue()
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("gamma.zip", inner)
+        z.writestr("delta.zip", inner)
+    outer.name = "container.zip"
+    outer.seek(0)
+    before = Scan.objects.count()
+    r = c.post("/scan/", {"archive": outer})
+    assert r.status_code == 302 and "/scan/batch/" in r["Location"]
+    assert Scan.objects.count() - before == 2
+
+
+def test_portfolio_page_and_severity_columns():
+    from cpguard.web.models import Scan
+    c = Client()
+    # 스캔 하나 만들어 위험도 컬럼이 채워지는지
+    c.post("/scan/", {"archive": _named_zip("portf.zip",
+           {"a/i.js": "app.get('/x',(req,res)=>{eval(req.query.q)})"})})
+    s = Scan.objects.order_by("-id").first()
+    assert (s.sev_critical + s.sev_high + s.sev_medium + s.sev_low + s.sev_info) == s.finding_count
+    r = c.get("/projects/")
+    assert r.status_code == 200
+    body = r.content.decode("utf-8")
+    assert "포트폴리오" in body
+
+
+def test_portfolio_export_zip_of_deliverables():
+    from cpguard.web.models import Scan
+    c = Client()
+    c.post("/scan/", {"archive": _named_zip("exp.zip",
+           {"a/i.js": "app.get('/x',(req,res)=>{eval(req.query.q)})"})})
+    s = Scan.objects.order_by("-id").first()
+    r = c.get(f"/projects/export.zip?ids={s.pk}&kind=both")
+    assert r.status_code == 200 and r["Content-Type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    names = zf.namelist()
+    assert any(n.endswith("_report.pdf") for n in names)
+    assert any(n.endswith("_analysis-sheet.xlsx") for n in names)
