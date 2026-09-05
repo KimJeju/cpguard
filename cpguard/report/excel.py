@@ -171,7 +171,7 @@ def to_rows(findings: list[Finding], base: str | Path | None = None,
 def write_workbook(findings: list[Finding], out_path: str | Path,
                    project: str = "결과", base: str | Path | None = None,
                    audit: dict[str, str] | None = None, lang: str = "ko",
-                   standard: str = "") -> Path:
+                   standards: list[str] | str | None = None) -> Path:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
@@ -248,48 +248,59 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
 
     # ---- 점검항목 결과 (기준을 골랐을 때만) ----
     # 14컬럼 분석목록표는 제출 형식이 고정이라 건드리지 않고 시트를 하나 더 만든다.
-    # 걸리지 않은 항목까지 '양호'로 남겨야 "무엇을 점검했는가"의 증빙이 된다.
+    # 여러 기준을 골랐으면 실제 산출물처럼 '분류' 열로 한 시트에 함께 싣는다.
     from .. import standards as _std_mod
-    std = _std_mod.get(standard)
-    if std is not None:
+    ids = [standards] if isinstance(standards, str) else list(standards or [])
+    stds = [s for s in (_std_mod.get(i) for i in ids) if s]
+    if stds:
         cwe_counts: dict[str, int] = {}
         for f in findings:
             c = (f.cwe or "").strip().upper()
             if c:
                 cwe_counts[c] = cwe_counts.get(c, 0) + 1
+        avail = _std_mod.rule_cwes()
+        V = _std_mod.VERDICT_EN if en else _std_mod.VERDICT_KO
+        multi = len(stds) > 1
         cs = wb.create_sheet(L("점검항목 결과"))
-        cs.append([L("점검 기준"), std.name_en if en else std.name])
-        cs.append([L("근거"), std.source])
-        cs.append([])
-        code = std.show_code
-        head = ([L("유형")] + ([L("코드")] if code else [])
-                + [L("보안약점"), L("판정"), L("탐지 건수"), "CWE"])
+        if not multi:
+            cs.append([L("점검 기준"), stds[0].name_en if en else stds[0].name])
+            cs.append([L("근거"), stds[0].source])
+            cs.append([])
+        head = ([L("분류")] if multi else []) + [L("유형"), L("코드"), L("보안약점"),
+                                                 L("판정"), L("탐지 건수"), "CWE"]
         cs.append(head)
         for c in cs[cs.max_row]:
             c.font, c.fill, c.border, c.alignment = header_font, header_fill, header_border, header_align
-        vcol = 3 if code else 2                    # 판정 열 위치
-        for r in _std_mod.coverage(std, cwe_counts):
-            verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
-            cs.append([r["group_en"] if en else r["group"]] + ([r["code"]] if code else [])
-                      + [r["name_en"] if en else r["name"], verdict, r["n"], ", ".join(r["cwes"])])
-            rn = cs.max_row
-            for c in cs[rn]:
-                c.font, c.border, c.alignment = data_font, data_border, data_align
-            for col in (vcol + 1, vcol + 2):
-                cs.cell(rn, col).alignment = center
-            if r["n"]:
-                cs.cell(rn, vcol + 1).fill = PatternFill(fill_type="solid",
+        head_row = cs.max_row
+        vcol = len(head) - 2                      # 판정 열(1-based)
+        for std in stds:
+            for r in _std_mod.coverage(std, cwe_counts, avail):
+                cs.append(([std.name_en if en else std.name] if multi else [])
+                          + [r["group_en"] if en else r["group"],
+                             r["code"] if std.show_code else "",
+                             r["name_en"] if en else r["name"],
+                             V[r["verdict"]], r["n"], ", ".join(r["cwes"])])
+                rn = cs.max_row
+                for c in cs[rn]:
+                    c.font, c.border, c.alignment = data_font, data_border, data_align
+                for col in (vcol, vcol + 1):
+                    cs.cell(rn, col).alignment = center
+                if r["verdict"] == _std_mod.VIOLATED:
+                    cs.cell(rn, vcol).fill = PatternFill(fill_type="solid",
                                                          fgColor=SEVERITY_FILL["high"])
-        um = _std_mod.unmapped(std, cwe_counts)
+        um = {}
+        for std in stds:
+            um.update(_std_mod.unmapped(std, cwe_counts))
+        um = {c: n for c, n in um.items() if not any(s.item_for(c) for s in stds)}
         if um:
             cs.append([])
             cs.append([L("기준 미매핑 탐지"),
                        ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1]))])
-        widths = ({"A": 26, "B": 9, "C": 46, "D": 9, "E": 11, "F": 34} if code
-                  else {"A": 26, "B": 46, "C": 9, "D": 11, "E": 34})
-        for col, w in widths.items():
-            cs.column_dimensions[col].width = w
-        cs.freeze_panes = "A5"
+        base_w = [26, 9, 46, 13, 11, 34]
+        widths = ([22] if multi else []) + base_w
+        for i, w in enumerate(widths):
+            cs.column_dimensions[get_column_letter(i + 1)].width = w
+        cs.freeze_panes = f"A{head_row + 1}"
 
     out = Path(out_path)
     out.parent.mkdir(parents=True, exist_ok=True)

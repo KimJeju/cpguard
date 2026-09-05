@@ -32,13 +32,16 @@ def _lang(request) -> str:
     UI 는 클라이언트 사전으로 번역하지만 룰 메시지·PDF 는 서버 생성이라 여기서 고른다."""
     return "en" if (request.GET.get("lang") or request.COOKIES.get("cpguard_lang")) == "en" else "ko"
 
-def _std(request) -> str:
-    """점검 기준 id — `?std=` (mois/owasp/cwe). 없거나 모르는 값이면 "" = 기준 미적용.
+def _stds(request, scan=None) -> list[str]:
+    """이 요청에 적용할 점검 기준 id 목록.
 
-    기준은 스캔이 아니라 볼 때 고르는 축이다. 같은 결과를 발주처가 요구하는 기준으로
-    다시 묶어 보여줄 뿐이므로, 기준을 바꾸려고 다시 스캔할 이유가 없다."""
-    std = _standard(request)
-    return std.id if std else ""
+    `?std=` 가 있으면 그것(쉼표로 여러 개), 없으면 스캔이 진단 시 지정한 기준.
+    기준은 결과를 묶어 보여주는 축일 뿐이라, 바꾸려고 다시 스캔할 이유가 없다."""
+    from .. import standards as _sm
+    raw = request.GET.get("std")
+    if raw is not None:
+        return [s for s in raw.split(",") if _sm.get(s)]
+    return scan.standard_ids if scan is not None else []
 
 
 # 코드 뷰어용 원본 보관 한도 (DB 비대화 방지)
@@ -166,7 +169,7 @@ def _job_prune() -> None:
 
 def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                   do_triage: bool, provider: str, secrets_only: bool = False,
-                  model: str = "") -> None:
+                  model: str = "", standards: str = "") -> None:
     """백그라운드 스캔 — 압축 해제 → 진행 콜백과 함께 스캔 → Scan 레코드 생성.
 
     secrets_only 면 데이터 흐름 축을 건너뛰고 패턴(시크릿·개인정보·설정)만 돈다.
@@ -246,7 +249,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 [_finding_to_dict(i, f, base) for i, f in enumerate(findings)], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
-            triage_note=triage_note, integrity_note=integrity_note,
+            triage_note=triage_note, integrity_note=integrity_note, standards=standards,
             sev_critical=sevc.get("critical", 0), sev_high=sevc.get("high", 0),
             sev_medium=sevc.get("medium", 0), sev_low=sevc.get("low", 0), sev_info=sevc.get("info", 0),
         )
@@ -321,7 +324,17 @@ def _base_context() -> dict:
                   ("medium", "중간 Medium"), ("low", "낮음 Low"), ("info", "정보 Info")]
     sev_rows = [{"key": k, "label": lb, "n": agg[k]} for k, lb in sev_labels]
     return {"scans": scans[:30], "projects": list(latest.values()),
-            "providers": available(), "stats": stats, "sev_rows": sev_rows}
+            "providers": available(), "stats": stats, "sev_rows": sev_rows,
+            "standards": _standard_choices()}
+
+
+def _standard_choices(selected: list[str] | None = None) -> list[dict]:
+    """업로드 폼의 기준 체크박스. 기본은 행안부 — 국내 진단의 표준 축이다."""
+    from .. import standards as _sm
+    sel = set(selected) if selected is not None else {_sm.DEFAULT}
+    return [{"id": s.id, "name": s.name, "source": s.source,
+             "count": len(s.items), "checked": s.id in sel}
+            for s in _sm.STANDARDS.values()]
 
 
 def settings_page(request):
@@ -490,7 +503,6 @@ def portfolio_export(request):
 
     from . import config as appcfg
     lang = _lang(request)
-    std = _std(request)
     meta = appcfg.report_meta()
     ids = [int(x) for x in (request.GET.get("ids") or "").split(",") if x.strip().isdigit()]
     ids = ids[:300]                                  # 폭주 방지 상한
@@ -508,7 +520,8 @@ def portfolio_export(request):
             if kind in ("report", "both"):
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_pdf_")) / "r.pdf"
                 try:
-                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standard=std)
+                    pdfmod.combined_report(scan, tmp, lang=lang, meta=meta,
+                                           standards=_stds(request, scan))
                     zf.writestr(f"{folder}/{safe}_report.pdf", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -517,7 +530,8 @@ def portfolio_export(request):
                 tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "s.xlsx"
                 try:
                     excel.write_workbook(findings, tmp, project=Path(scan.name).stem,
-                                         audit=scan.audit, lang=lang, standard=std)
+                                         audit=scan.audit, lang=lang,
+                                         standards=_stds(request, scan))
                     zf.writestr(f"{folder}/{safe}_analysis-sheet.xlsx", tmp.read_bytes())
                 finally:
                     shutil.rmtree(tmp.parent, ignore_errors=True)
@@ -551,7 +565,7 @@ def _attachment(fname: str) -> str:
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(fname)}"
 
 
-def _pdf_response(scan, kind: str, lang: str = "ko", standard: str = ""):
+def _pdf_response(scan, kind: str, lang: str = "ko", standards: list[str] | None = None):
     from ..report import pdf as pdfmod
     from . import config as appcfg
     meta = appcfg.report_meta()          # 설정의 보고서 정보(작성자·기관·발주처·기간·버전)
@@ -561,7 +575,7 @@ def _pdf_response(scan, kind: str, lang: str = "ko", standard: str = ""):
             pdfmod.remediation_guide(scan, tmp, lang=lang, meta=meta)
             suffix = "remediation-guide" if lang == "en" else "조치가이드"
         else:
-            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standard=standard)
+            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standards=standards)
             suffix = "assessment-report" if lang == "en" else "진단결과보고서"
         data = tmp.read_bytes()
     finally:
@@ -574,7 +588,8 @@ def _pdf_response(scan, kind: str, lang: str = "ko", standard: str = ""):
 @never_cache
 def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
-    return _pdf_response(get_object_or_404(Scan, pk=pk), "combined", _lang(request), _std(request))
+    scan = get_object_or_404(Scan, pk=pk)
+    return _pdf_response(scan, "combined", _lang(request), _stds(request, scan))
 
 
 @never_cache
@@ -622,8 +637,9 @@ def scan_standard_api(request, pk: int):
     get_object_or_404(Scan, pk=pk)
     std = _standard(request)
     if std is None:
-        return JsonResponse({"standards": [{"id": s.id, "name": s.name, "name_en": s.name_en}
-                                           for s in standards.STANDARDS.values()]})
+        return JsonResponse({"standards": [
+            {"id": s.id, "name": s.name, "name_en": s.name_en, "source": s.source,
+             "count": len(s.items)} for s in standards.STANDARDS.values()]})
     counts = {r["cwe"]: r["n"] for r in FindingRow.objects.filter(scan_id=pk)
               .exclude(cwe="").values("cwe").annotate(n=Count("id"))}
     items = standards.coverage(std, counts)
@@ -632,6 +648,7 @@ def scan_standard_api(request, pk: int):
         "show_code": std.show_code,
         "items": items,
         "violated": sum(1 for i in items if i["n"]),
+        "not_covered": sum(1 for i in items if not i["covered"]),
         "total_items": len(items),
         "unmapped": standards.unmapped(std, counts),
     })
@@ -909,12 +926,15 @@ def upload(request):
     provider = request.POST.get("provider", "")
     secrets_only = bool(request.POST.get("secrets_only"))
     model = request.POST.get("model", "")
+    # 진단 전에 고른 점검 기준. 기준은 결과 산출 방식만 바꾸므로 스캔 자체는 동일하다.
+    from .. import standards as _std
+    chosen = ",".join(s for s in request.POST.getlist("standards") if _std.get(s))
 
     # 잡 생성
     jobs = []   # (job_id, args)
     for name, wd in projects:
         job_id = uuid.uuid4().hex
-        args = (job_id, wd, name, do_triage, provider, secrets_only, model)
+        args = (job_id, wd, name, do_triage, provider, secrets_only, model, chosen)
         jobs.append((job_id, args))
 
     async_ = _async_scan()
@@ -1066,6 +1086,8 @@ def detail(request, pk: int):
         "total": total,
         "shown": len(findings),
         "truncated": truncated,
+        # 진단 시 고른 기준 — 검토 화면의 기준 셀렉트를 여기에 맞춘다
+        "scan_standards": _standard_choices(scan.standard_ids),
     })
 
 
@@ -1250,7 +1272,7 @@ def export_xlsx(request, pk: int):
     tmp = Path(tempfile.mkdtemp(prefix="cpguard_xlsx_")) / "out.xlsx"
     try:
         excel.write_workbook(findings, tmp, project=Path(scan.name).stem, audit=scan.audit,
-                             lang=lang, standard=_std(request))
+                             lang=lang, standards=_stds(request, scan))
         data = tmp.read_bytes()
     finally:
         shutil.rmtree(tmp.parent, ignore_errors=True)

@@ -123,6 +123,22 @@
       <ul id="filelist" style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px"></ul>
     </div>
 
+    <fieldset style="margin-top:16px;border:1px solid var(--line);padding:10px 14px 12px">
+      <legend class="muted" style="font-size:12px;padding:0 6px">점검 기준 — 어떤 레퍼런스로 판정할지 (복수 선택)</legend>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        {% for s in standards %}
+        <label class="muted" style="display:flex;gap:7px;align-items:center;cursor:pointer;font-size:12.5px" title="{{ s.source }}">
+          <input type="checkbox" name="standards" form="scanform" value="{{ s.id }}"{% if s.checked %} checked{% endif %}
+                 style="flex:0 0 auto;width:auto;margin:0">
+          <span>{{ s.name }} <span style="opacity:.6">({{ s.count }})</span></span>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="muted" style="font-size:11.5px;margin:8px 0 0">
+        스캔은 기준과 무관하게 한 번만 돕니다. 기준은 결과를 어떤 점검표로 묶어 보고할지를 정하며,
+        진단 후 검토 화면에서 바꿀 수도 있습니다.</p>
+    </fieldset>
+
     <div style="display:flex;gap:14px;align-items:center;margin-top:14px;flex-wrap:wrap">
       <label class="secrets-toggle" style="display:flex;gap:8px;align-items:center;cursor:pointer">
         <input type="checkbox" name="secrets_only" form="scanform" value="1" {% if secrets_mode %}checked{% endif %}>

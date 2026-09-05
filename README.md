@@ -63,9 +63,10 @@ then hands the result to a three-pane review screen where a human confirms the v
 - **Bulk deliverables** — select projects and download one ZIP with each project's PDF report and xlsx sheet, ready to hand to developers.
 
 **Assess against the standard your client asks for**
-- Pick the reference the findings are judged by: **MOIS Secure Coding Guide** (Korea's public-sector standard, 7 weakness categories) · **OWASP Top 10 (2021)** · **CWE**.
-- The mapping key is CWE, so **the scan runs once and the standard is chosen when you look** — switching references never means rescanning.
+- Tick the references before the scan starts: **MOIS Secure Coding Guide** (Korea's public-sector standard) · **Electronic Financial Supervision Regulation** web checklist (Korean finance) · **OWASP Top 10 (2021)** · **CWE**. Pick several — real Korean deliverables report against more than one at a time.
+- The mapping key is CWE, so **the scan runs once and the standards only shape the report** — switching or adding references never means rescanning.
 - Filter the review screen by check item, group the issue list by it, and the deliverables follow: the PDF's *check items* section becomes that standard's full checklist with a violated/pass verdict per item, and the xlsx gains a *check items* sheet. Items are identified by category and weakness name, the way real assessment deliverables are written — never by an item number, which differs between editions of the guide. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
+- **A check item with no rule behind it is never reported as "pass."** Items outside static analysis — directory indexing, admin page exposure, CSRF — are marked *Not assessed*, so the deliverable never claims a check that did not happen.
 - Findings outside the chosen standard's mapping are reported separately, never silently dropped.
 
 **LLM triage**
@@ -134,8 +135,8 @@ Linux install `fonts-nanum`, or point `CPGUARD_PDF_FONT` at any TrueType font yo
 # CLI scan (SARIF + analysis sheet)
 cpguard scan ./project --sarif out.sarif --xlsx out.xlsx
 
-# Assess against a standard (mois | owasp | cwe)
-cpguard scan ./project --standard mois --xlsx out.xlsx
+# Assess against one or more standards (mois | efs | owasp | cwe)
+cpguard scan ./project --standard mois --standard efs --xlsx out.xlsx
 
 # Re-verify with LLM triage
 cpguard scan ./project --triage --provider gemini

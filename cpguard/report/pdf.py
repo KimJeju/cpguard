@@ -349,12 +349,54 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
     return [KeepTogether(t) if len(rows) <= 8 else t, Spacer(1, 4 * mm)]
 
 
+_ITEM_TABLE_STYLE = [
+    ("FONTSIZE", (0, 0), (-1, -1), 8),
+    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
+    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
+    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+]
+
+
+def _item_table(rows_std, std, V, T, st, en):
+    """점검항목 표. 항목 번호는 싣지 않는다 — 기준 문서는 판마다 번호가 달라 대조 부담만
+    생기고, 실제 진단 산출물도 유형·보안약점명으로 적는다. 공식 코드가 있는 기준만 붙인다."""
+    from .. import standards as _sm
+    code = std.show_code
+    head = [T("유형")] + ([T("코드")] if code else []) + [T("보안약점"), "CWE", T("판정"), T("탐지")]
+    data = [head]
+    for r in rows_std:
+        cw = (", ".join(r["cwes"][:3]) + ("…" if len(r["cwes"]) > 3 else "")) or "-"
+        # 보안약점명은 길다 — 문자열로 두면 셀을 넘치므로 Paragraph 로 줄바꿈시킨다.
+        data.append([r["group_en"] if en else r["group"]]
+                    + ([r["code"]] if code else [])
+                    + [Paragraph(r["name_en"] if en else r["name"], st["cell"]), cw,
+                       V[r["verdict"]], str(r["n"]) if r["n"] else "-"])
+    widths = ([28 * mm] + ([14 * mm] if code else [])
+              + [(56 if code else 70) * mm, 30 * mm, 24 * mm, 14 * mm])
+    vcol = len(head) - 2
+    style = list(_ITEM_TABLE_STYLE) + [
+        ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+        ("ALIGN", (vcol - 1, 0), (-1, -1), "CENTER"),
+    ]
+    for i, r in enumerate(rows_std, 1):
+        if r["verdict"] == _sm.VIOLATED:
+            style += [("TEXTCOLOR", (vcol, i), (vcol, i), colors.HexColor("#b3261e")),
+                      ("FONTNAME", (vcol, i), (vcol, i), _FONT_B)]
+        elif r["verdict"] == _sm.NOT_COVERED:
+            style.append(("TEXTCOLOR", (0, i), (-1, i), colors.HexColor("#8a8f98")))
+    tbl = Table(data, colWidths=widths, repeatRows=1)
+    tbl.setStyle(TableStyle(style))
+    return tbl
+
+
 def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
-                    meta: dict | None = None, standard: str = "") -> None:
+                    meta: dict | None = None,
+                    standards: list[str] | str | None = None) -> None:
     """합본 진단 결과 보고서 — 표지·개정이력·목차·개요·요약·항목·상세·총평·부록.
 
     meta: 설정의 보고서 정보(author/org/client/tester/period/version). 비면 기본값.
-    standard: 점검 기준 id(mois/owasp/cwe). 주면 '3. 진단 항목'이 그 기준의 점검표가 된다."""
+    standards: 점검 기준 id 목록. 주면 '3. 진단 항목'이 기준별 점검표가 된다."""
     _register_font()
     st = _styles()
     en = lang == "en"
@@ -528,9 +570,16 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     # ── 3. 진단 항목 ──
     story.append(Paragraph(T("3. 진단 항목"), st["h1"]))
     from .. import standards as _std_mod
-    std = _std_mod.get(standard)
+    ids = [standards] if isinstance(standards, str) else list(standards or [])
+    stds = [s for s in (_std_mod.get(i) for i in ids) if s]
 
-    if std is None:
+    cwe_counts: dict[str, int] = {}
+    for f in findings:
+        c = (f.get("cwe") or "").strip().upper()
+        if c:
+            cwe_counts[c] = cwe_counts.get(c, 0) + 1
+
+    if not stds:
         story.append(Paragraph(T(
             "이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다."), st["body"]))
         story.append(Spacer(1, 2 * mm))
@@ -542,70 +591,46 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         irows = [[T("점검 항목"), "CWE", T("탐지")]]
         for r, d in sorted(by_rule.items(), key=lambda x: -x[1]["n"]):
             irows.append([r, d["cwe"] or "-", str(d["n"])])
-        widths = [124 * mm, 32 * mm, 18 * mm]
-        body_align = None
+        it = Table(irows, colWidths=[124 * mm, 32 * mm, 18 * mm], repeatRows=1)
+        it.setStyle(TableStyle(_ITEM_TABLE_STYLE + [
+            ("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5), ("ALIGN", (2, 0), (2, -1), "CENTER")]))
+        story.append(it)
     else:
-        # 기준을 골랐으면 그 기준의 점검표 전체를 싣는다. 걸리지 않은 항목까지 '양호'로
-        # 남겨야 산출물이 "무엇을 점검했는가"의 증빙이 된다.
-        cwe_counts: dict[str, int] = {}
-        for f in findings:
-            c = (f.get("cwe") or "").strip().upper()
-            if c:
-                cwe_counts[c] = cwe_counts.get(c, 0) + 1
-        rows_std = _std_mod.coverage(std, cwe_counts)
-        violated = sum(1 for r in rows_std if r["n"])
-        # 근거 문서 하나만 쓴다 — 이름과 출처를 나란히 적으면 같은 말이 두 번 나온다.
-        intro = (f"Assessed against {std.source}. "
-                 f"{violated} of the {len(rows_std)} weaknesses below were found."
-                 if en else
-                 f"점검 기준은 {std.source}이며, 아래 {len(rows_std)}개 보안약점 중 "
-                 f"{violated}개 항목에서 위반이 확인되었다. 위반이 없는 항목은 양호로 표기한다.")
-        story.append(Paragraph(intro, st["body"]))
-        story.append(Spacer(1, 2 * mm))
-        # 항목 번호는 싣지 않는다 — 기준 문서는 판마다 번호가 달라 대조 부담만 생기고,
-        # 실제 진단 산출물도 분류·유형·보안약점명으로 적는다. 공식 코드가 있는 기준만 붙인다.
-        code = std.show_code
-        head = [T("유형")] + ([T("코드")] if code else []) + [T("보안약점"), "CWE", T("판정"), T("탐지")]
-        irows = [head]
-        for r in rows_std:
-            verdict = ("Violated" if en else "취약") if r["n"] else ("Pass" if en else "양호")
-            cw = ", ".join(r["cwes"][:3]) + ("…" if len(r["cwes"]) > 3 else "")
-            # 보안약점명은 길다("사용자 하드디스크에 저장되는 쿠키를 통한 정보 노출").
-            # 문자열로 두면 셀을 넘치므로 Paragraph 로 감싸 줄바꿈시킨다.
-            nm = Paragraph(r["name_en"] if en else r["name"], st["cell"])
-            irows.append([r["group_en"] if en else r["group"]]
-                         + ([r["code"]] if code else [])
-                         + [nm, cw, verdict, str(r["n"]) if r["n"] else "-"])
-        widths = ([30 * mm] + ([14 * mm] if code else [])
-                  + [(60 if code else 74) * mm, 32 * mm, 18 * mm, 16 * mm])
-        body_align = len(head)
-
-
-    style = [("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 8.5),
-             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d5dae2")),
-             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef1f6")),
-             ("FONTNAME", (0, 0), (-1, 0), _FONT_B),
-             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-             ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
-    if body_align:
-        vcol = body_align - 2                      # 판정 열 (마지막에서 두 번째)
-        style += [("ALIGN", (vcol - 1, 0), (-1, -1), "CENTER"), ("FONTSIZE", (0, 0), (-1, -1), 8)]
-        for i, r in enumerate(rows_std, 1):
-            if r["n"]:
-                style.append(("TEXTCOLOR", (vcol, i), (vcol, i), colors.HexColor("#b3261e")))
-                style.append(("FONTNAME", (vcol, i), (vcol, i), _FONT_B))
-    else:
-        style.append(("ALIGN", (2, 0), (2, -1), "CENTER"))
-    it = Table(irows, colWidths=widths, repeatRows=1)
-    it.setStyle(TableStyle(style))
-    story.append(it)
-    if std is not None and (um := _std_mod.unmapped(std, cwe_counts)):
-        story.append(Spacer(1, 2 * mm))
-        lead = ("Findings outside this standard's mapping: "
-                if en else "이 기준의 점검항목에 매핑되지 않은 탐지: ")
-        story.append(Paragraph(
-            lead + ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1])),
-            st["small"]))
+        avail = _std_mod.rule_cwes()
+        V = _std_mod.VERDICT_EN if en else _std_mod.VERDICT_KO
+        for si, std in enumerate(stds):
+            rows_std = _std_mod.coverage(std, cwe_counts, avail)
+            nv = sum(1 for r in rows_std if r["verdict"] == _std_mod.VIOLATED)
+            nn = sum(1 for r in rows_std if r["verdict"] == _std_mod.NOT_COVERED)
+            if si:
+                story.append(Spacer(1, 6 * mm))
+            story.append(Paragraph(std.name_en if en else std.name, st["h2sec"]))
+            intro = (f"Assessed against {std.source}. {nv} of the {len(rows_std)} weaknesses "
+                     f"below were found."
+                     if en else
+                     f"점검 기준은 {std.source}이며, 아래 {len(rows_std)}개 보안약점 중 "
+                     f"{nv}개 항목에서 위반이 확인되었다.")
+            if nn:
+                intro += (f" {nn} items are outside static analysis and are marked "
+                          f"'{V[_std_mod.NOT_COVERED]}' rather than passing."
+                          if en else
+                          f" 이 중 {nn}개 항목은 정적 분석으로 확인할 수 있는 규칙이 없어 "
+                          f"양호가 아니라 ‘{V[_std_mod.NOT_COVERED]}’ 으로 표기한다.")
+            story.append(Paragraph(intro, st["body"]))
+            story.append(Spacer(1, 2 * mm))
+            story.append(_item_table(rows_std, std, V, T, st, en))
+        um = {}
+        for std in stds:
+            um.update(_std_mod.unmapped(std, cwe_counts))
+        um = {c: n for c, n in um.items() if not any(s.item_for(c) for s in stds)}
+        if um:
+            story.append(Spacer(1, 2 * mm))
+            lead = ("Findings outside the selected standards: "
+                    if en else "선택한 기준의 점검항목에 매핑되지 않은 탐지: ")
+            story.append(Paragraph(
+                lead + ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1])),
+                st["small"]))
     story.append(PageBreak())
 
     # ── 4. 상세 진단 결과 ──

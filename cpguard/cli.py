@@ -34,9 +34,11 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("path", help="스캔할 프로젝트 경로")
     sc.add_argument("--sarif", metavar="FILE", help="SARIF 2.1.0 결과 저장 경로")
     sc.add_argument("--xlsx", metavar="FILE", help="고객 제출용 분석목록표(xlsx) 저장 경로")
-    sc.add_argument("--standard", choices=["mois", "owasp", "cwe"],
-                    help="점검 기준 — mois(행정안전부 시큐어코딩) · owasp(Top 10) · cwe. "
-                         "지정하면 점검항목별 판정을 함께 출력하고 xlsx 에 점검항목 시트를 넣는다")
+    sc.add_argument("--standard", action="append", metavar="ID",
+                    choices=["mois", "efs", "owasp", "cwe"],
+                    help="점검 기준(여러 번 지정 가능) — mois(행정안전부 보안약점) · "
+                         "efs(전자금융감독규정 웹 취약점) · owasp(Top 10) · cwe. "
+                         "지정하면 점검항목별 판정을 출력하고 xlsx 에 점검항목 시트를 넣는다")
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
     sc.add_argument("--triage", action="store_true",
                     help="LLM 트리아지로 오탐 재검증")
@@ -105,25 +107,36 @@ def main(argv: list[str] | None = None) -> int:
     if args.xlsx:
         from .report import excel
         excel.write_workbook(findings, args.xlsx, project=root.name, base=root,
-                             standard=args.standard or "")
+                             standards=args.standard or [])
         print(f"분석목록표 저장: {args.xlsx}")
 
     if args.standard:
         from . import standards
-        std = standards.get(args.standard)
         counts: dict[str, int] = {}
         for f in findings:
             c = (f.cwe or "").strip().upper()
             if c:
                 counts[c] = counts.get(c, 0) + 1
-        rows = standards.coverage(std, counts)
-        violated = [r for r in rows if r["n"]]
-        print()
-        print(f"[점검 기준] {std.name} — {len(rows)}개 항목 중 {len(violated)}개 위반")
-        for r in violated:
-            print(f"  취약  {r['code']}  {r['name']}  ({r['n']}건)")
-        if um := standards.unmapped(std, counts):
-            print("  기준 미매핑: " + ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1])))
+        avail = standards.rule_cwes()
+        for sid in args.standard:
+            std = standards.get(sid)
+            rows = standards.coverage(std, counts, avail)
+            violated = [r for r in rows if r["verdict"] == standards.VIOLATED]
+            skipped = [r for r in rows if r["verdict"] == standards.NOT_COVERED]
+            print()
+            print(f"[점검 기준] {std.name} — {len(rows)}개 항목 중 "
+                  f"위반 {len(violated)} · 양호 {len(rows) - len(violated) - len(skipped)} · "
+                  f"진단 대상 아님 {len(skipped)}")
+            for r in violated:
+                print(f"  취약  {r['name']}  ({r['n']}건)")
+            if skipped:
+                # 규칙이 없어 못 본 항목을 양호로 세면 안 한 점검을 했다고 쓰는 셈이다.
+                print("  진단 대상 아님(해당 규칙 없음): "
+                      + ", ".join(r["name"] for r in skipped[:8])
+                      + (f" 외 {len(skipped) - 8}개" if len(skipped) > 8 else ""))
+            if um := standards.unmapped(std, counts):
+                print("  기준 미매핑: "
+                      + ", ".join(f"{c}({n})" for c, n in sorted(um.items(), key=lambda kv: -kv[1])))
 
     # CI 게이트: --fail-on 지정 시 그 등급 이상 탐지일 때만 실패 코드. 미지정 시 레거시(탐지 있으면 1).
     if args.fail_on is not None:

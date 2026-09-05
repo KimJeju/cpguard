@@ -32,6 +32,15 @@ class Scan(models.Model):
     sev_medium = models.IntegerField(default=0)
     sev_low = models.IntegerField(default=0)
     sev_info = models.IntegerField(default=0)
+    # 진단 시 고른 점검 기준(쉼표 구분 id). 탐지 결과 자체는 기준과 무관하지만,
+    # "무엇으로 진단하기로 했는가"가 남아야 산출물·검토 화면이 그 기준을 기본으로 쓴다.
+    standards = models.CharField(max_length=120, blank=True, default="")
+
+    @property
+    def standard_ids(self) -> list[str]:
+        """이 스캔에 지정된 기준 id 목록(모르는 값은 버린다)."""
+        from .. import standards as _std
+        return [s for s in (self.standards or "").split(",") if _std.get(s)]
 
     def store_severity_counts(self, counts: dict[str, int] | None = None) -> None:
         """위험도 카운트 컬럼을 채운다. counts 미지정 시 findings 에서 계산."""

@@ -249,9 +249,7 @@
         <div style="display:flex;gap:6px">
           <select id="fstd" title="점검 기준 — 어떤 레퍼런스로 판정할지">
             <option value="">기준 미적용</option>
-            <option value="mois">행안부 보안약점</option>
-            <option value="owasp">OWASP Top 10</option>
-            <option value="cwe">CWE</option>
+            {% for s in scan_standards %}<option value="{{ s.id }}"{% if s.checked %} data-scan="1"{% endif %} title="{{ s.source }}">{{ s.name }}</option>{% endfor %}
           </select>
           <select id="fitem" title="점검항목" disabled><option value="">점검항목 전체</option></select>
         </div>
@@ -385,7 +383,7 @@
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
   const WS_KEY = 'cpguard.ws.v1';
   let ws = { leftW: 320, rightW: 380, bottomH: 260, bottom: true, left: true, right: true, tab: 'ai', view: 'tree',
-             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true };
+             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', stdPicked: false, hideAudited: false, sort: 'severity', asc: true };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
@@ -399,6 +397,13 @@
     el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table'); el('v-files').classList.toggle('on', ws.view === 'files');
     el('group').value = ws.group; el('fsev').value = ws.sev; el('fcat').value = ws.cat; el('fnew').value = ws.fnew; el('hideAudited').checked = ws.hideAudited;
     el('faudit').value = ws.audit || 'all';
+    // 저장된 선택이 없으면 진단 시 고른 기준을 기본으로 (없으면 기준 미적용)
+    if (ws.std === undefined || ws.std === null) ws.std = '';
+    if (!ws.std && !ws._stdInit) {
+      const first = document.querySelector('#fstd option[data-scan]');
+      if (first) ws.std = first.value;
+    }
+    ws._stdInit = true;
     el('fstd').value = ws.std || '';
   }
 
@@ -874,7 +879,9 @@
     return it ? (STD.showCode ? `${it.code} ${it.name}` : it.name)
               : (ws.std ? '기준 미매핑' : '(기준 미선택)');
   }
-  function stdSuffix() { return ws.std ? ('?std=' + ws.std) : ''; }
+  // 사용자가 직접 고른 경우에만 산출물을 그 기준 하나로 좁힌다. 자동 선택(진단 시 고른
+  // 기준)일 때는 파라미터를 붙이지 않아야 서버가 스캔에 지정된 기준 전부를 싣는다.
+  function stdSuffix() { return ws.stdPicked ? ('?std=' + ws.std) : ''; }
   function applyStdLinks() {
     for (const [id, url] of [['dl-report', REPORT_URL], ['dl-xlsx', XLSX_URL]]) {
       const a = el(id); if (a) a.href = url + stdSuffix();
@@ -907,7 +914,7 @@
     const it = STD.items.find(i => i.code === ws.item);
     if (it) for (const c of it.cwes) STD.cwes.add(c);
   }
-  el('fstd').onchange = () => { ws.std = el('fstd').value; ws.item = ''; saveWS(); loadStandard(); };
+  el('fstd').onchange = () => { ws.std = el('fstd').value; ws.item = ''; ws.stdPicked = true; saveWS(); loadStandard(); };
   el('fitem').onchange = () => { ws.item = el('fitem').value; setItemCwes(); saveWS(); renderTree(); };
 
   // 상단 안내 배너 닫기 — 스캔별로 기억해 다음에 안 뜬다(다시 보려면 새 스캔이거나 localStorage 삭제)

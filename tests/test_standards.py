@@ -47,7 +47,7 @@ def test_every_rule_cwe_maps_to_a_check_item():
     assert not standards.unmapped(mois, counts)
 
 
-@pytest.mark.parametrize("sid", ["mois", "owasp", "cwe"])
+@pytest.mark.parametrize("sid", sorted(standards.STANDARDS))
 def test_item_codes_are_unique_and_lookup_works(sid):
     std = standards.get(sid)
     codes = [i.code for i in std.items]
@@ -83,7 +83,7 @@ def test_standard_api_and_item_filter():
 
     # 기준 없이 부르면 고를 수 있는 목록을 준다
     listing = c.get(f"/scan/{pk}/api/standard", SERVER_NAME="127.0.0.1").json()
-    assert {s["id"] for s in listing["standards"]} == {"mois", "owasp", "cwe"}
+    assert {s["id"] for s in listing["standards"]} == set(standards.STANDARDS)
 
     d = c.get(f"/scan/{pk}/api/standard?std=mois", SERVER_NAME="127.0.0.1").json()
     assert d["total_items"] == len(standards.get("mois").items)
@@ -123,3 +123,54 @@ def test_deliverables_carry_the_chosen_standard():
     assert "행정안전부" in txt and "SQL 삽입" in txt and "양호" in txt
     # 항목 번호는 판마다 달라 싣지 않는다(대조 부담 제거)
     assert "SC-01" not in txt
+
+
+def test_not_covered_is_not_reported_as_pass():
+    """규칙이 없는 항목을 '양호'로 찍으면 안 한 점검을 했다고 쓰는 셈이다."""
+    std = standards.get("efs")
+    rows = standards.coverage(std, {}, available=frozenset({"CWE-89"}))
+    by = {r["code"]: r["verdict"] for r in rows}
+    assert by["sql-injection"] == standards.PASS            # 규칙 있음 · 탐지 0
+    assert by["directory-indexing"] == standards.NOT_COVERED  # 정적 분석 대상 아님
+    assert by["csrf"] == standards.NOT_COVERED               # CWE 는 있으나 규칙 없음
+
+    rows = standards.coverage(std, {"CWE-89": 2}, available=frozenset({"CWE-89"}))
+    assert next(r for r in rows if r["code"] == "sql-injection")["verdict"] == standards.VIOLATED
+
+
+def test_efs_standard_is_registered():
+    std = standards.get("efs")
+    assert std is not None and not std.show_code
+    names = {i.name for i in std.items}
+    assert {"SQL 인젝션", "크로스사이트 스크립팅", "쿠키 변조"} <= names
+
+
+def _seed_multi(c: Client) -> int:
+    from cpguard.web.models import Scan
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("a/i.js", "app.get('/x',(req,res)=>{eval(req.query.q)})")
+    c.post("/scan/", {"archive": SimpleUploadedFile("multi.zip", buf.getvalue()),
+                      "standards": ["mois", "efs", "없는기준"]}, SERVER_NAME="127.0.0.1")
+    return Scan.objects.order_by("-id").first().pk
+
+
+def test_standards_chosen_at_scan_time_drive_the_deliverables():
+    """진단 전에 고른 기준이 저장되고, ?std= 없이도 산출물에 그대로 적용돼야 한다."""
+    from cpguard.web.models import Scan
+    c = Client()
+    pk = _seed_multi(c)
+    assert Scan.objects.get(pk=pk).standard_ids == ["mois", "efs"]   # 모르는 값은 버린다
+
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(
+        c.get(f"/scan/{pk}/export.xlsx", SERVER_NAME="127.0.0.1").content))
+    ws = wb["점검항목 결과"]
+    assert [c.value for c in ws[1]][0] == "분류"          # 여러 기준 → 분류 열
+    groups = {r[0] for r in ws.iter_rows(min_row=2, values_only=True) if r[0]}
+    assert len(groups) == 2
+
+    from pypdf import PdfReader
+    txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(
+        c.get(f"/scan/{pk}/report.pdf", SERVER_NAME="127.0.0.1").content)).pages)
+    assert "전자금융감독규정" in txt and "행정안전부" in txt and "진단 대상 아님" in txt

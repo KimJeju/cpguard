@@ -194,6 +194,58 @@ def _owasp() -> tuple[Item, ...]:
     return tuple(Item(code, name, name_en, G, G, cwes) for code, name, name_en, cwes in rows)
 
 
+def _efs() -> tuple[Item, ...]:
+    """전자금융감독규정 기반 웹 취약점 점검항목.
+
+    금융권 소스코드 진단 산출물은 행안부 보안약점과 별개로 전자금융감독규정 축을 함께
+    싣는다. 여기 표는 그 축에서 참조하는 웹 취약점 항목(KISA 「홈페이지 취약점 진단·제거
+    가이드」 28개 항목)이다. 설정·운영 영역 항목(디렉터리 인덱싱·관리자 페이지 노출 등)은
+    소스코드 정적 분석의 대상이 아니므로 CWE 를 비워 두고 '진단 대상 아님'으로 표기한다.
+    """
+    G, GE = "웹 취약점", "Web vulnerabilities"
+    rows = [
+        ("buffer-overflow", "버퍼 오버플로우", "Buffer overflow",
+         ("CWE-119", "CWE-120", "CWE-121", "CWE-122", "CWE-125", "CWE-787")),
+        ("format-string", "포맷 스트링", "Format string", ("CWE-134",)),
+        ("ldap-injection", "LDAP 인젝션", "LDAP injection", ("CWE-90",)),
+        ("os-command", "운영체제 명령 실행", "OS command execution", ("CWE-78", "CWE-77")),
+        ("sql-injection", "SQL 인젝션", "SQL injection", ("CWE-89",)),
+        ("ssi-injection", "SSI 인젝션", "SSI injection", ("CWE-97",)),
+        ("xpath-injection", "XPath 인젝션", "XPath injection", ("CWE-643", "CWE-91", "CWE-652")),
+        ("directory-indexing", "디렉터리 인덱싱", "Directory indexing", ()),
+        ("information-leak", "정보 누출", "Information leakage",
+         ("CWE-200", "CWE-209", "CWE-532", "CWE-546", "CWE-615", "CWE-359")),
+        ("malicious-content", "악성 콘텐츠", "Malicious content", ("CWE-94", "CWE-98")),
+        ("xss", "크로스사이트 스크립팅", "Cross-site scripting", ("CWE-79", "CWE-80")),
+        ("weak-password-policy", "약한 문자열 강도", "Weak password strength",
+         ("CWE-521", "CWE-522")),
+        ("insufficient-authentication", "불충분한 인증", "Insufficient authentication",
+         ("CWE-287", "CWE-306", "CWE-798", "CWE-259", "CWE-1392")),
+        ("weak-password-recovery", "취약한 패스워드 복구", "Weak password recovery", ("CWE-640",)),
+        ("csrf", "크로스사이트 리퀘스트 변조", "Cross-site request forgery", ("CWE-352",)),
+        ("session-prediction", "세션 예측", "Session prediction",
+         ("CWE-330", "CWE-338", "CWE-340", "CWE-337")),
+        ("insufficient-authorization", "불충분한 인가", "Insufficient authorization",
+         ("CWE-285", "CWE-862", "CWE-863", "CWE-732")),
+        ("insufficient-session-expiration", "불충분한 세션 만료",
+         "Insufficient session expiration", ("CWE-613",)),
+        ("session-fixation", "세션 고정", "Session fixation", ("CWE-384",)),
+        ("automation-attack", "자동화 공격", "Automation attack", ("CWE-307", "CWE-799")),
+        ("missing-process-validation", "프로세스 검증 누락", "Missing process validation",
+         ("CWE-840", "CWE-841")),
+        ("file-upload", "파일 업로드", "File upload", ("CWE-434",)),
+        ("file-download", "파일 다운로드", "File download", ("CWE-73",)),
+        ("admin-page-exposure", "관리자 페이지 노출", "Admin page exposure", ()),
+        ("path-traversal", "경로 추적", "Path traversal", ("CWE-22", "CWE-23", "CWE-99")),
+        ("location-disclosure", "위치 공개", "Location disclosure", ("CWE-527", "CWE-538", "CWE-540")),
+        ("cleartext-transmission", "데이터 평문 전송", "Cleartext transmission",
+         ("CWE-319", "CWE-311", "CWE-312", "CWE-295", "CWE-321", "CWE-326", "CWE-327")),
+        ("cookie-tampering", "쿠키 변조", "Cookie tampering",
+         ("CWE-565", "CWE-614", "CWE-784", "CWE-1004", "CWE-539")),
+    ]
+    return tuple(Item(code, ko, en, G, GE, cwes) for code, ko, en, cwes in rows)
+
+
 # CWE 기준으로 볼 때 쓰는 이름표. 우리 규칙이 실제로 내보내는 CWE 를 덮는다.
 CWE_NAMES = {
     "CWE-22": ("경로 순회", "Path Traversal"),
@@ -241,6 +293,9 @@ STANDARDS: dict[str, Standard] = {
                      "MOIS Secure Coding Guide (Korea)",
                      "행정안전부 「소프트웨어 개발보안 가이드」 보안약점", _mois(),
                      show_code=False),
+    "efs": Standard("efs", "전자금융감독규정 웹 취약점", "Electronic Financial Supervision (Korea)",
+                    "전자금융감독규정 · KISA 「홈페이지 취약점 진단·제거 가이드」 점검항목",
+                    _efs(), show_code=False),
     "owasp": Standard("owasp", "OWASP Top 10 (2021)", "OWASP Top 10 (2021)",
                       "OWASP Top 10:2021", _owasp()),
     "cwe": Standard("cwe", "CWE", "CWE", "MITRE Common Weakness Enumeration", _cwe_items()),
@@ -254,17 +309,50 @@ def get(std_id: str | None) -> Standard | None:
     return STANDARDS.get((std_id or "").strip().lower()) or None
 
 
-def coverage(std: Standard, cwe_counts: dict[str, int]) -> list[dict]:
+def rule_cwes() -> frozenset[str]:
+    """현재 룰셋이 실제로 탐지할 수 있는 CWE 집합.
+
+    이걸 봐야 '탐지 0건'과 '애초에 점검하지 않음'을 구분할 수 있다. 규칙이 없는 항목을
+    양호로 찍으면 안 한 점검을 했다고 쓰는 셈이라, 산출물의 신뢰가 거기서 무너진다."""
+    cached = getattr(rule_cwes, "_c", None)
+    if cached is not None:
+        return cached
+    from .patterns import load_pattern_rules
+    from .taint.spec import load_rules
+    out = frozenset(c for c in ({r.cwe for r in load_rules()}
+                                | {r.cwe for r in load_pattern_rules()}) if c)
+    rule_cwes._c = out
+    return out
+
+
+# 점검항목 판정
+VIOLATED = "violated"       # 탐지됨
+PASS = "pass"               # 점검했고 탐지 없음
+NOT_COVERED = "not_covered"  # 이 항목을 볼 수 있는 규칙이 없음 = 점검하지 않음
+
+VERDICT_KO = {VIOLATED: "취약", PASS: "양호", NOT_COVERED: "진단 대상 아님"}
+VERDICT_EN = {VIOLATED: "Violated", PASS: "Pass", NOT_COVERED: "Not assessed"}
+
+
+def coverage(std: Standard, cwe_counts: dict[str, int],
+             available: frozenset[str] | None = None) -> list[dict]:
     """점검항목별 결과. 산출물의 '점검항목 표'가 이 모양 그대로 들어간다.
 
-    cwe_counts: CWE -> 탐지 건수. 항목에 걸리는 CWE 가 하나도 없으면 '양호'.
+    cwe_counts: CWE -> 탐지 건수.
+    available: 룰셋이 탐지 가능한 CWE(기본 rule_cwes()). 항목의 CWE 중 하나도 다루지
+      못하면 양호가 아니라 '진단 대상 아님'이다 — 설정·운영 영역 항목(디렉터리 인덱싱 등)이
+      정적 분석으로 확인되지 않았다는 사실을 산출물에 그대로 남긴다.
     """
+    if available is None:
+        available = rule_cwes()
     out = []
     for it in std.items:
         n = sum(cwe_counts.get(c, 0) for c in it.cwes)
+        covered = any(c in available for c in it.cwes)
         out.append({"code": it.code, "name": it.name, "name_en": it.name_en,
                     "group": it.group, "group_en": it.group_en, "n": n,
-                    "cwes": list(it.cwes)})
+                    "covered": covered, "cwes": list(it.cwes),
+                    "verdict": VIOLATED if n else (PASS if covered else NOT_COVERED)})
     return out
 
 
