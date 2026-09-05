@@ -22,7 +22,21 @@ from pathlib import Path
 # 보안: 캐시는 CPGuard 가 직접 만든 자체 파싱 결과를 사용자 홈(~/.cpguard/cache,
 # 앱 전용·비공개 디렉터리)에 쓴 것만 unpickle 한다 — 외부/신뢰불가 입력이 아니다.
 # 그 디렉터리에 쓸 수 있는 주체는 이미 앱과 동일한 신뢰 수준을 가진다.
-_PARSE_CACHE_VER = 1
+def _normalizer_version() -> str:
+    """정규화기 소스 해시. IR 모양이 바뀌면 캐시가 자동으로 무효화된다.
+
+    상수를 손으로 올리는 방식은 잊기 쉽고, 잊으면 옛 IR 이 그대로 재사용돼
+    "고쳤는데 결과가 안 바뀐다"는 조용한 오류가 난다."""
+    h = hashlib.sha1()
+    for name in ("normalize.py", "normalize_cfam.py"):
+        try:
+            h.update((Path(__file__).parent / "parse" / name).read_bytes())
+        except OSError:
+            return "dev"
+    return h.hexdigest()[:12]
+
+
+_PARSE_CACHE_VER = _normalizer_version()
 
 
 def _parse_cache_dir() -> Path:

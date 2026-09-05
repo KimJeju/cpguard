@@ -61,3 +61,51 @@ def test_new_extensions_registered():
         assert ext in loader.SUPPORTED_EXTENSIONS
     assert loader.rule_language("c") == "cpp"          # C 파일은 cpp 규칙 공유
     assert loader.rule_language("java") == "java"
+
+
+# ---- 정규화기 회귀: try 블록 · for-each · 객체 생성 ----
+# 셋 다 "IR 이 문장 순서를 잃거나 노드를 Opaque 로 접어" taint 가 조용히 끊기던 자리다.
+# 조용한 미탐이라 벤치마크 없이는 드러나지 않으므로 최소 케이스를 남긴다.
+
+def _scan(tmp_path, name, src):
+    p = tmp_path / name
+    p.write_text(src, encoding="utf-8")
+    return {f.rule_id for f in scan_file(p)}
+
+
+def test_java_taint_survives_try_block(tmp_path):
+    """try 블록을 Opaque 로 접으면 블록 안 대입 순서가 사라져 오염이 끊겼다."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("q");'
+           ' try { String sql = "select " + p;'
+           '       java.sql.Statement st = null; st.executeQuery(sql); }'
+           ' catch (Exception e) {} } }')
+    assert "java.sqli" in _scan(tmp_path, "T.java", src)
+
+
+def test_java_taint_flows_through_foreach(tmp_path):
+    """for (T v : coll) 의 반복 변수는 순회 대상의 원소 — 대상이 오염되면 변수도 오염."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' javax.servlet.http.Cookie[] cs = request.getCookies();'
+           ' String p = "";'
+           ' for (javax.servlet.http.Cookie c : cs) { p = c.getValue(); }'
+           ' Runtime.getRuntime().exec(p); } }')
+    assert "java.command-injection" in _scan(tmp_path, "F.java", src)
+
+
+def test_java_object_creation_is_a_sink(tmp_path):
+    """new FileInputStream(path) 처럼 생성자 자체가 위험 지점인 경우."""
+    src = ('class A { void f(HttpServletRequest request) {'
+           ' String p = request.getParameter("f");'
+           ' java.io.FileInputStream in = new java.io.FileInputStream(new java.io.File(p)); } }')
+    assert "java.path-traversal" in _scan(tmp_path, "N.java", src)
+
+
+def test_parse_cache_version_tracks_normalizer(tmp_path):
+    """정규화기 소스가 바뀌면 파싱 캐시 키가 바뀌어야 한다.
+
+    상수를 손으로 올리는 방식은 잊기 쉽고, 잊으면 옛 IR 이 재사용돼
+    '고쳤는데 결과가 안 바뀐다'는 조용한 오류가 난다."""
+    from cpguard import scanner
+    assert scanner._PARSE_CACHE_VER == scanner._normalizer_version()
+    assert len(scanner._PARSE_CACHE_VER) >= 8

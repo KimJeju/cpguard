@@ -54,6 +54,8 @@ class Spec:
     descend: tuple[str, ...] = field(default_factory=tuple)   # 클래스 등: 본문만 꺼내 분석
     wrap: tuple[str, ...] = ("expression_statement",)         # 식을 감싼 문 노드(펼침)
     unwrap_decl: tuple[str, ...] = field(default_factory=tuple)  # C 의 pointer_declarator 등
+    new_expr: tuple[str, ...] = field(default_factory=tuple)     # 객체 생성식(new X(y))
+    splice: tuple[str, ...] = field(default_factory=tuple)       # try/switch 등: 자식을 문으로 펼침
 
 
 _ID = ("identifier",)
@@ -80,6 +82,11 @@ LANG: dict[str, Spec] = {
         block=("block", "program", "class_body", "local_variable_declaration", "constructor_body"),
         idents=_ID, literals=_LIT_COMMON,
         descend=("class_declaration", "interface_declaration", "enum_declaration"),
+        new_expr=("object_creation_expression",),
+        splice=("try_statement", "try_with_resources_statement", "resource_specification",
+                "resource", "catch_clause", "finally_clause", "synchronized_statement",
+                "switch_expression", "switch_block", "switch_block_statement_group",
+                "labeled_statement"),
     ),
     "csharp": Spec(
         call="invocation_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -97,6 +104,10 @@ LANG: dict[str, Spec] = {
                "variable_declaration", "namespace_declaration", "file_scoped_namespace_declaration"),
         idents=_ID, literals=_LIT_COMMON + ("verbatim_string_literal", "interpolated_string_expression"),
         descend=("class_declaration", "struct_declaration", "interface_declaration", "record_declaration"),
+        new_expr=("object_creation_expression",),
+        splice=("try_statement", "catch_clause", "finally_clause", "switch_statement",
+                "switch_body", "switch_section", "lock_statement", "using_statement",
+                "checked_statement", "labeled_statement"),
     ),
     "go": Spec(
         call="call_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -113,6 +124,7 @@ LANG: dict[str, Spec] = {
         block=("block", "statement_list", "source_file", "var_declaration", "const_declaration",
                "expression_list"),
         idents=_ID + ("field_identifier", "package_identifier"), literals=_LIT_COMMON,
+        splice=("select_statement", "type_switch_statement", "expression_switch_statement", "labeled_statement", "communication_case", "default_case", "expression_case", "type_case",),
     ),
     "cpp": Spec(
         call="call_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -133,6 +145,7 @@ LANG: dict[str, Spec] = {
         descend=("class_specifier", "struct_specifier"),
         unwrap_decl=("pointer_declarator", "reference_declarator", "function_declarator",
                      "array_declarator", "parenthesized_declarator"),
+        splice=("try_statement", "catch_clause", "switch_statement", "labeled_statement", "case_statement",),
     ),
     "kotlin": Spec(
         call="call_expression", call_fn=None, call_args=None, args_types=("value_arguments", "call_suffix"),
@@ -150,6 +163,7 @@ LANG: dict[str, Spec] = {
                "class_body", "variable_declaration", "value_argument"),
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("string_literal", "character_literal"),
         descend=("class_declaration", "object_declaration", "companion_object"),
+        splice=("try_expression", "catch_block", "finally_block", "when_expression", "when_entry",),
     ),
     "swift": Spec(
         call="call_expression", call_fn=None, call_args=None, args_types=("call_suffix", "value_arguments"),
@@ -166,6 +180,7 @@ LANG: dict[str, Spec] = {
         block=("function_body", "statements", "source_file", "class_body", "pattern"),
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("line_string_literal", "multi_line_string_literal"),
         descend=("class_declaration", "protocol_declaration"),
+        splice=("do_statement", "catch_block", "switch_statement", "switch_entry",),
     ),
     "ruby": Spec(
         call="call", call_fn=None, call_args="arguments", args_types=("argument_list",),
@@ -183,6 +198,7 @@ LANG: dict[str, Spec] = {
         idents=_ID + ("constant", "instance_variable", "global_variable", "class_variable"),
         literals=_LIT_COMMON + ("string", "symbol", "simple_symbol", "hash_key_symbol"),
         descend=("class", "module"),
+        splice=("begin", "rescue", "ensure", "case", "when", "then",),
     ),
 }
 LANG["c"] = LANG["cpp"]
@@ -296,6 +312,12 @@ class _Worker:
         if t in s.decl:
             return self._decl(node)
 
+        # try/switch/synchronized 처럼 블록을 품지만 우리가 모델링하지 않는 문.
+        # Opaque 로 접으면 블록 안 대입의 "순서"가 사라져 오염 추적이 그 지점에서 끊긴다
+        # (Java 는 위험 코드가 대부분 try 안에 있어 치명적). 자식을 문 리스트로 펼친다.
+        if t in s.splice:
+            return self.block(self._named(node))
+
         return self.expr(node)
 
     def _stmt_or_expr(self, node: TSNode):
@@ -360,12 +382,30 @@ class _Worker:
                      then=self._body(then), orelse=self._body(els))
 
     def _loop(self, node: TSNode) -> ir.Loop:
-        cond = child_by_field(node, "condition") or child_by_field(node, "right")
+        cond = child_by_field(node, "condition")
         body = child_by_field(node, "body")
         if body is None:
             body = next((c for c in reversed(self._named(node)) if c.type in self.s.block), None)
+        stmts = self._body(body)
+
+        # for-each (for (T v : coll) / foreach (var v in coll)): 반복 변수는 순회 대상의 원소다.
+        # 대상이 오염됐으면 변수도 오염된 것으로 보고(과대근사) 본문 앞에 바인딩을 넣는다.
+        # 이게 없으면 컬렉션으로 들어온 사용자 입력이 루프 안에서 통째로 사라진다.
+        it = child_by_field(node, "value") or child_by_field(node, "right")
+        var = child_by_field(node, "name") or child_by_field(node, "left")
+        if it is not None and var is not None:
+            tgt = self._unwrap(var)
+            if tgt is not None and tgt.type not in self.s.idents:
+                tgt = self._first_ident(tgt)
+            if tgt is not None:
+                stmts = [ir.Assign(loc=loc_of(node, self.file),
+                                   target=ir.Ident(loc=loc_of(tgt, self.file), name=text_of(tgt)),
+                                   value=self.expr(it), operator="declare")] + stmts
+        elif cond is None:
+            cond = it
+
         return ir.Loop(loc=loc_of(node, self.file),
-                       test=self.expr(cond) if cond is not None else None, body=self._body(body))
+                       test=self.expr(cond) if cond is not None else None, body=stmts)
 
     # ---------- 선언/할당 ----------
 
@@ -454,6 +494,17 @@ class _Worker:
                         args.append(self.expr(v) if v is not None else self._opaque(a))
                     else:
                         args.append(self.expr(a))
+            return ir.Call(loc=loc_of(node, self.file), callee=callee, args=args)
+
+        if t in s.new_expr:
+            # new java.io.FileInputStream(path) — 생성자도 위험 지점이 될 수 있으므로
+            # 타입 이름을 callee 로 하는 Call 로 모델링한다(Opaque 로 접으면 sink 매칭 불가).
+            ty = self._fld(node, "type")
+            args_node = self._fld(node, "arguments") or next(
+                (c for c in kids if c.type in s.args_types), None)
+            args = [self.expr(a) for a in self._named(args_node)] if args_node is not None else []
+            callee = (ir.Ident(loc=loc_of(ty, self.file), name=text_of(ty))
+                      if ty is not None else self._opaque(node))
             return ir.Call(loc=loc_of(node, self.file), callee=callee, args=args)
 
         if t == s.member:
