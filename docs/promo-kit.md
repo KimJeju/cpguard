@@ -31,36 +31,66 @@ repo: https://github.com/KimJeju/cpguard
 ## Show HN (Hacker News)
 
 **Title:**
-`Show HN: CPGuard – Open-source SAST with CPG taint analysis + LLM triage, runs offline`
+`Show HN: CPGuard – open-source SAST that traces source-to-sink with a code property graph`
+
+대안(더 짧게): `Show HN: CPGuard – code property graph SAST with LLM triage, runs offline`
 
 **Body:**
 ```
-I built CPGuard, an open-source static analysis tool for finding security bugs in source code.
+CPGuard is an open-source static analyzer for finding security bugs in source code.
 
-Most affordable SAST is regex/pattern based and drowns you in false positives. CPGuard instead
-builds a code property graph (AST + CFG + def-use + call graph) and runs interprocedural taint
-analysis with function summaries, so it traces user input from source to a dangerous sink across
-files. On top of that it can use an LLM (Claude/Gemini/GPT) to triage each finding for
-reachability, which cuts false positives further.
+It parses with tree-sitter into a language-neutral IR, builds a code property graph
+(AST + CFG + def-use + call), and runs interprocedural taint analysis using function
+summaries, so it follows user input from a source to a dangerous sink across files
+rather than matching a regex at one line. Optionally it sends each finding to an LLM
+(Claude/Gemini/GPT) to judge reachability, which removes some false positives.
 
-It ships a Ghidra/Fortify-style 3-pane audit workbench: issue explorer, a code viewer that
-highlights the Source→Sink flow inline, and an inspector where a human confirms the verdict and
-writes notes. Everything runs fully offline (no Python/admin needed, single installer); only the
-optional LLM triage calls a cloud API.
+Numbers, so you can calibrate: on OWASP Benchmark v1.2 it gets F1 0.689 and a
+benchmark score (recall minus false-positive rate) of 0.392 over the 1,572 cases in
+the six categories taint analysis actually covers. I exclude 1,168 cases that are API
+misuse checks rather than data flow (weak crypto/hash/RNG, cookie flags, trust
+boundary) and say so in the README; the harness is in bench/ if you want to re-run it.
+That is well short of a mature commercial engine, and the gap is mostly path
+sensitivity — it does not know that an is_numeric() check upstream makes a flow safe.
 
-On OWASP Benchmark v1.2 it scores F1 0.689 / benchmark score 0.392 over the 1,572 cases in the
-six categories taint analysis actually covers; the harness and the exclusions are in the repo so
-you can re-run it.
+Findings land in a three-pane audit workbench: issue list, a code viewer that draws
+the source-to-sink flow inline, and an inspector where you mark true/false positive
+and leave a note. It runs fully offline, single installer, no Python or admin rights;
+only the optional LLM triage talks to a network.
 
-Languages: JS/TS, PHP, Python, Java, Kotlin, Go, Ruby, C/C++, Swift, C#. Exports SARIF (GitHub Code Scanning), plus PDF report / xlsx.
-There's a GitHub Action for CI with a severity gate. I tested it end-to-end on a real 26k-file /
-2.3GB project (~4,900 findings in ~5 min).
+Languages: JS/TS, PHP, Python, Java, Kotlin, Go, Ruby, C/C++, Swift, C#. Output is
+SARIF (GitHub Code Scanning), plus PDF/xlsx reports for the audit paperwork Korean
+clients expect. There is a GitHub Action with a severity gate.
 
-It started as my graduation project and I'm continuing it as open source. Feedback very welcome —
-especially on the detection engine and false-positive rate.
+It started as my graduation project and I am continuing it in the open. I would most
+like feedback on the engine — especially where it produces false positives you would
+not tolerate.
 
 https://github.com/KimJeju/cpguard
 ```
+
+**첫 댓글 (기술 설명 — 게시 직후 직접 달 것):**
+```
+Some detail on the engine, since that is the part worth criticising.
+
+Each file becomes a language-neutral IR, so a normalizer per language is all a new
+language needs; the taint rules are YAML (sources, sinks, sanitizers, propagators) and
+are shared across languages where the shape matches. The CPG is deliberately small —
+AST, CFG, def-use, call — not a general-purpose graph database, because the only
+queries I run are reachability ones.
+
+Interprocedural analysis is function summaries rather than full IFDS: for each rule I
+compute, per function, whether a parameter reaches a sink and whether the return value
+is tainted, then propagate at call sites until fixpoint. It over-approximates on
+purpose — an unknown callee passes taint through, container writes taint the whole
+container — because for a security tool a missed flow costs more than a false one, and
+the workbench plus LLM triage is where the noise gets filtered.
+
+Known limits: no path sensitivity (a validated flow still reports), string keys are
+tracked only for literal indexes, and reflection/dynamic dispatch is invisible. Those
+are the top three sources of false positives in the benchmark run.
+```
+
 > HN 팁: 오전(미 동부 기준) 게시, 첫 댓글에 "how it works" 간단히. 과장 금지, 정직하게.
 
 ---
