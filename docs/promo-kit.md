@@ -1,6 +1,6 @@
 # CPGuard 홍보 키트
 
-릴리스 v0.1.2 기준. 아래 초안은 그대로 복붙하거나 다듬어 쓰면 됩니다.
+릴리스 v0.1.4 기준. 아래 초안은 그대로 복붙하거나 다듬어 쓰면 됩니다.
 repo: https://github.com/KimJeju/cpguard
 
 ## 한 줄 포지셔닝
@@ -21,8 +21,9 @@ repo: https://github.com/KimJeju/cpguard
 - **감사 작업대** — 코드 뷰어 위 Source→Sink 흐름 강조 + 인스펙터 + 사람 판정/메모.
 - **완전 오프라인** — 파이썬·인터넷·관리자 권한 없이 단일 설치본. 에어갭 환경 OK.
 - **대형 코드베이스** — 26,049 파일 / 2.3GB 프로젝트를 ~5분에 4,857건 탐지(실측).
+- **정확도(측정치)** — OWASP Benchmark v1.2 대상 6유형 1,572건에서 F1 **0.689**, 공식 점수(재현율−오탐률) **0.392**. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
 - **CI 연동** — GitHub Action + SARIF → Code Scanning. `fail-on` 게이트.
-- **언어** — JavaScript · TypeScript · PHP · Python.
+- **언어** — JS/TS · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C#.
 - 오픈소스(졸업작품에서 출발).
 
 ---
@@ -47,7 +48,11 @@ highlights the Source→Sink flow inline, and an inspector where a human confirm
 writes notes. Everything runs fully offline (no Python/admin needed, single installer); only the
 optional LLM triage calls a cloud API.
 
-Languages: JS/TS/PHP/Python. Exports SARIF (GitHub Code Scanning), plus PDF report / xlsx.
+On OWASP Benchmark v1.2 it scores F1 0.689 / benchmark score 0.392 over the 1,572 cases in the
+six categories taint analysis actually covers; the harness and the exclusions are in the repo so
+you can re-run it.
+
+Languages: JS/TS, PHP, Python, Java, Kotlin, Go, Ruby, C/C++, Swift, C#. Exports SARIF (GitHub Code Scanning), plus PDF report / xlsx.
 There's a GitHub Action for CI with a severity gate. I tested it end-to-end on a real 26k-file /
 2.3GB project (~4,900 findings in ~5 min).
 
@@ -96,7 +101,8 @@ https://github.com/KimJeju/cpguard
 - Ghidra/Fortify 결의 3분할 감사 작업대: 코드 뷰어에 Source→Sink 흐름을 강조하고,
   인스펙터에서 사람이 판정·메모합니다.
 - 완전 오프라인(파이썬·인터넷·관리자 권한 불필요, 단일 설치본). 에어갭 환경 대응.
-- SARIF·GitHub Action 으로 CI 연동. 언어: JS/TS/PHP/Python.
+- SARIF·GitHub Action 으로 CI 연동. 언어: JS/TS·PHP·Python·Java·Kotlin·Go·Ruby·C/C++·Swift·C#.
+- OWASP Benchmark v1.2(대상 1,572건) F1 0.689 · 점수 0.392. 측정 스크립트와 제외 기준 공개.
 - 실제 26,049 파일 / 2.3GB 프로젝트로 검증(약 5분에 4,857건).
 
 졸업작품에서 시작해 오픈소스로 이어가고 있습니다. 엔진·오탐률 피드백 특히 환영합니다.
