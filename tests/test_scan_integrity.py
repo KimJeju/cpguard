@@ -59,3 +59,18 @@ def test_empty_project_is_complete(tmp_path):
 def test_report_defaults():
     r = ScanReport()
     assert r.complete and r.total == 0
+
+
+def test_excluded_dir_name_in_ancestor_does_not_hide_project(tmp_path):
+    """제외 이름(tmp/build/dist…)이 스캔 루트 '바깥' 조상에 있어도 스캔돼야 한다.
+
+    리눅스에서 업로드본을 /tmp 에 풀면 예전에는 프로젝트 전체가 조용히 0건이 됐다.
+    루트 '안'의 제외 디렉터리는 그대로 걸러진다."""
+    root = tmp_path / "tmp" / "build" / "proj"
+    (root / "node_modules").mkdir(parents=True)
+    (root / "a.js").write_text(GOOD, encoding="utf-8")
+    (root / "node_modules" / "dep.js").write_text(GOOD, encoding="utf-8")
+
+    findings, report = scan_path(root)
+    assert report.scanned == 1          # node_modules 는 여전히 제외
+    assert findings

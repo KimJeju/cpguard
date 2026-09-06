@@ -130,8 +130,17 @@ def _parse_one(path_str: str):
         return (path_str, None, None, None, False, f"{type(e).__name__}: {e}")
 
 
-def _excluded(p: Path, excludes: set[str]) -> bool:
-    return any(part in excludes for part in p.parts) or p.name.startswith("~$")
+def _excluded(p: Path, root: Path, excludes: set[str]) -> bool:
+    """제외 판정은 스캔 루트 기준 상대경로로만 한다.
+
+    절대경로 전체를 보면 루트 바깥 조상 디렉터리가 걸린다. 예: 리눅스에서
+    /tmp/upload/proj 를 스캔하면 'tmp' 파트에 걸려 프로젝트 전체가 조용히 0건이 된다
+    (무결성 보고에도 안 남는다 = "0건"이 안전으로 보이는 최악의 실패)."""
+    try:
+        parts = p.relative_to(root).parts
+    except ValueError:
+        parts = p.parts
+    return any(part in excludes for part in parts) or p.name.startswith("~$")
 
 
 def _walk_root(root: Path) -> Path:
@@ -150,7 +159,7 @@ def iter_source_files(root: str | Path, excludes: set[str] | None = None,
     root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
-        if not p.is_file() or _excluded(p, excludes):
+        if not p.is_file() or _excluded(p, root, excludes):
             continue
         if p.suffix.lower() not in loader.SUPPORTED_EXTENSIONS:
             continue
@@ -169,7 +178,7 @@ def iter_text_files(root: str | Path, excludes: set[str] | None = None):
     root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
-        if not p.is_file() or _excluded(p, excludes):
+        if not p.is_file() or _excluded(p, root, excludes):
             continue
         try:
             size = p.stat().st_size
