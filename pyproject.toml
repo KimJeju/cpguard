@@ -1,6 +1,6 @@
 [project]
 name = "cpguard"
-version = "0.1.3"
+version = "0.1.4"
 description = "CPG-based static security analysis with LLM triage"
 readme = "README.md"
 license = "Apache-2.0"
