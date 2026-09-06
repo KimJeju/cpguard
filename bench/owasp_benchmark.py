@@ -74,6 +74,17 @@ def load_expected(root: Path) -> dict[str, tuple[str, bool]]:
     return expected
 
 
+def metrics(c: dict[str, int]) -> dict:
+    tp, fn, fp, tn = c["TP"], c["FN"], c["FP"], c["TN"]
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    fpr = fp / (fp + tn) if (fp + tn) else 0.0
+    return {**c, "recall": recall, "precision": precision, "f1": f1,
+            "false_positive_rate": fpr,
+            # OWASP Benchmark 공식 점수: 정탐률 - 오탐률 (Youden index)
+            "benchmark_score": recall - fpr}
+
 def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -> dict:
     expected = load_expected(root)
     src = root / "src" / "main" / "java" / "org" / "owasp" / "benchmark" / "testcode"
@@ -102,16 +113,6 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
         else:
             c["FP" if hit else "TN"] += 1
 
-    def metrics(c: dict[str, int]) -> dict:
-        tp, fn, fp, tn = c["TP"], c["FN"], c["FP"], c["TN"]
-        recall = tp / (tp + fn) if (tp + fn) else 0.0
-        precision = tp / (tp + fp) if (tp + fp) else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
-        fpr = fp / (fp + tn) if (fp + tn) else 0.0
-        return {**c, "recall": recall, "precision": precision, "f1": f1,
-                "false_positive_rate": fpr,
-                # OWASP Benchmark 공식 점수: 정탐률 - 오탐률 (Youden index)
-                "benchmark_score": recall - fpr}
 
     scored = {k: metrics(v) for k, v in sorted(cats.items()) if CATEGORY_RULE.get(k)}
     excluded = {k: v["total"] for k, v in sorted(cats.items()) if not CATEGORY_RULE.get(k)}

@@ -1,0 +1,98 @@
+{
+  "benchmark": "OWASP Benchmark v1.2 (Java)",
+  "tool": "Semgrep OSS (1.176.1) — config p/java",
+  "findings_total": 1909,
+  "per_category": {
+    "cmdi": {
+      "TP": 112,
+      "FN": 14,
+      "FP": 96,
+      "TN": 29,
+      "total": 251,
+      "recall": 0.8888888888888888,
+      "precision": 0.5384615384615384,
+      "f1": 0.6706586826347306,
+      "false_positive_rate": 0.768,
+      "benchmark_score": 0.12088888888888882
+    },
+    "ldapi": {
+      "TP": 26,
+      "FN": 1,
+      "FP": 28,
+      "TN": 4,
+      "total": 59,
+      "recall": 0.9629629629629629,
+      "precision": 0.48148148148148145,
+      "f1": 0.6419753086419752,
+      "false_positive_rate": 0.875,
+      "benchmark_score": 0.08796296296296291
+    },
+    "pathtraver": {
+      "TP": 120,
+      "FN": 13,
+      "FP": 106,
+      "TN": 29,
+      "total": 268,
+      "recall": 0.9022556390977443,
+      "precision": 0.5309734513274337,
+      "f1": 0.6685236768802229,
+      "false_positive_rate": 0.7851851851851852,
+      "benchmark_score": 0.1170704539125591
+    },
+    "sqli": {
+      "TP": 234,
+      "FN": 38,
+      "FP": 143,
+      "TN": 89,
+      "total": 504,
+      "recall": 0.8602941176470589,
+      "precision": 0.6206896551724138,
+      "f1": 0.7211093990755009,
+      "false_positive_rate": 0.6163793103448276,
+      "benchmark_score": 0.24391480730223125
+    },
+    "xpathi": {
+      "TP": 14,
+      "FN": 1,
+      "FP": 13,
+      "TN": 7,
+      "total": 35,
+      "recall": 0.9333333333333333,
+      "precision": 0.5185185185185185,
+      "f1": 0.6666666666666667,
+      "false_positive_rate": 0.65,
+      "benchmark_score": 0.2833333333333333
+    },
+    "xss": {
+      "TP": 202,
+      "FN": 44,
+      "FP": 108,
+      "TN": 101,
+      "total": 455,
+      "recall": 0.8211382113821138,
+      "precision": 0.6516129032258065,
+      "f1": 0.7266187050359713,
+      "false_positive_rate": 0.5167464114832536,
+      "benchmark_score": 0.3043917998988602
+    }
+  },
+  "overall": {
+    "TP": 708,
+    "FN": 111,
+    "FP": 494,
+    "TN": 259,
+    "total": 1572,
+    "recall": 0.8644688644688645,
+    "precision": 0.589018302828619,
+    "f1": 0.7006432459178625,
+    "false_positive_rate": 0.6560424966799469,
+    "benchmark_score": 0.20842636778891765
+  },
+  "unmapped_rules": {
+    "java.lang.security.audit.crypto.des-is-deprecated.des-is-deprecated": 171,
+    "java.lang.security.audit.crypto.desede-is-deprecated.desede-is-deprecated": 130,
+    "java.lang.security.audit.crypto.use-of-sha1.use-of-sha1": 85,
+    "java.lang.security.audit.tainted-session-from-http-request.tainted-session-from-http-request": 61,
+    "java.lang.security.audit.crypto.use-of-md5.use-of-md5": 28
+  }
+}
