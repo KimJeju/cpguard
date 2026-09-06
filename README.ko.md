@@ -113,7 +113,7 @@
 
 ### 설치본 — Windows (권장 · 파이썬 불필요)
 
-[Releases](https://github.com/KimJeju/cpguard/releases) 에서 `CPGuard-Setup-0.1.5.exe` 를 받아 실행합니다.
+[Releases](https://github.com/KimJeju/cpguard/releases) 에서 `CPGuard-Setup-0.1.3.exe` 를 받아 실행합니다.
 사용자 영역 설치라 관리자 권한이 필요 없고, WebView2 런타임이 없으면 자동 설치합니다.
 
 직접 빌드하려면:
@@ -174,7 +174,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cpguard
-        uses: KimJeju/cpguard@v0.1.5
+        uses: KimJeju/cpguard@v0.1.3
         with:
           path: '.'
           fail-on: 'high'      # high 이상 탐지 시 빌드 실패 (none=게이트 안 함)

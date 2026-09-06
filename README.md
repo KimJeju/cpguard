@@ -113,7 +113,7 @@ then hands the result to a three-pane review screen where a human confirms the v
 
 ### Installer — Windows (recommended, no Python needed)
 
-Download `CPGuard-Setup-0.1.5.exe` from [Releases](https://github.com/KimJeju/cpguard/releases) and run it.
+Download `CPGuard-Setup-0.1.3.exe` from [Releases](https://github.com/KimJeju/cpguard/releases) and run it.
 It installs per-user (no admin rights) and installs the WebView2 runtime if missing.
 
 To build the installer yourself:
@@ -173,7 +173,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cpguard
-        uses: KimJeju/cpguard@v0.1.5
+        uses: KimJeju/cpguard@v0.1.3
         with:
           path: '.'
           fail-on: 'high'      # fail the build on high or above (none = no gate)
