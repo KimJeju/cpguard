@@ -174,9 +174,12 @@ def main() -> int:
     args = ap.parse_args()
 
     result = evaluate(Path(args.root), args.limit, args.workers)
-    print(render(result))
+    # JSON 을 먼저 저장한다 — cp949 콘솔에서 render() 출력이
+    # UnicodeEncodeError 로 죽으면 몇 분 돌린 결과가 통째로 날아간다.
     if args.json:
         Path(args.json).write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(render(result))
+    if args.json:
         print(f"\nJSON 저장: {args.json}")
     return 0
 
