@@ -160,7 +160,14 @@ def launch(port: int | None = None, debug: bool = False) -> None:
     try:
         api = _WinApi()
         # frameless: OS 제목표시줄 제거. 대신 앱 헤더가 드래그 영역·창버튼을 제공한다.
+        #
+        # easy_drag=False 가 중요하다. 기본값(True)이면 pywebview 가 window 전체에
+        # mousedown 을 걸고 대상을 가리지 않은 채 창을 움직인다 — 패널 크기 조절 거터를
+        # 끄는 순간 창이 따라 움직이고, 최대화 상태면 그대로 풀려버린다(AI 패널·좌측
+        # 탐색기 폭 조절이 사실상 불가능). 끄면 .pywebview-drag-region(헤더)만 드래그
+        # 영역으로 남아 제목표시줄과 같은 동작이 된다.
         window = webview.create_window(TITLE, url, js_api=api, frameless=True,
+                                       easy_drag=False,
                                        width=WIDTH, height=HEIGHT,
                                        min_size=(900, 600), confirm_close=False)
         api._set_window(window)
