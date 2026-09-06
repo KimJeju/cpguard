@@ -12,7 +12,10 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 Write-Host "[1/2] PyInstaller 번들 생성..." -ForegroundColor Cyan
-python -m PyInstaller packaging\cpguard.spec --noconfirm --distpath dist --workpath build\pyi
+# 빌드에 쓸 파이썬. conda 프로필이 셸을 base 환경으로 되돌려 놓는 일이 있어
+# PATH 만 믿으면 의존성이 없는 인터프리터로 빌드가 시작된다 → 인터프리터를 직접 지정한다.
+$py = if ($env:CPGUARD_PYTHON) { $env:CPGUARD_PYTHON } else { "python" }
+& $py -m PyInstaller packaging\cpguard.spec --noconfirm --distpath dist --workpath build\pyi
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller 빌드 실패" }
 
 $exe = Join-Path $root "dist\CPGuard\CPGuard.exe"
@@ -60,5 +63,6 @@ if (-not $iscc) {
 & $iscc "packaging\cpguard.iss"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup 빌드 실패" }
 
-$setup = Get-ChildItem "packaging\output\CPGuard-Setup-*.exe" | Select-Object -First 1
+# 방금 만든 것을 집는다 — 이름순 첫 번째를 쓰면 릴리스가 쌓일수록 항상 옛 버전을 가리킨다.
+$setup = Get-ChildItem "packaging\output\CPGuard-Setup-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 Write-Host "  완료: $($setup.FullName)" -ForegroundColor Green
