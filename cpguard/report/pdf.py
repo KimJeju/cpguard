@@ -7,6 +7,7 @@ CPGUARD_PDF_FONT / CPGUARD_PDF_FONT_BOLD 환경변수로 직접 지정할 수 �
 from __future__ import annotations
 
 import datetime as _dt
+from collections import Counter
 from pathlib import Path
 
 from reportlab.graphics.shapes import Drawing, Rect, String
@@ -49,6 +50,11 @@ _FONT_CANDIDATES = [
      "/usr/share/fonts/opentype/noto/NotoSansKR-Bold.ttf"),
 ]
 
+# 패키지 동봉 폰트(NanumGothic, OFL-1.1) — 시스템에 한글 폰트가 없는 리눅스 서버에서도
+# 산출물이 나오게 하는 최후 보루. 시스템 폰트를 먼저 쓰므로 기존 산출물 모양은 그대로다.
+_BUNDLED = (str(Path(__file__).parent / "fonts" / "NanumGothic-Regular.ttf"),
+            str(Path(__file__).parent / "fonts" / "NanumGothic-Bold.ttf"))
+
 # 표준 경로에 없을 때 훑어볼 폰트 디렉터리와 파일명 패턴.
 _FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts",
               str(Path.home() / ".fonts"), str(Path.home() / ".local/share/fonts")]
@@ -70,7 +76,14 @@ def _scan_font_dirs() -> list[tuple[str, str | None]]:
     return found
 
 
-def _register_font() -> None:
+class KoreanFontMissing(RuntimeError):
+    """한글 폰트를 못 찾음.
+
+    그대로 만들면 글자가 전부 ■ 로 찍힌 PDF 가 발주처로 나간다. 조용히 만드는 것보다
+    멈춰 세우는 편이 낫다 — 리눅스 서버에서는 한글 폰트가 기본 설치되지 않는다."""
+
+
+def _register_font(lang: str = "ko") -> None:
     """한글 폰트를 찾아 등록. 못 찾으면 Helvetica 폴백(한글 깨짐)."""
     global _FONT, _FONT_B
     if _FONT == _KO:
@@ -80,7 +93,7 @@ def _register_font() -> None:
     env = os.environ.get("CPGUARD_PDF_FONT")
     cands = ([(env, os.environ.get("CPGUARD_PDF_FONT_BOLD"))] if env else []) + _FONT_CANDIDATES
 
-    for reg, bold in cands + _scan_font_dirs():
+    for reg, bold in cands + _scan_font_dirs() + [_BUNDLED]:
         if not reg or not Path(reg).exists():
             continue
         try:
@@ -90,6 +103,12 @@ def _register_font() -> None:
             continue  # CFF(.otf) 등 reportlab 이 못 읽는 포맷 → 다음 후보
         _FONT, _FONT_B = _KO, _KO_B
         return
+
+    if lang != "en":
+        raise KoreanFontMissing(
+            "한글 폰트를 찾지 못했습니다. 그대로 만들면 본문이 ■ 로 깨집니다.\n"
+            f"동봉 폰트({_BUNDLED[0]}) 까지 못 읽었다면 설치본이 손상된 것입니다.\n"
+            "  우회: CPGUARD_PDF_FONT=/경로/한글폰트.ttf (Ubuntu 는 sudo apt install fonts-nanum)")
 
 
 SEV_KR = {"critical": "매우위험", "high": "위험", "medium": "보통", "low": "낮음", "info": "정보"}
@@ -399,7 +418,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
 
     meta: 설정의 보고서 정보(author/org/client/tester/period/version). 비면 기본값.
     standards: 점검 기준 id 목록. 주면 '3. 진단 항목'이 기준별 점검표가 된다."""
-    _register_font()
+    _register_font(lang)
     st = _styles()
     en = lang == "en"
     T = lambda s: tr(s, lang)                       # noqa: E731
@@ -498,15 +517,13 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     story.append(_sev_chart(counts, SEV))
     story.append(Spacer(1, 4 * mm))
     # CWE 상위
-    cwe_c: dict = {}
+    cwe_c = Counter(f.get("cwe") or "-" for f in findings)
     seen: dict = {}
     for f in findings:
-        c = f.get("cwe") or "-"
-        cwe_c[c] = cwe_c.get(c, 0) + 1
-        seen.setdefault(c, f.get("rule_id"))
+        seen.setdefault(f.get("cwe") or "-", f.get("rule_id"))
     story.append(Paragraph(T("취약점 유형(CWE) 상위"), st["h2sec"]))
     rows = [["CWE", T("규칙 예"), T("개수")]]
-    for cwe, n in sorted(cwe_c.items(), key=lambda x: -x[1])[:12]:
+    for cwe, n in cwe_c.most_common(12):
         rows.append([cwe, seen.get(cwe, ""), str(n)])
     ct = Table(rows, colWidths=[36 * mm, 118 * mm, 20 * mm])
     ct.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), _FONT), ("FONTSIZE", (0, 0), (-1, -1), 9),
@@ -575,11 +592,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     ids = [standards] if isinstance(standards, str) else list(standards or [])
     stds = [s for s in (_std_mod.get(i) for i in ids) if s]
 
-    cwe_counts: dict[str, int] = {}
-    for f in findings:
-        c = (f.get("cwe") or "").strip().upper()
-        if c:
-            cwe_counts[c] = cwe_counts.get(c, 0) + 1
+    cwe_counts = Counter(c for f in findings
+                         if (c := (f.get("cwe") or "").strip().upper()))
 
     if not stds:
         story.append(Paragraph(T(
@@ -688,7 +702,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
 
 def remediation_guide(scan, path, lang: str = "ko", meta: dict | None = None) -> None:
     """유형별 조치 가이드 — 스캔에 등장한 규칙 유형별 설명·조치·예시."""
-    _register_font()
+    _register_font(lang)
     st = _styles()
     en = lang == "en"
     T = lambda s: tr(s, lang)                       # noqa: E731
@@ -850,7 +864,7 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     """
     from . import consolidated as C
 
-    _register_font()
+    _register_font(lang)
     st = _styles()
     en = lang == "en"
     T = lambda s: tr(s, lang)                       # noqa: E731
@@ -1059,13 +1073,10 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
          "이번 진단에서 도출된 보안약점 유형별 조치 방안은 다음과 같다. 유형별 상세 코드 "
          "예시는 별도의 조치 가이드를 참조한다."), st["body"]))
     story.append(Spacer(1, 2 * mm))
-    seen_keys: dict[str, int] = {}
-    for r in D["final"]:
-        for f in r.scan.findings:
-            k = _rule_key(f["rule_id"])
-            seen_keys[k] = seen_keys.get(k, 0) + 1
+    seen_keys = Counter(_rule_key(f["rule_id"])
+                        for r in D["final"] for f in r.scan.findings)
     rows = [[T("보안약점 유형"), T("영향"), T("조치 방안"), T("건수")]]
-    for k, n in sorted(seen_keys.items(), key=lambda x: -x[1])[:20]:
+    for k, n in seen_keys.most_common(20):
         rem = REM.get(k, DFT)
         rows.append([rem[0], rem[1], rem[2], str(n)])
     story.append(_tbl(rows, [34 * mm, 60 * mm, 66 * mm, 14 * mm],

@@ -253,3 +253,5 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 [Apache License 2.0](LICENSE). 상업적 이용을 포함해 자유롭게 사용·수정·재배포할 수 있으며,
 저작권 고지와 라이선스 전문을 유지하면 됩니다. 명시적 특허 사용 허락 조항을 포함합니다.
+
+동봉 서체: **나눔고딕** (c) NHN Corporation, [SIL Open Font License 1.1](cpguard/report/fonts/OFL.txt). 한글 폰트가 없는 서버에서도 한글 보고서가 나오도록 패키지에 포함합니다.

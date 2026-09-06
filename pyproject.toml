@@ -35,7 +35,7 @@ cpguard = "cpguard.cli:main"
 cpguard-app = "cpguard.desktop:main"
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pypdf"]
 triage = ["anthropic>=0.40"]
 desktop = ["pywebview>=5.0"]
 openai = ["openai>=1.40"]
@@ -53,4 +53,4 @@ include = ["cpguard*"]
 testpaths = ["tests"]
 
 [tool.setuptools.package-data]
-cpguard = ["specs/*.yml", "patterns/*.yml", "web/templates/*.html", "web/migrations/*.py", "web/*.md"]
+cpguard = ["specs/*.yml", "patterns/*.yml", "report/fonts/*", "web/templates/*.html", "web/migrations/*.py", "web/*.md"]

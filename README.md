@@ -238,3 +238,5 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 ## 📄 License
 
 [Apache License 2.0](LICENSE). Free to use, modify and redistribute, commercially included, provided the notice and license are preserved. Includes an express patent grant.
+
+Bundled third-party font: **NanumGothic** (c) NHN Corporation, under the [SIL Open Font License 1.1](cpguard/report/fonts/OFL.txt). It ships with the package so Korean reports render on servers without Korean fonts installed.

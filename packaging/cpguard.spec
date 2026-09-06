@@ -22,6 +22,7 @@ datas += [
     ("../cpguard/web/templates", "cpguard/web/templates"),
     ("../cpguard/web/migrations", "cpguard/web/migrations"),
     ("../cpguard/web/guide.md", "cpguard/web"),
+    ("../cpguard/report/fonts", "cpguard/report/fonts"),
 ]
 
 # tree-sitter 문법 (컴파일된 확장 모듈)
