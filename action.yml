@@ -1,5 +1,5 @@
-name: 'CPGuard SAST'
-description: 'CPG 기반 taint 분석 + 패턴 SAST 스캔 → SARIF (GitHub Code Scanning 연동)'
+name: 'CPGuard'
+description: 'CPG 기반 taint 분석 + 패턴 스캔 → SARIF (GitHub Code Scanning 연동)'
 author: 'CPGuard'
 branding:
   icon: 'shield'

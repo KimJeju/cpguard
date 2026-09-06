@@ -22,7 +22,7 @@ def main(path: str) -> int:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError) as e:
-        print(f"## 🛡️ CPGuard SAST\n\nSARIF 읽기 실패: `{e}`")
+        print(f"## 🛡️ CPGuard 진단\n\nSARIF 읽기 실패: `{e}`")
         return 0
 
     by_sev: Counter = Counter()
@@ -38,7 +38,7 @@ def main(path: str) -> int:
             by_rule[r.get("ruleId", "?")] += 1
 
     total = sum(by_sev.values())
-    out = ["## 🛡️ CPGuard SAST", ""]
+    out = ["## 🛡️ CPGuard 진단", ""]
     if total == 0:
         out.append("탐지된 취약점 없음. ✅")
         print("\n".join(out))

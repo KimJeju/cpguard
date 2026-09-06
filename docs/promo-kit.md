@@ -5,12 +5,12 @@ repo: https://github.com/KimJeju/cpguard
 
 ## 한 줄 포지셔닝
 
-> **CPGuard — CPG 기반 taint 분석 + LLM 트리아지를 결합한 오픈소스 SAST.**
+> **CPGuard — CPG 기반 taint 분석 + LLM 트리아지를 결합한 오픈소스 정적 보안 분석기.**
 > 정규식 패턴이 아니라 코드 속성 그래프로 Source→Sink 흐름을 추적해 오탐을 줄이고,
 > Ghidra/Fortify 결의 3분할 감사 작업대에서 조사·판정까지 연결한다. 완전 오프라인 동작.
 
 한 줄 영어:
-> An open-source SAST that combines **CPG-based taint analysis with LLM triage** — traces
+> An open-source static analyzer that combines **CPG-based taint analysis with LLM triage** — traces
 > real Source→Sink data flow (not regex), triages false positives with Claude/Gemini/GPT,
 > and ships a Ghidra-style audit workbench. Runs fully offline.
 
@@ -30,13 +30,13 @@ repo: https://github.com/KimJeju/cpguard
 ## Show HN (Hacker News)
 
 **Title:**
-`Show HN: CPGuard – Open-source SAST with CPG taint analysis + LLM triage, runs offline`
+`Show HN: CPGuard – Open-source static analyzer with CPG taint analysis + LLM triage, runs offline`
 
 **Body:**
 ```
 I built CPGuard, an open-source static analysis tool for finding security bugs in source code.
 
-Most affordable SAST is regex/pattern based and drowns you in false positives. CPGuard instead
+Most affordable scanners are regex/pattern based and drowns you in false positives. CPGuard instead
 builds a code property graph (AST + CFG + def-use + call graph) and runs interprocedural taint
 analysis with function summaries, so it traces user input from source to a dangerous sink across
 files. On top of that it can use an LLM (Claude/Gemini/GPT) to triage each finding for
@@ -62,14 +62,14 @@ https://github.com/KimJeju/cpguard
 
 ## X / Twitter (스레드)
 
-1/ 오픈소스 SAST 를 만들었습니다 — **CPGuard**.
+1/ 오픈소스 정적 보안 분석기를 만들었습니다 — **CPGuard**.
 정규식 패턴 대신 **코드 속성 그래프(CPG)** 로 Source→Sink taint 흐름을 추적해 취약점을 찾습니다.
 🔗 github.com/KimJeju/cpguard
 
 2/ 핵심은 두 가지:
 ① CPG + 프로시저간 taint 분석 → 파일을 넘나드는 흐름 추적
 ② LLM 트리아지(Claude/Gemini/GPT) → 오탐 재검증
-패턴 매칭 SAST 의 오탐 지옥을 줄이는 게 목표.
+패턴 매칭 도구의 오탐 지옥을 줄이는 게 목표.
 
 3/ Ghidra/Fortify 결의 **3분할 감사 작업대** — 코드 위에 흐름을 그려주고, 사람이 최종 판정.
 완전 오프라인(파이썬·인터넷·관리자 권한 X). CI 는 GitHub Action + SARIF.
@@ -84,11 +84,11 @@ https://github.com/KimJeju/cpguard
 
 ## GeekNews (news.hada.io) / disquiet — 한국어
 
-**제목:** CPGuard – CPG 기반 taint 분석 + LLM 트리아지 오픈소스 SAST
+**제목:** CPGuard – CPG 기반 taint 분석 + LLM 트리아지 오픈소스 정적 보안 분석기
 
 **본문:**
 ```
-정규식/패턴 위주 SAST 의 오탐 한계를 넘어보려고 만든 오픈소스 정적 보안 분석 도구입니다.
+정규식/패턴 위주 도구의 오탐 한계를 넘어보려고 만든 오픈소스 정적 보안 분석 도구입니다.
 
 - tree-sitter 파싱 → 언어중립 IR → CPG(AST·CFG·def-use·call) → 프로시저간 taint(함수 요약)
   로 사용자 입력(source)이 위험 지점(sink)까지 흐르는지 파일 넘나들며 추적합니다.
@@ -110,7 +110,7 @@ https://github.com/KimJeju/cpguard
 
 > r/netsec 는 자기홍보 규칙이 엄격 — "how it works" 중심의 기술 글로. 아래는 r/opensource·r/devops 용.
 
-**Title:** `CPGuard: open-source SAST with CPG taint analysis + LLM triage (offline, SARIF/CI)`
+**Title:** `CPGuard: open-source static analyzer with CPG taint analysis + LLM triage (offline, SARIF/CI)`
 
 **Body:** (Show HN 본문 재사용 + 스크린샷 링크)
 
@@ -119,7 +119,7 @@ https://github.com/KimJeju/cpguard
 ## LinkedIn (전문가/보안 대상)
 
 ```
-정적 보안 분석(SAST) 도구 CPGuard 를 오픈소스로 공개했습니다.
+정적 보안 분석 도구 CPGuard 를 오픈소스로 공개했습니다.
 
 패턴 매칭 위주 도구의 오탐 한계를 넘고자, 코드 속성 그래프(CPG) 기반 프로시저간 taint 분석에
 LLM 트리아지를 결합했습니다. Source→Sink 흐름을 코드 위에 시각화하는 감사 작업대,
@@ -127,7 +127,7 @@ LLM 트리아지를 결합했습니다. Source→Sink 흐름을 코드 위에 �
 
 실제 26k 파일 / 2.3GB 규모 프로젝트로 검증했습니다. 보안·DevSecOps 하시는 분들의 피드백을 기다립니다.
 
-#SAST #AppSec #DevSecOps #OpenSource #보안
+#StaticAnalysis #AppSec #DevSecOps #OpenSource #보안
 https://github.com/KimJeju/cpguard
 ```
 
@@ -142,7 +142,7 @@ https://github.com/KimJeju/cpguard
 - [ ] X/Twitter 스레드 + 워크벤치 스크린샷
 - [ ] LinkedIn 포스트
 - [ ] Reddit: r/opensource, r/devops (r/netsec 은 규칙 확인 후)
-- [ ] dev.to 런치 블로그(선택) — "How I built a CPG-based SAST"
+- [ ] dev.to 런치 블로그(선택) — "How I built a CPG-based static analyzer"
 - [ ] awesome-static-analysis 목록에 PR(선택)
 - [ ] OWASP Slack / 로컬 보안 커뮤니티 공유
 

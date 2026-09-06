@@ -453,7 +453,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         cover_rows.append((T("진단 담당자"), meta["tester"]))
     cover_rows.append((T("보고서 버전"), version))
     _cover(story, st, f"{project}\n" + T("소스코드 취약점 진단 결과 보고서"),
-           T("SAST 진단 · CPGuard"), cover_rows)
+           T("정적 보안 진단 · CPGuard"), cover_rows)
 
     # ── 문서 개정 이력 ──
     story.append(Paragraph(T("문서 개정 이력"), st["h2"]))   # h2(목차 미등록) — 목차엔 안 넣는다
@@ -891,7 +891,7 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
              (T("진단 수행 기간"), meta.get("period") or "-"),
              (T("보고서 버전"), version), (T("작성일"), today), (T("작성자"), author)]
     _cover(story, st, title + "\n" + T("소스코드 취약점 진단 결과 보고서"),
-           T("SAST 진단 · CPGuard"), cover)
+           T("정적 보안 진단 · CPGuard"), cover)
 
     # ── 제·개정 이력 ── (h2 = 목차 미등록)
     story.append(Paragraph(T("제·개정 이력"), st["h2"]))

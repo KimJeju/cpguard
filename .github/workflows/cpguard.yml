@@ -1,4 +1,4 @@
-name: CPGuard SAST
+name: CPGuard
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       - run: pip install -e '.[dev]'   # 따옴표 없으면 bash 가 [dev] 를 글롭으로 본다
       - run: pytest -q
 
-  sast:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -99,7 +99,7 @@ MSG: dict[str, str] = {
 # ── PDF 문서 챔버(제목·표머리·라벨·정적 문단) ──────────────────────────────
 PDF_UI: dict[str, str] = {
     "소스코드 취약점 진단 결과 보고서": "Source Code Vulnerability Assessment Report",
-    "SAST 진단 · CPGuard": "SAST Assessment · CPGuard",
+    "정적 보안 진단 · CPGuard": "Static Security Assessment · CPGuard",
     "분석 도구": "Analyzer",
     "CPGuard (CPG 기반 taint 분석)": "CPGuard (CPG-based taint analysis)",
     "분석 일시": "Scan time", "소스 파일 수": "Source files", "총 이슈": "Total issues",
@@ -144,8 +144,8 @@ PDF_UI: dict[str, str] = {
     "유형": "Category", "보안약점": "Weakness", "코드": "Code",
     "건수": "Count", "비율": "Share", "진단 방식": "Method",
     "포함 확장자": "File extensions",
-    "정적 분석(SAST) — 데이터 흐름(taint) + 패턴 점검":
-        "Static analysis (SAST) — data-flow (taint) + pattern checks",
+    "정적 분석 — 데이터 흐름(taint) + 패턴 점검":
+        "Static analysis — data-flow (taint) + pattern checks",
     "목차를 갱신하려면 이 영역을 선택하고 F9 를 누르세요.":
         "Select this area and press F9 to update the table of contents.",
     "취약점": "Vulnerability", "데이터 흐름": "Data Flow", "영향": "Impact",

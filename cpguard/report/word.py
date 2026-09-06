@@ -166,7 +166,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     _para(doc, "SOURCE CODE SECURITY ASSESSMENT", size=11, color=S.MUTED, align=CENTER)
     _para(doc, project, size=22, bold=True, align=CENTER, space_after=2)
     _para(doc, T("소스코드 취약점 진단 결과 보고서"), size=18, bold=True, align=CENTER)
-    _para(doc, T("SAST 진단 · CPGuard"), size=12, color=S.INK_SOFT, align=CENTER, space_after=24)
+    _para(doc, T("정적 보안 진단 · CPGuard"), size=12, color=S.INK_SOFT, align=CENTER, space_after=24)
 
     cover = [(T("프로젝트"), project), (T("대상"), scan.name)]
     if meta.get("client"):
@@ -212,7 +212,7 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
               (T("포함 확장자"), langs)])
 
     _heading(doc, T("1.3 진단 방법 및 기준"), 2)
-    method = [(T("진단 방식"), T("정적 분석(SAST) — 데이터 흐름(taint) + 패턴 점검")),
+    method = [(T("진단 방식"), T("정적 분석 — 데이터 흐름(taint) + 패턴 점검")),
               (T("분석 도구"), "CPGuard"),
               (T("진단 일시"), scan.created_at.strftime("%Y-%m-%d %H:%M"))]
     _kv(doc, method)
@@ -466,7 +466,7 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     _para(doc, "SOURCE CODE SECURITY ASSESSMENT", size=11, color=S.MUTED, align=CENTER)
     _para(doc, title, size=22, bold=True, align=CENTER, space_after=2)
     _para(doc, T("소스코드 취약점 진단 결과 보고서"), size=18, bold=True, align=CENTER)
-    _para(doc, T("SAST 진단 · CPGuard"), size=12, color=S.INK_SOFT, align=CENTER, space_after=24)
+    _para(doc, T("정적 보안 진단 · CPGuard"), size=12, color=S.INK_SOFT, align=CENTER, space_after=24)
     _kv(doc, [(T("발주처/고객"), client or "-"), (T("대상 시스템"), system or "-"),
               (T("대상 프로젝트"), str(D["projects"]) + ("" if en else "개")),
               (T("수행 기관/회사"), meta.get("org") or "-"),

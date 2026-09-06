@@ -30,7 +30,7 @@
 
 > **CPGuard** = **CPG** (Code Property Graph) + **Guard** — it guards your code with a property graph, not a pattern list. That graph is why the logo is three connected nodes.
 
-Pattern-matching SAST drowns you in false positives. CPGuard goes deeper —
+Pattern-matching scanners drown you in false positives. CPGuard goes deeper —
 **tree-sitter parsing → language-neutral IR → CPG (AST · CFG · def-use · call) → interprocedural taint with function summaries → LLM triage** —
 then hands the result to a three-pane review screen where a human confirms the verdict.
 
@@ -168,7 +168,7 @@ permissions:
   contents: read
   security-events: write
 jobs:
-  sast:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
