@@ -11,6 +11,19 @@ permissions:
   security-events: write   # SARIF → Code Scanning 업로드에 필요
 
 jobs:
+  # 리눅스에서 테스트를 돌린다. 개발은 윈도우에서 하는데, 경로·폰트·대소문자 때문에
+  # 윈도우에서만 초록불인 회귀가 실제로 나왔다(/tmp 경로 제외로 스캔이 통째로 0건,
+  # 한글 폰트 부재로 PDF 본문이 전부 두부).
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[dev]'   # 따옴표 없으면 bash 가 [dev] 를 글롭으로 본다
+      - run: pytest -q
+
   sast:
     runs-on: ubuntu-latest
     steps:
