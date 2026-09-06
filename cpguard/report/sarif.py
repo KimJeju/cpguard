@@ -21,13 +21,18 @@ def _location(step, base: Path | None):
             uri = str(Path(uri).resolve().relative_to(Path(strip_longpath(base)))).replace("\\", "/")
         except Exception:
             uri = Path(uri).name
+    # SARIF 는 1-based 행번호만 받는다. 파일명 규칙처럼 줄이 없는 탐지는 Loc 이 0 이라
+    # 그대로 내보내면 GitHub 이 파일 전체를 거부한다 — 탐지 한 건 때문에 결과가 통째로
+    # 사라지므로 여기서 올려 맞춘다(실제로 Code Scanning 업로드가 이걸로 실패했다).
+    start = max(1, step.loc.start_line)
+    end = max(start, step.loc.end_line)
     return {
         "physicalLocation": {
             "artifactLocation": {"uri": uri},
             "region": {
-                "startLine": step.loc.start_line,
+                "startLine": start,
                 "startColumn": step.loc.start_col + 1,
-                "endLine": step.loc.end_line,
+                "endLine": end,
                 "endColumn": step.loc.end_col + 1,
                 "snippet": {"text": step.code},
             },
