@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -80,11 +81,8 @@ def _luhn_ok(value: str) -> bool:
 def _shannon(s: str) -> float:
     if not s:
         return 0.0
-    freq: dict[str, int] = {}
-    for ch in s:
-        freq[ch] = freq.get(ch, 0) + 1
     n = float(len(s))
-    return -sum((c / n) * math.log(c / n, 2) for c in freq.values())
+    return -sum((c / n) * math.log(c / n, 2) for c in Counter(s).values())
 
 
 def _entropy_b64(value: str) -> bool:

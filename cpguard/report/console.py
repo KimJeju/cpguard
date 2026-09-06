@@ -1,5 +1,6 @@
 """콘솔 출력 — source→sink 경로를 사람이 읽게."""
 from __future__ import annotations
+from collections import Counter
 
 from pathlib import Path
 
@@ -36,9 +37,7 @@ def render(findings: list[Finding], base=None) -> str:
             lines.append(f"      {s.kind:<12} {loc:<28} {s.code}")
         lines.append("")
 
-    by_sev: dict[str, int] = {}
-    for f in findings:
-        by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
+    by_sev = Counter(f.severity for f in findings)
     summary = ", ".join(f"{k} {v}" for k, v in sorted(by_sev.items()))
     lines.append(f"총 {len(findings)}건 ({summary})")
     return "\n".join(lines)

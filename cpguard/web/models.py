@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 
 from django.db import models
 
@@ -125,33 +126,21 @@ class Scan(models.Model):
 
     @property
     def rule_counts(self) -> list[tuple[str, int]]:
-        c: dict[str, int] = {}
-        for f in self.findings:
-            c[f["rule_id"]] = c.get(f["rule_id"], 0) + 1
-        return sorted(c.items(), key=lambda x: -x[1])
+        return Counter(f["rule_id"] for f in self.findings).most_common()
 
     @property
     def file_counts(self) -> list[tuple[str, int]]:
-        c: dict[str, int] = {}
-        for f in self.findings:
-            c[f["file"]] = c.get(f["file"], 0) + 1
-        return sorted(c.items(), key=lambda x: -x[1])
+        return Counter(f["file"] for f in self.findings).most_common()
 
     @property
     def verdict_counts(self) -> dict[str, int]:
-        out: dict[str, int] = {}
-        for f in self.findings:
-            v = f.get("verdict")
-            if v:
-                out[v] = out.get(v, 0) + 1
-        return out
+        # dict() 로 감싼다 — Django 템플릿은 {{ d.items }} 를 d["items"] 로 먼저 찾는데
+        # Counter 는 없는 키에 0 을 돌려줘 {% for %} 가 int 를 순회하려 든다.
+        return dict(Counter(v for f in self.findings if (v := f.get("verdict"))))
 
     @property
     def severity_counts(self) -> dict[str, int]:
-        out: dict[str, int] = {}
-        for f in self.findings:
-            out[f["severity"]] = out.get(f["severity"], 0) + 1
-        return out
+        return dict(Counter(f["severity"] for f in self.findings))
 
 
 class FindingRow(models.Model):

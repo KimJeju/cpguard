@@ -23,6 +23,7 @@
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -130,7 +131,7 @@ def build(scans, standards: list[str] | str | None = None, lang: str = "ko") -> 
     initial: list[ProjectRow] = []
     final: list[ProjectRow] = []
     review: dict[tuple, dict] = {}          # 3.2 정오탐 표 (보안약점명, 위험도, 사유) -> 집계
-    all_cwe: dict[str, int] = {}
+    all_cwe: Counter = Counter()
 
     for scan in scans:
         findings = scan.findings
@@ -169,9 +170,8 @@ def build(scans, standards: list[str] | str | None = None, lang: str = "ko") -> 
             d = by_weak.setdefault(k, {"cls": cls, "group": grp, "name": wname,
                                        "severity": f.get("severity", ""), "n": 0})
             d["n"] += 1
-            c = (f.get("cwe") or "").strip().upper()
-            if c:
-                all_cwe[c] = all_cwe.get(c, 0) + 1
+            if c := (f.get("cwe") or "").strip().upper():
+                all_cwe[c] += 1
         order = {s: i for i, s in enumerate(SEV_ORDER)}
         final.append(ProjectRow(
             scan=scan, name=name, files=scan.file_count, lines=scan.code_lines,
@@ -190,9 +190,7 @@ def build(scans, standards: list[str] | str | None = None, lang: str = "ko") -> 
     # 2. 진단 항목 — 기준별 유형과 항목 수. GROUP_DESC 는 한국어 유형명이 키다.
     groups = []
     for std in stds:
-        seen: dict[str, int] = {}
-        for it in std.items:
-            seen[it.group] = seen.get(it.group, 0) + 1
+        seen = Counter(it.group for it in std.items)
         for ko_group, n in seen.items():
             en_group = next(x.group_en for x in std.items if x.group == ko_group)
             desc = GROUP_DESC.get(ko_group, ("", ""))

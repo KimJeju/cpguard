@@ -310,7 +310,7 @@ def _literal_key(node: ir.Node, ctx: Ctx) -> str | None:
     if len(raw) < 2 or raw[0] not in "\"'" or raw[-1] != raw[0]:
         return None
     inner = raw[1:-1]
-    if any(m in inner for m in ("${", "#{", "\(", '"', "'")):
+    if any(m in inner for m in ("${", "#{", r"\(", '"', "'")):
         return None   # 보간·중첩 인용 → 상수 키로 보기 어렵다
     return inner
 

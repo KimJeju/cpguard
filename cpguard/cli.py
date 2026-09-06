@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import multiprocessing
 import sys
 from pathlib import Path
@@ -112,11 +113,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.standard:
         from . import standards
-        counts: dict[str, int] = {}
-        for f in findings:
-            c = (f.cwe or "").strip().upper()
-            if c:
-                counts[c] = counts.get(c, 0) + 1
+        counts = Counter(c for f in findings
+                         if (c := (f.cwe or "").strip().upper()))
         avail = standards.rule_cwes()
         for sid in args.standard:
             std = standards.get(sid)

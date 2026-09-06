@@ -253,11 +253,8 @@ def write_workbook(findings: list[Finding], out_path: str | Path,
     ids = [standards] if isinstance(standards, str) else list(standards or [])
     stds = [s for s in (_std_mod.get(i) for i in ids) if s]
     if stds:
-        cwe_counts: dict[str, int] = {}
-        for f in findings:
-            c = (f.cwe or "").strip().upper()
-            if c:
-                cwe_counts[c] = cwe_counts.get(c, 0) + 1
+        cwe_counts = Counter(c for f in findings
+                             if (c := (f.cwe or "").strip().upper()))
         avail = _std_mod.rule_cwes()
         V = _std_mod.VERDICT_EN if en else _std_mod.VERDICT_KO
         multi = len(stds) > 1

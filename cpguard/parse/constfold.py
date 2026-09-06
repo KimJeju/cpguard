@@ -28,6 +28,7 @@ children 이 하나면 그 가지만 전파된다).
 from __future__ import annotations
 
 import operator as _op
+from collections import Counter
 
 from .. import ir
 
@@ -162,12 +163,12 @@ def _simple_name(node: ir.Node) -> str | None:
 
 def _fold_scope(body: list[ir.Node], params: list[str]) -> None:
     # (1) 이름별 대입 횟수. 두 번 이상이면 값을 특정할 수 없다.
-    counts: dict[str, int] = {p: 2 for p in params}   # 파라미터는 호출자가 정한다 → 상수 아님
+    counts = Counter({p: 2 for p in params})         # 파라미터는 호출자가 정한다 → 상수 아님
     for n in _walk_scope(body):
         if isinstance(n, ir.Assign):
             name = _simple_name(n.target)
             if name:
-                counts[name] = counts.get(name, 0) + 1
+                counts[name] += 1
 
     # (2) 전위 순회하며 상수표를 채우고, 그 시점 표로 분기를 접는다.
     consts: dict[str, object] = {}

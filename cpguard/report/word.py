@@ -12,6 +12,7 @@ report/style.py 의 흑백 팔레트를 공유한다.
 from __future__ import annotations
 
 import datetime as _dt
+from collections import Counter
 from pathlib import Path
 
 from docx import Document
@@ -230,14 +231,12 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
 
     _para(doc, "", space_after=8)
     _heading(doc, T("취약점 유형(CWE) 상위"), 2)
-    cwe_c: dict = {}
+    cwe_c = Counter(f.get("cwe") or "-" for f in findings)
     seen: dict = {}
     for f in findings:
-        c = f.get("cwe") or "-"
-        cwe_c[c] = cwe_c.get(c, 0) + 1
-        seen.setdefault(c, f.get("rule_id"))
+        seen.setdefault(f.get("cwe") or "-", f.get("rule_id"))
     rows = [["CWE", T("규칙 예"), T("개수")]]
-    for cwe, n in sorted(cwe_c.items(), key=lambda x: -x[1])[:12]:
+    for cwe, n in cwe_c.most_common(12):
         rows.append([cwe, seen.get(cwe, ""), str(n)])
     _table(doc, rows, [3.6, 11.8, 2.0], aligns=[None, None, CENTER])
 
@@ -275,11 +274,8 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     _heading(doc, T("3. 진단 항목"), 1)
     ids = [standards] if isinstance(standards, str) else list(standards or [])
     stds = [s for s in (_sm.get(i) for i in ids) if s]
-    cwe_counts: dict[str, int] = {}
-    for f in findings:
-        c = (f.get("cwe") or "").strip().upper()
-        if c:
-            cwe_counts[c] = cwe_counts.get(c, 0) + 1
+    cwe_counts = Counter(c for f in findings
+                         if (c := (f.get("cwe") or "").strip().upper()))
 
     if not stds:
         _para(doc, T("이번 진단에서 탐지된 점검 항목(규칙)과 분류·건수는 다음과 같다."), space_after=6)
@@ -648,13 +644,10 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
                 if en else
                 "이번 진단에서 도출된 보안약점 유형별 조치 방안은 다음과 같다. 유형별 상세 코드 "
                 "예시는 별도의 조치 가이드를 참조한다."), size=9.5, space_after=6)
-    seen: dict[str, int] = {}
-    for r in D["final"]:
-        for f in r.scan.findings:
-            k = _rule_key(f["rule_id"])
-            seen[k] = seen.get(k, 0) + 1
+    seen = Counter(_rule_key(f["rule_id"])
+                   for r in D["final"] for f in r.scan.findings)
     rows = [[T("보안약점 유형"), T("영향"), T("조치 방안"), T("건수")]]
-    for k, n in sorted(seen.items(), key=lambda x: -x[1])[:20]:
+    for k, n in seen.most_common(20):
         rem = REM.get(k, DFT)
         rows.append([rem[0], rem[1], rem[2], str(n)])
     _table(doc, rows, [3.4, 6.0, 6.6, 1.4], sizes=8, aligns=[None, None, None, CENTER])
