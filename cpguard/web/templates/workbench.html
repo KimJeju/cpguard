@@ -264,6 +264,7 @@
         </div>
         <div style="display:flex;gap:6px">
           <select id="group">
+            <option value="similar">유사 이슈 그룹</option>
             <option value="severity">위험도별</option><option value="rule_id">규칙별</option><option value="file">파일별</option><option value="category">유형별</option><option value="std_item">점검항목별</option>
           </select>
           <select id="fnew">
@@ -510,6 +511,8 @@
   el('v-files').onclick = () => { ws.view = 'files'; applyWS(); saveWS(); renderTree(); };
 
   let sel = null, curStep = 0;
+  let GONEXT = false;
+  try { GONEXT = !!localStorage.getItem('cpguard.gonext'); } catch (e) {}
 
   // ---------- 필터 ----------
   // 흐름 내용 필터 — 정오탐은 대부분 "이 sanitizer 를 거쳤는가 / 이 sink 인가"로 갈린다.
@@ -531,6 +534,13 @@
   }
 
   let FLOW_RE = null;
+  // 같은 규칙 + 같은 sink 코드 = 같은 판정을 받을 이슈. LLM 트리아지가 비용 통제에
+  // 쓰던 묶음과 같은 기준이라, 화면에서도 한 덩어리로 보고 한 번에 판정한다.
+  function similarKey(f) {
+    const snk = (f.steps && f.steps.length) ? f.steps[f.steps.length - 1].code : '';
+    return f.rule_id + ' · ' + String(snk).replace(/\s+/g, '').slice(0, 60);
+  }
+
   function visible() {
     const q = el('q').value.trim().toLowerCase();
     return FINDINGS.filter(f => {
@@ -622,7 +632,7 @@
 
     const key = ws.group;
     const groups = new Map();
-    for (const f of items) { const k = key === 'category' ? (CAT_LABEL[f.category || 'flow'] || f.category) : key === 'std_item' ? stdLabel(f) : (f[key] || '(없음)'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
+    for (const f of items) { const k = key === 'similar' ? similarKey(f) : key === 'category' ? (CAT_LABEL[f.category || 'flow'] || f.category) : key === 'std_item' ? stdLabel(f) : (f[key] || '(없음)'); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); }
     const keys = [...groups.keys()].sort((a, b) => key === 'severity' ? (SEV_ORDER[a] ?? 9) - (SEV_ORDER[b] ?? 9) : groups.get(b).length - groups.get(a).length);
     let html = items.length ? '' : '<div class="empty">조건에 맞는 이슈가 없습니다.</div>';
     for (const k of keys) {
@@ -771,6 +781,9 @@
     html += '</div><div class="audit-btns">';
     for (const [k, label] of Object.entries(AUDIT_LABEL)) html += `<button class="ab${(f.audit || '') === k ? ' on' : ''}" data-audit="${k}">${label}</button>`;
     html += '</div>';
+    html += `<label class="muted" style="display:flex;gap:6px;align-items:center;font-size:11.5px;margin:2px 0 8px">`
+      + `<input type="checkbox" id="gonext" style="width:auto;margin:0"${GONEXT ? ' checked' : ''}> 판정 후 다음 이슈로</label>`;
+    html += `<div id="hist" class="muted" style="font-size:11.5px"></div>`;
     // 감사자 의견 메모 — 값은 .value 로 넣어 HTML 로 렌더되지 않게 한다(평문 취급).
     html += `<div class="note-box"><label>감사자 의견</label>`
       + `<textarea id="note-input" placeholder="이 이슈에 대한 판단 근거·메모를 적으세요 (평문)"></textarea>`
@@ -778,11 +791,27 @@
       + `<span class="note-status" id="note-status"></span></div></div>`;
     el('detail').innerHTML = html;
     el('detail').querySelectorAll('.flow-step').forEach(n => n.onclick = () => gotoStep(f, Number(n.dataset.step)));
-    el('detail').querySelectorAll('.ab').forEach(n => n.onclick = () => setAudit(f, n.dataset.audit));
+    el('detail').querySelectorAll('.ab').forEach(n => n.onclick = () => setAudit(f, n.dataset.audit, el('gonext') && el('gonext').checked));
     const ta = el('note-input'); ta.value = f.audit_note || '';   // HTML 아님 — 평문 값 주입
     const save = el('note-save'), st = el('note-status');
     ta.oninput = () => { st.textContent = ''; };
     save.onclick = () => saveNote(f, ta.value, save, st);
+    const gn = el('gonext');
+    if (gn) gn.onchange = () => { GONEXT = gn.checked; try { localStorage.setItem('cpguard.gonext', GONEXT ? '1' : ''); } catch (e) {} };
+    loadHistory(f);
+  }
+
+  // 판정 이력 — 발주처 검수에서 "이 오탐 판정 누가 언제" 를 물으면 근거가 있어야 한다.
+  function loadHistory(f) {
+    const box = el('hist');
+    if (!box) return;
+    fetch(`/scan/${SCAN_PK}/api/history/${f.id}`).then(r => r.json()).then(d => {
+      const ev = d.events || [];
+      if (!ev.length) { box.innerHTML = ''; return; }
+      box.innerHTML = '<div style="margin:6px 0 2px">판정 이력</div>' + ev.map(e =>
+        `<div>${esc(e.at)} · ${esc(AUDIT_LABEL[e.before] || '미확인')} → <b>${esc(AUDIT_LABEL[e.after] || '미확인')}</b>`
+        + `${e.bulk ? ' <span class="muted">(일괄)</span>' : ''}</div>`).join('');
+    }).catch(() => {});
   }
   function saveNote(f, note, btn, st) {
     btn.disabled = true; st.textContent = '저장 중…';
@@ -829,14 +858,23 @@
   }
   function sel_id() { return typeof sel === 'undefined' ? null : sel; }
 
-  function setAudit(f, status) {
+  // 판정 후 다음 이슈로 — 100건을 연속 처리할 때 클릭 수가 절반이 된다.
+  function nextAfter(f) {
+    const items = visible();
+    const i = items.findIndex(x => x.id === f.id);
+    const nxt = items[i + 1] || items.find(x => x.id !== f.id);
+    if (nxt) select(nxt.id);
+  }
+
+  function setAudit(f, status, goNext) {
     fetch(`/scan/${SCAN_PK}/audit/`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF }, body: new URLSearchParams({ index: f.id, status }) })
       .then(r => r.json()).then(d => {
         if (!d.ok) return;
         const before = f.audit || '';
         f.audit = status;
         applyAuditDelta(f, before, status);
-        renderDetail(f); renderTree();
+        renderTree();
+        if (goNext) nextAfter(f); else renderDetail(f);
       });
   }
 

@@ -130,7 +130,7 @@
         <label class="muted" style="display:flex;gap:7px;align-items:center;cursor:pointer;font-size:12.5px" title="{{ s.source }}">
           <input type="checkbox" name="standards" form="scanform" value="{{ s.id }}"{% if s.checked %} checked{% endif %}
                  style="flex:0 0 auto;width:auto;margin:0">
-          <span>{{ s.name }} <span style="opacity:.6">({{ s.count }})</span></span>
+          <span>{{ s.name }} <span style="opacity:.6">({{ s.count }})</span>{% if s.draft %} <span class="badge" title="{{ s.draft }}">초안</span>{% endif %}</span>
         </label>
         {% endfor %}
       </div>

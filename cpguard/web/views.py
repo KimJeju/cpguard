@@ -402,7 +402,7 @@ def _standard_choices(selected: list[str] | None = None, lang: str = "ko") -> li
     en = lang == "en"
     sel = set(selected) if selected is not None else {_sm.DEFAULT}
     return [{"id": s.id, "name": s.name_en if en else s.name, "source": s.source_for(lang),
-             "count": len(s.items), "checked": s.id in sel}
+             "count": len(s.items), "checked": s.id in sel, "draft": s.draft_note}
             for s in _sm.STANDARDS.values()]
 
 
@@ -865,6 +865,16 @@ def scan_findings_api(request, pk: int):
     for r in rows:                            # 행 배경색·라벨용 감사 상태
         r["audit"] = audit.get(str(r["idx"]), "")
     return JsonResponse({"total": total, "page": page, "size": size, "rows": rows})
+
+
+def audit_history_api(request, pk: int, idx: int):
+    """이슈 하나의 판정 이력 — 인스펙터 하단이 읽는다."""
+    from .models import AuditEvent
+    get_object_or_404(Scan, pk=pk)
+    rows = [{"before": e.before, "after": e.after, "bulk": e.bulk,
+             "at": e.at.strftime("%Y-%m-%d %H:%M"), "actor": e.actor}
+            for e in AuditEvent.objects.filter(scan_id=pk, idx=idx)[:50]]
+    return JsonResponse({"events": rows})
 
 
 def scan_finding_api(request, pk: int, idx: int):
@@ -1443,7 +1453,11 @@ def set_audit(request, pk: int):
     status = request.POST.get("status", "")
     if status not in AUDIT_STATES:
         return JsonResponse({"ok": False, "error": "알 수 없는 상태"}, status=400)
+    before = scan.audit.get(str(idx), "")
     scan.set_audit(idx, status)
+    if before != status:
+        from .models import AuditEvent
+        AuditEvent.objects.create(scan=scan, idx=idx, before=before, after=status)
     return JsonResponse({"ok": True, "index": idx, "status": status})
 
 
@@ -1462,14 +1476,21 @@ def set_audit_bulk(request, pk: int):
     idxs = {i for i in idxs if 0 <= i < scan.finding_count}
     if not idxs:
         return JsonResponse({"ok": False, "error": "대상 없음"}, status=400)
+    from .models import AuditEvent
     a = scan.audit
+    events = []
     for i in idxs:
+        before = a.get(str(i), "")
+        if before == status:
+            continue
+        events.append(AuditEvent(scan=scan, idx=i, before=before, after=status, bulk=True))
         if status:
             a[str(i)] = status
         else:
             a.pop(str(i), None)
     scan.audit_json = json.dumps(a)
     scan.save(update_fields=["audit_json"])
+    AuditEvent.objects.bulk_create(events, batch_size=500)
     return JsonResponse({"ok": True, "count": len(idxs), "status": status})
 
 

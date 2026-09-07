@@ -204,6 +204,26 @@ class Scan(models.Model):
         return dict(Counter(f["severity"] for f in self.findings))
 
 
+class AuditEvent(models.Model):
+    """이슈 판정 변경 이력.
+
+    합본 보고서의 '정오탐 점검' 단계가 곧 이 이력이다. 발주처 검수에서 "이 오탐 판정은
+    누가 언제 했나"를 물으면 답할 근거가 있어야 한다. 1인 데스크톱이라 작성자는
+    비워두고, 서버 에디션에서 사용자와 연결한다.
+    """
+    scan = models.ForeignKey("Scan", related_name="audit_events", on_delete=models.CASCADE)
+    idx = models.IntegerField()                       # 스캔 내 finding id
+    before = models.CharField(max_length=20, blank=True, default="")
+    after = models.CharField(max_length=20, blank=True, default="")
+    at = models.DateTimeField(auto_now_add=True)
+    actor = models.CharField(max_length=100, blank=True, default="")
+    bulk = models.BooleanField(default=False)         # 일괄 판정으로 바뀐 건인지
+
+    class Meta:
+        ordering = ["-at", "-id"]
+        indexes = [models.Index(fields=["scan", "idx"])]
+
+
 class ProjectSetting(models.Model):
     """프로젝트별 진단 설정 — 매 진단 반복되는 제외 작업을 저장해 둔다.
 

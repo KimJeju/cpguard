@@ -36,6 +36,7 @@ urlpatterns = [
     path("scan/<int:pk>/api/findings", views.scan_findings_api, name="scan_findings_api"),
     path("scan/<int:pk>/api/standard", views.scan_standard_api, name="scan_standard_api"),
     path("scan/<int:pk>/api/finding/<int:idx>", views.scan_finding_api, name="scan_finding_api"),
+    path("scan/<int:pk>/api/history/<int:idx>", views.audit_history_api, name="audit_history_api"),
     path("scan/<int:pk>/report.pdf", views.export_pdf_report, name="export_pdf_report"),
     path("scan/<int:pk>/guide.pdf", views.export_pdf_guide, name="export_pdf_guide"),
 ]

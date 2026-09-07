@@ -622,6 +622,9 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
             if si:
                 story.append(Spacer(1, 6 * mm))
             story.append(Paragraph(std.name_en if en else std.name, st["h2sec"]))
+            if std.draft_note and not en:
+                story.append(Paragraph("※ " + _esc(std.draft_note), st["body"]))
+                story.append(Spacer(1, 2 * mm))
             intro = (f"Assessed against {std.source_for(lang)}. {nv} of the {len(rows_std)} weaknesses "
                      f"below were found."
                      if en else

@@ -207,3 +207,19 @@ def test_en_deliverables_contain_no_korean():
     cells = " ".join(str(cl.value) for ws in wb.worksheets
                      for row in ws.iter_rows() for cl in row if cl.value)
     assert not han.search(cells), f"xlsx(en) 한글 잔존: {sorted(set(han.findall(cells)))[:20]}"
+
+
+def test_a_draft_standard_announces_itself():
+    """항목 목록이 공식 문서로 확인되지 않은 기준은 화면과 산출물에서 그렇다고 말해야 한다.
+
+    점검표는 빠진 항목이 조용히 없는 게 가장 위험하다.
+    """
+    from cpguard.standards import STANDARDS
+
+    mobile = STANDARDS["mobile"]
+    assert mobile.draft_note, "초안 경고가 있어야 한다"
+    assert len(mobile.items) == 24
+    assert all(it.cwes for it in mobile.items), "모든 항목에 CWE 매핑이 있어야 한다"
+
+    for other in ("mois", "efs", "owasp", "cwe"):
+        assert not STANDARDS[other].draft_note, f"{other} 는 초안이 아니다"

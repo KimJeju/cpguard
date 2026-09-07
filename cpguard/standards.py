@@ -38,6 +38,9 @@ class Standard:
     items: tuple[Item, ...]
     source_en: str = ""        # 근거 문서 영문 표기(비면 source)
     show_code: bool = True     # code 가 그 기준의 공식 코드인가(OWASP A01·CWE-89 = 참)
+    # 항목 목록이 공식 문서로 완전 확인되지 않았을 때의 경고. 비어 있지 않으면 화면과
+    # 산출물에 그대로 노출한다 — 점검표는 빠진 항목이 조용히 없는 게 가장 위험하다.
+    draft_note: str = ""
 
     def source_for(self, lang: str) -> str:
         """근거 문서 표기. EN 보고서에 한국어 근거가 그대로 실리지 않게 한다."""
@@ -297,12 +300,72 @@ def _cwe_items() -> tuple[Item, ...]:
                                            key=lambda kv: int(kv[0].split("-")[1])))
 
 
+def _mobile() -> tuple[Item, ...]:
+    """모바일 대응 보안약점 진단 — 안드로이드 앱 진단 사업에서 요구된다.
+
+    항목명은 공개 가이드의 목록을 따르고 CWE 매핑은 우리가 붙였다. 다만 확보한 목록에
+    5번 항목이 빠져 있어 24개만 싣는다 — 공식 가이드로 확인하기 전에는 초안이다
+    (Standard.draft_note 로 화면·산출물에 그대로 알린다).
+    """
+    G = ("입력데이터 검증 및 표현", "Input data validation and representation")
+    S = ("보안기능", "Security features")
+    T = ("시간 및 상태", "Time and state")
+    E = ("에러처리", "Error handling")
+    C = ("코드오류", "Code error")
+    A = ("API 오용", "API abuse")
+    M = ("모바일 플랫폼", "Mobile platform")
+    raw = [
+        ("sql-injection", "SQL 삽입", "SQL injection", G, ("CWE-89",)),
+        ("path-resource-injection", "경로조작 및 자원삽입", "Path manipulation and resource injection",
+         G, ("CWE-22", "CWE-23", "CWE-73", "CWE-99")),
+        ("xss", "크로스사이트 스크립트", "Cross-site scripting", G, ("CWE-79",)),
+        ("os-command-injection", "운영체제 명령어 삽입", "OS command injection", G, ("CWE-77", "CWE-78")),
+        ("weak-crypto", "취약한 암호화 알고리즘 사용", "Use of a broken cryptographic algorithm",
+         S, ("CWE-327", "CWE-326")),
+        ("plaintext-storage", "중요정보 평문 저장", "Cleartext storage of sensitive information",
+         S, ("CWE-312", "CWE-313", "CWE-922")),
+        ("plaintext-transmission", "중요정보 평문 전송", "Cleartext transmission of sensitive information",
+         S, ("CWE-319",)),
+        ("hardcoded-password", "하드코드된 비밀번호", "Hardcoded password", S, ("CWE-259", "CWE-798")),
+        ("weak-key-length", "충분하지 않은 키 길이 사용", "Inadequate key length", S, ("CWE-326",)),
+        ("weak-random", "적절하지 않은 난수값 사용", "Use of an insufficiently random value", S, ("CWE-330", "CWE-338")),
+        ("hardcoded-key", "하드코드된 암호화 키", "Hardcoded cryptographic key", S, ("CWE-321", "CWE-798")),
+        ("secret-in-comment", "주석문안에 포함된 시스템 주요정보",
+         "Sensitive system information in a comment", S, ("CWE-615",)),
+        ("toctou", "경쟁조건: 검사시점과 사용시점(TOCTOU)", "Race condition (TOCTOU)", T, ("CWE-367",)),
+        ("error-info-exposure", "오류메시지 및 시스템 데이터 정보노출",
+         "Information exposure through an error message", E, ("CWE-209", "CWE-497")),
+        ("missing-error-handling", "오류상황 대응 부재", "Missing error handling", E, ("CWE-390", "CWE-544")),
+        ("improper-exception", "부적절한 예외 처리", "Improper exception handling", E, ("CWE-248", "CWE-396", "CWE-397")),
+        ("null-deref", "Null Pointer 역참조", "Null pointer dereference", C, ("CWE-476",)),
+        ("resource-leak", "부적절한 자원 해제", "Improper release of a resource", C, ("CWE-404", "CWE-772")),
+        ("dangerous-api", "취약한 API 사용", "Use of a dangerous API", A, ("CWE-242", "CWE-676")),
+        ("android-component-exposure", "안드로이드 애플리케이션 컴포넌트의 부적절한 접근 허용",
+         "Improperly exported Android component", M, ("CWE-926",)),
+        ("implicit-intent", "민감한 정보 전송을 위한 암시적 intent 사용",
+         "Sensitive data sent through an implicit intent", M, ("CWE-927",)),
+        ("storage-without-access-control", "접근제어 없이 내·외부저장소 사용",
+         "Storage used without access control", M, ("CWE-276", "CWE-922")),
+        ("permission-bypass", "안드로이드의 권한 검사 우회", "Android permission check bypass", M, ("CWE-284",)),
+        ("class-loading-hijack", "클래스 로딩 하이재킹", "Class loading hijacking", M, ("CWE-470",)),
+    ]
+    return tuple(Item(code=c, name=n, name_en=ne, group=g[0], group_en=g[1], cwes=cw)
+                 for c, n, ne, g, cw in raw)
+
+
 STANDARDS: dict[str, Standard] = {
     "mois": Standard("mois", "행정안전부 소프트웨어 개발보안 가이드",
                      "MOIS Secure Coding Guide (Korea)",
                      "행정안전부 「소프트웨어 개발보안 가이드」 보안약점", _mois(),
                      source_en="MOIS Software Development Security Guide (Korea)",
                      show_code=False),
+    "mobile": Standard("mobile", "모바일 대응 보안약점 진단", "Mobile Secure Coding Checklist (Korea)",
+                       "행정안전부 「모바일 대응 소프트웨어 개발보안 가이드」 보안약점",
+                       _mobile(),
+                       source_en="MOIS Mobile Software Development Security Guide (Korea)",
+                       show_code=False,
+                       draft_note="초안 — 확보한 목록에 5번 항목이 빠져 있습니다. "
+                                  "고객 제출 전에 공식 가이드로 항목을 확인하세요."),
     "efs": Standard("efs", "전자금융감독규정 웹 취약점", "Electronic Financial Supervision (Korea)",
                     "전자금융감독규정 · KISA 「홈페이지 취약점 진단·제거 가이드」 점검항목",
                     _efs(),
