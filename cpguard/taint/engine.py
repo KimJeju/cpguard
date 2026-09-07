@@ -486,9 +486,23 @@ def _run_loop(node: ir.Loop, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace
     return _merge(cur, _run(node.body, dict(cur), ctx))
 
 
+def _annotated_env(fn: ir.Function, ctx: Ctx) -> dict[str, Trace]:
+    """프레임워크가 요청 값을 주입하는 파라미터를 오염 상태로 시작시킨다.
+
+    Spring 의 @RequestParam, ASP.NET 의 [FromQuery] 같은 것들. 이 파라미터는 호출자가
+    없고 프레임워크가 직접 채우므로, 요약(호출 인자 전파)으로는 절대 오염되지 않는다.
+    진입점 자체를 소스로 보지 않으면 컨트롤러가 통째로 미탐이 된다.
+    """
+    wanted = {n for s in ctx.rule.sources if s.kind == "annotation" for n in s.name}
+    if not wanted:
+        return {}
+    return {p.name: [Step("source", p.loc, _snippet(p.loc, ctx.src))]
+            for p in fn.params if wanted.intersection(p.annotations)}
+
+
 def _run_function(fn: ir.Function, ctx: Ctx) -> None:
-    """함수 본문을 빈 env 로 분석한다(파라미터 오염은 요약이 담당)."""
-    _run(fn.body, {}, ctx)
+    """함수 본문을 분석한다(일반 파라미터 오염은 요약이 담당)."""
+    _run(fn.body, _annotated_env(fn, ctx), ctx)
 
 
 # ---------- 요약 계산 ----------

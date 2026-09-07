@@ -197,6 +197,13 @@ sources:
   - Console.ReadLine
   - Console.In.ReadLine
   - HttpContext.Current.Request
+- pattern: annotation
+  name:
+  - FromQuery
+  - FromBody
+  - FromRoute
+  - FromForm
+  - FromHeader
 sinks:
 - pattern: call
   callee:

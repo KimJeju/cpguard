@@ -33,6 +33,17 @@ sources:
 - pattern: name
   name:
   - System.getenv
+- pattern: annotation
+  name:
+  - RequestParam
+  - PathVariable
+  - RequestBody
+  - RequestHeader
+  - RequestPart
+  - CookieValue
+  - ModelAttribute
+  - RequestAttribute
+  - MatrixVariable
 sinks:
 - pattern: call
   callee:

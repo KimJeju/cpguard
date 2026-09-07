@@ -201,3 +201,64 @@ def test_the_else_branch_of_a_guard_stays_tainted(tmp_path):
     hits = _php(tmp_path, '<?php function d(){ $w = $_GET["id"];'
                           ' if (is_numeric($w)) { echo 1; } else { mysqli_query($c, "SELECT " . $w); } }')
     assert len(hits) == 1
+
+
+# ---------- 프레임워크 진입점(어노테이션 소스) ----------
+
+def _scan(tmp_path, name, code, rule_id):
+    from cpguard.scanner import scan_file
+    p = tmp_path / name
+    p.write_text(code, encoding="utf-8")
+    return [f for f in scan_file(p) if f.rule_id == rule_id]
+
+
+SPRING = '''public class Ctl {
+  @GetMapping("/u")
+  public String u(@RequestParam String name) {
+    String q = "SELECT * FROM t WHERE n='" + name + "'";
+    return stmt.executeQuery(q);
+  }
+}
+'''
+
+PLAIN_JAVA = '''public class Ctl {
+  public String u(String name) {
+    String q = "SELECT * FROM t WHERE n='" + name + "'";
+    return stmt.executeQuery(q);
+  }
+}
+'''
+
+
+def test_spring_request_param_is_a_source(tmp_path):
+    """프레임워크가 채우는 파라미터는 호출자가 없다 — 요약으로는 절대 오염되지 않는다."""
+    assert len(_scan(tmp_path, "Ctl.java", SPRING, "java.sqli")) == 1
+
+
+def test_a_plain_parameter_is_not_a_source(tmp_path):
+    """어노테이션 없는 파라미터까지 소스로 보면 내부 헬퍼가 전부 오탐이 된다."""
+    assert _scan(tmp_path, "Ctl.java", PLAIN_JAVA, "java.sqli") == []
+
+
+def test_aspnet_from_query_is_a_source(tmp_path):
+    code = '''public class Ctl2 {
+  public string U([FromQuery] string name) {
+    var q = "SELECT * FROM t WHERE n='" + name + "'";
+    return cmd.ExecuteReader(q);
+  }
+}
+'''
+    assert len(_scan(tmp_path, "Ctl2.cs", code, "csharp.sqli")) == 1
+
+
+def test_kotlin_annotation_sits_on_a_sibling_node(tmp_path):
+    """Kotlin 은 어노테이션이 parameter 의 자식이 아니라 앞 형제로 붙는다."""
+    code = '''class Ctl3 {
+    @GetMapping("/u")
+    fun u(@RequestParam name: String): String {
+        val q = "SELECT * FROM t WHERE n='" + name + "'"
+        return stmt.executeQuery(q)
+    }
+}
+'''
+    assert len(_scan(tmp_path, "Ctl3.kt", code, "kotlin.sqli")) == 1

@@ -235,6 +235,30 @@ class _Worker:
     def _fld(self, node: TSNode, name: str | None) -> TSNode | None:
         return child_by_field(node, name) if name else None
 
+    def _annotations(self, node) -> list[str]:
+        """파라미터에 붙은 어노테이션 이름. @RequestParam("q") -> RequestParam.
+
+        Spring 계열은 요청 값을 파라미터로 주입하므로, 어노테이션을 못 보면 컨트롤러
+        진입점이 통째로 사라진다(미탐). 이름만 모으고 인자는 보지 않는다.
+        """
+        out: list[str] = []
+        stack = list(getattr(node, "children", []) or [])
+        # Kotlin 은 어노테이션이 parameter 의 자식이 아니라 앞 형제(parameter_modifiers)다.
+        prev = getattr(node, "prev_sibling", None)
+        if prev is not None and prev.type.endswith("modifiers"):
+            stack.append(prev)
+        while stack:
+            n = stack.pop()
+            if n.type in ("annotation", "marker_annotation", "attribute"):
+                name = self._fld(n, "name") or self._first_ident(n)
+                if name is not None:
+                    out.append(text_of(name).lstrip("@"))
+                continue
+            if n.type in ("modifiers", "parameter_modifiers", "attribute_list",
+                          "annotation_argument_list"):
+                stack.extend(getattr(n, "children", []) or [])
+        return out
+
     def _first_ident(self, node: TSNode | None) -> TSNode | None:
         """노드 안에서 첫 식별자(깊이 우선). 파라미터/선언 이름 뽑기용."""
         if node is None:
@@ -358,7 +382,8 @@ class _Worker:
                 if tgt is None:
                     tgt = self._first_ident(p)
                 if tgt is not None:
-                    params.append(ir.Param(loc=loc_of(tgt, self.file), name=text_of(tgt)))
+                    params.append(ir.Param(loc=loc_of(tgt, self.file), name=text_of(tgt),
+                                           annotations=self._annotations(p)))
         # Swift 는 parameter 가 함수 노드의 직계 자식(컨테이너 없음)
         if not params and not s.params_types:
             for p in self._named(node):

@@ -15,11 +15,15 @@ SPEC_DIR = Path(__file__).resolve().parent.parent / "specs"
 
 @dataclass
 class SourcePattern:
-    """오염 진입점. member: req.query.* 같은 접근, call: process.argv 같은 호출/이름."""
-    kind: str                                   # 'member' | 'name'
+    """오염 진입점.
+
+    member: req.query.* 같은 접근, name: process.argv 같은 호출/이름,
+    annotation: @RequestParam 처럼 프레임워크가 요청 값을 파라미터에 주입하는 형태.
+    """
+    kind: str                                   # 'member' | 'name' | 'annotation'
     object: str | None = None                   # member 의 루트 (예: req)
     property: list[str] = field(default_factory=list)   # member 의 2번째 세그먼트 후보
-    name: list[str] = field(default_factory=list)       # name 패턴의 전체 경로 후보
+    name: list[str] = field(default_factory=list)       # name/annotation 패턴의 이름 후보
 
 
 @dataclass

@@ -130,6 +130,9 @@ class Loop(Node):
 @dataclass
 class Param(Node):
     name: str
+    # 파라미터에 붙은 어노테이션 이름들(@RequestParam 등). 프레임워크가 요청 값을
+    # 파라미터로 주입하는 형태를 source 로 잡는 데 쓴다. 없으면 빈 리스트.
+    annotations: list[str] = field(default_factory=list)
 
 
 @dataclass
