@@ -810,7 +810,7 @@ def test_the_report_records_what_was_excluded_and_what_was_checked(tmp_path):
     assert "분석 기준" in txt and "php.sqli" in txt   # 검출 0건인 규칙도 실린다
 
 
-def test_project_exclusions_are_saved_and_applied_to_the_next_scan():
+def test_project_exclusions_are_saved_and_applied_to_the_next_scan(request):
     """제외 설정은 저장돼서 다음 진단에 적용되고, 그 사실이 스캔에 남는다."""
     from cpguard.web.models import ProjectSetting, Scan
 
@@ -826,6 +826,8 @@ def test_project_exclusions_are_saved_and_applied_to_the_next_scan():
     st = ProjectSetting.objects.get(project=project)
     assert st.glob_list == ("app/conf.py", "**/vendor/**")
     assert st.rule_list == ("js.command-injection",)
+    # 이 설정은 DB 에 남아 뒤 테스트의 스캔까지 바꾼다 — 이 테스트 안에서 지운다
+    request.addfinalizer(lambda: ProjectSetting.objects.filter(project=project).delete())
 
     second = Scan.objects.get(pk=_seed_scan(c))
     cfg = second.scan_config
@@ -838,3 +840,33 @@ def test_project_exclusions_are_saved_and_applied_to_the_next_scan():
     rules_hit = {f["rule_id"] for f in second.findings}
     assert "js.command-injection" not in rules_hit          # 제외한 규칙은 안 돈다
     assert not any(f["file"].endswith("conf.py") for f in second.findings)   # 제외 경로도
+
+
+def test_the_scan_records_language_stats_and_the_report_shows_them():
+    """발주처 보고서 첫 장의 '분석 대상 현황'을 진단원이 따로 세지 않게 한다."""
+    from cpguard.web.models import Scan
+
+    _seed_scan(Client())
+    scan = Scan.objects.order_by("-pk").first()   # 같은 초에 만들어진 스캔이 여럿일 수 있다
+    rows = {r["language"]: r for r in scan.language_stats}
+    assert "javascript" in rows and "python" in rows
+    for r in rows.values():
+        assert r["files"] >= 1 and r["lines"] >= 1
+        assert r["issues"] >= 0
+        assert r["density"] == round(r["issues"] / (r["lines"] / 1000), 2)
+
+
+def test_uncertain_flows_are_marked_for_the_reviewer():
+    """분석 대상에 코드가 없는 함수를 거친 흐름은 표시돼야 오탐 검토 순서가 잡힌다."""
+    c = Client()
+    z = _zip_bytes({
+        "a.js": "function h(req){ const v = someLib(req.query.x); child_process.exec(v); }\n",
+        "b.js": "function g(req){ child_process.exec(req.query.y); }\n",
+    })
+    c.post("/scan/", {"archive": z}, follow=True)
+    from cpguard.web.models import Scan
+    scan = Scan.objects.order_by("-pk").first()
+    flags = {f["file"].split("/")[-1]: f.get("uncertain") for f in scan.findings
+             if f["rule_id"] == "js.command-injection"}
+    assert flags.get("a.js") is True      # 미해석 함수를 거침
+    assert flags.get("b.js") is False     # 직접 흐름

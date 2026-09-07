@@ -49,6 +49,8 @@ class Ctx:
     out: list[Finding]
     summaries: dict[str, Summary] = field(default_factory=dict)
     return_traces: list[Trace] = field(default_factory=list)  # 요약 계산용: 오염된 리턴들
+    # 이번 흐름이 '분석 대상에 코드가 없는 함수'를 거쳤는가(과대근사 통과 표시)
+    unknown_call: bool = False
 
 
 # ---------- 경로/스니펫 유틸 ----------
@@ -181,10 +183,12 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                     return tr + [step]
             return None  # 인자가 오염돼도 리턴으로 흐르지 않으면 오염 아님(정밀도)
 
-        # 알 수 없는 함수(라이브러리 등): 인자 오염이 결과로 흐른다고 과대근사
+        # 알 수 없는 함수(라이브러리 등): 인자 오염이 결과로 흐른다고 과대근사.
+        # 그 함수 안에서 정제됐을 수도 있으므로 이 흐름은 '불확실'로 표시해 둔다.
         for a in node.args:
             tr = _taint(a, env, ctx)
             if tr:
+                ctx.unknown_call = True
                 return tr + [step]
         return _taint(node.callee, env, ctx)
 
@@ -250,8 +254,9 @@ def _emit(ctx: Ctx, steps: list[Step]) -> None:
     ctx.out.append(Finding(
         rule_id=ctx.rule.id, message=ctx.rule.message,
         severity=ctx.rule.severity, cwe=ctx.rule.cwe,
-        owasp=ctx.rule.owasp, steps=steps,
+        owasp=ctx.rule.owasp, steps=steps, uncertain=ctx.unknown_call,
     ))
+    ctx.unknown_call = False   # 다음 흐름과 섞이지 않게 되돌린다
 
 
 def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:

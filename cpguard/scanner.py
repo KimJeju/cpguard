@@ -75,6 +75,8 @@ class ScanReport:
     text_scanned: int = 0                              # 패턴 축이 훑은 텍스트 파일 수(소스 포함)
     code_lines: int = 0                                # 분석한 소스의 총 라인 수(진단 규모 근거)
     languages: list[str] = field(default_factory=list)  # 분석한 개발언어(보고서 '개발언어')
+    # 언어별 (파일 수, 라인 수) — 보고서 첫 장의 '분석 대상 현황'과 밀도 계산에 쓴다.
+    by_language: dict[str, dict[str, int]] = field(default_factory=dict)
     skipped_too_large: list[str] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)  # (경로, 사유)
     partial: list[str] = field(default_factory=list)             # 구문오류로 일부만 분석
@@ -349,6 +351,13 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
         # 진단 규모 근거 — 산출물의 '파일 수 / 빌드 라인 수 / 개발언어' 열이 이걸 쓴다.
         report.code_lines = sum(src.count(b"\n") + 1 for _p, _m, src, _l in parsed if src)
         report.languages = sorted({lang for _p, _m, _s, lang in parsed if lang})
+        # 변수명 주의: _p 는 이 함수의 진행 콜백이다(제너레이터식과 달리 for 는 덮어쓴다).
+        for _path, _mod, src, lang in parsed:
+            if not lang:
+                continue
+            e = report.by_language.setdefault(lang, {"files": 0, "lines": 0})
+            e["files"] += 1
+            e["lines"] += (src.count(b"\n") + 1) if src else 0
 
         # 2) 데이터 흐름 축: 파일 경계를 넘는 공용 레지스트리와 규칙별 요약
         if parsed:

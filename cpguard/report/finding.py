@@ -34,6 +34,9 @@ class Finding:
     fp_hint: bool = False             # 같은 줄에 오탐 신호(process.env 등)가 있었는가
     matched_value: str | None = None  # 탐지값(마스킹됨). 산출물이 유출원이 되지 않게
     category: str = "flow"            # flow | secret | pii | config | hygiene | infra
+    # 분석 대상에 코드가 없는 함수를 거친 흐름. 그 함수 안에서 정제됐을 수 있으므로
+    # 결과가 부정확할 수 있다 — 진단원이 오탐 우선 검토 순서를 잡는 데 쓴다.
+    uncertain: bool = False
 
     @property
     def source(self) -> Step:

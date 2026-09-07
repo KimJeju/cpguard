@@ -116,6 +116,20 @@
     <span class="muted" style="margin-left:auto">오탐·보류·조치완료는 조치대상에서 빠집니다</span>
   </div>
   {% if latest.integrity_note %}<div class="err" style="margin-top:12px">스캔 무결성: {{ latest.integrity_note }}</div>{% endif %}
+  {% if latest.language_stats %}
+  <table style="margin-top:14px">
+    <tr><th>개발언어</th><th style="text-align:right">파일</th><th style="text-align:right">라인</th>
+        <th style="text-align:right">탐지</th><th style="text-align:right" title="1,000 라인당 탐지 건수">밀도</th></tr>
+    {% for r in latest.language_stats %}
+    <tr><td>{{ r.language }}</td>
+        <td style="text-align:right">{{ r.files }}</td>
+        <td style="text-align:right">{{ r.lines }}</td>
+        <td style="text-align:right">{{ r.issues }}</td>
+        <td style="text-align:right">{{ r.density }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
   <details style="margin-top:12px">
     <summary class="muted" style="cursor:pointer;font-size:12.5px">진단 제외 설정{% if setting %} · 경로 {{ setting.glob_list|length }} · 규칙 {{ setting.rule_list|length }}{% endif %}</summary>
     <form method="post" action="{% url 'project_settings' project %}" style="margin-top:10px;display:grid;gap:8px;max-width:720px">{% csrf_token %}

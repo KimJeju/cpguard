@@ -299,6 +299,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 [_finding_to_dict(i, f, base) for i, f in enumerate(findings)], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
+            stats_json=json.dumps(_language_stats(scan_report, findings, base), ensure_ascii=False),
             scan_config_json=json.dumps({
                 "exclude_globs": list(ex_globs),
                 "exclude_rules": sorted(ex_rules),
@@ -887,6 +888,30 @@ def scan_finding_api(request, pk: int, idx: int):
     return JsonResponse({"finding": f, "sources": subset})
 
 
+# 확장자 -> 언어. 탐지는 파일 경로만 들고 있어서 언어별 이슈 수는 여기서 되짚는다.
+def _language_stats(report, findings, base: Path) -> dict:
+    """언어별 파일 수·라인 수·이슈 수·밀도(이슈/KLOC).
+
+    발주처 보고서 첫 장이 늘 '분석 대상 현황'이다. 지금까지는 진단원이 따로 셌다.
+    밀도는 어디부터 볼지 정하는 데도 쓴다.
+    """
+    from ..parse import loader
+    by = {k: dict(v) for k, v in (report.by_language or {}).items()}
+    for f in findings:
+        try:
+            lang = loader.language_name_for(Path(f.sink.loc.file))
+        except Exception:
+            lang = None
+        if not lang:
+            continue
+        e = by.setdefault(lang, {"files": 0, "lines": 0})
+        e["issues"] = e.get("issues", 0) + 1
+    for e in by.values():
+        e.setdefault("issues", 0)
+        e["density"] = round(e["issues"] / (e["lines"] / 1000), 2) if e["lines"] else 0.0
+    return {"by_language": by}
+
+
 def _carry_over_audit(project: str, findings: list, base: Path) -> tuple[dict, dict]:
     """같은 프로젝트의 직전 스캔에서 감사 상태·의견을 지문 기준으로 가져온다.
 
@@ -968,6 +993,7 @@ def _finding_to_dict(idx: int, f: Finding, base: Path) -> dict:
         "triage_provider": f.triage_provider,
         "precision": f.precision,
         "fp_hint": f.fp_hint,
+        "uncertain": f.uncertain,
         "matched_value": f.matched_value,
         "category": f.category,
         "fp": _fingerprint(f, _rel(f.sink.loc.file, base)),
@@ -1558,6 +1584,7 @@ def _findings_from_scan(scan: Scan) -> list[Finding]:
             triage_reason=d.get("triage_reason"), triage_provider=d.get("triage_provider"),
             precision=d.get("precision", "high"), fp_hint=bool(d.get("fp_hint", False)),
             matched_value=d.get("matched_value"), category=d.get("category", "flow"),
+            uncertain=bool(d.get("uncertain")),
         ))
     return out
 

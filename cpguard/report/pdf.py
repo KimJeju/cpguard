@@ -697,9 +697,30 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     at.setStyle(TableStyle(astyle))
     story.append(at)
 
+    _scope_table(story, st, scan, T)
     _appendix_scope(story, st, scan, T, SEV)
 
     _build_report(story, path, f"{project} " + T("진단 결과 보고서"))
+
+
+def _scope_table(story, st, scan, T) -> None:
+    """분석 대상 현황 — 언어별 파일·라인·탐지·밀도.
+
+    발주처 보고서 첫 장에 늘 들어가는 표다. 밀도(1,000라인당 탐지)는 어느 언어부터
+    볼지 정하는 근거가 된다."""
+    rows_src = getattr(scan, "language_stats", None) or []
+    if not rows_src:
+        return
+    story.append(PageBreak())
+    story.append(Paragraph(T("부록 D. 분석 대상 현황"), st["h1"]))
+    rows = [[T("개발언어"), T("파일"), T("라인"), T("검출"), T("밀도")]]
+    for r in rows_src:
+        rows.append([r.get("language", ""), str(r.get("files", 0)), f"{r.get('lines', 0):,}",
+                     str(r.get("issues", 0)), f"{r.get('density', 0):g}"])
+    story.append(_tbl(rows, [70 * mm, 26 * mm, 30 * mm, 26 * mm, 22 * mm],
+                      aligns={1: "RIGHT", 2: "RIGHT", 3: "RIGHT", 4: "RIGHT"}, st=st))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph(T("밀도 = 1,000 라인당 검출 건수."), st["small"] if "small" in st else st["body"]))
 
 
 def _appendix_scope(story, st, scan, T, SEV) -> None:

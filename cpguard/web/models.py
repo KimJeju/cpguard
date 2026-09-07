@@ -46,6 +46,8 @@ class Scan(models.Model):
     # 이 스캔에 실제로 적용된 설정 — 제외 경로·제외 규칙·적용 규칙 목록.
     # 보고서의 '제외 정보'·'분석 기준' 절이 이걸 그대로 싣는다(재현·감리 대응).
     scan_config_json = models.TextField(blank=True, default="{}")
+    # 언어별 파일·라인·이슈·밀도 — 보고서 '분석 대상 현황'과 프로젝트 홈 카드
+    stats_json = models.TextField(blank=True, default="{}")
 
     @property
     def language_list(self) -> list[str]:
@@ -130,6 +132,17 @@ class Scan(models.Model):
             n.pop(str(index), None)
         self.audit_notes_json = json.dumps(n)
         self.save(update_fields=["audit_notes_json"])
+
+    @property
+    def language_stats(self) -> list[dict]:
+        """언어별 통계를 이슈 많은 순으로. 화면·보고서가 그대로 표로 옮긴다."""
+        try:
+            by = (json.loads(self.stats_json or "{}") or {}).get("by_language") or {}
+        except ValueError:
+            return []
+        rows = [{"language": k, **v} for k, v in by.items()]
+        rows.sort(key=lambda r: (-r.get("issues", 0), -r.get("lines", 0)))
+        return rows
 
     @property
     def scan_config(self) -> dict:
