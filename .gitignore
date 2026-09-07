@@ -9,3 +9,6 @@ build/
 .DS_Store
 packaging/output/
 packaging/redist/
+
+# 진단 대상 샘플 — 고객사·3rd party 소스가 들어올 수 있다. 저장소에 올리지 않는다.
+test_source/
