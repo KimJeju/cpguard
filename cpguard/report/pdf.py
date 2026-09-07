@@ -253,14 +253,31 @@ def _kv_table(rows, T, col0=50 * mm, col1=124 * mm):
     return t
 
 
-def _cover(story, st, title, subtitle, meta_rows):
+def _cover(story, st, title, subtitle, meta_rows, logo_path: str = "", header_note: str = ""):
+    """표지. logo_path·header_note 는 보고서 양식이 지정한다(없으면 기존 모양 그대로)."""
     center = ParagraphStyle("cvc", parent=st["body"], alignment=TA_CENTER)
-    story.append(Spacer(1, 45 * mm))
+    story.append(Spacer(1, 24 * mm if logo_path else 45 * mm))
+    if logo_path:
+        # 로고는 로컬 파일이다. 경로가 틀리거나 읽을 수 없으면 표지를 죽이지 않고 건너뛴다.
+        try:
+            from reportlab.platypus import Image as _Image
+            img = _Image(logo_path)
+            ratio = (img.imageHeight / img.imageWidth) if img.imageWidth else 0.3
+            img.drawWidth, img.drawHeight = 45 * mm, 45 * mm * ratio
+            img.hAlign = "CENTER"
+            story.append(img)
+            story.append(Spacer(1, 10 * mm))
+        except Exception:
+            pass
     story.append(Paragraph("SOURCE CODE SECURITY ASSESSMENT", ParagraphStyle("c0", parent=center, fontName=_FONT, fontSize=11, textColor=colors.HexColor(S.MUTED))))
     story.append(Spacer(1, 8 * mm))
     story.append(Paragraph(title, ParagraphStyle("c1", parent=center, fontName=_FONT_B, fontSize=22, leading=30)))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(subtitle, ParagraphStyle("c2", parent=center, fontName=_FONT, fontSize=13, textColor=colors.HexColor(S.INK_SOFT))))
+    if header_note:
+        story.append(Spacer(1, 6 * mm))
+        story.append(Paragraph(_esc(header_note), ParagraphStyle(
+            "c3", parent=center, fontName=_FONT, fontSize=10.5, textColor=colors.HexColor(S.MUTED))))
     story.append(Spacer(1, 30 * mm))
     t = Table([[k, v] for k, v in meta_rows], colWidths=[50 * mm, 124 * mm])
     t.setStyle(TableStyle([
@@ -465,8 +482,10 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",  # no
     if meta.get("tester"):
         cover_rows.append((T("진단 담당자"), meta["tester"]))
     cover_rows.append((T("보고서 버전"), version))
-    _cover(story, st, f"{project}\n" + T("소스코드 취약점 진단 결과 보고서"),
-           T("정적 보안 진단 · CPGuard"), cover_rows)
+    _cover(story, st,
+           tpl.get("title_override") or (f"{project}\n" + T("소스코드 취약점 진단 결과 보고서")),
+           T("정적 보안 진단 · CPGuard"), cover_rows,
+           logo_path=tpl.get("logo_path") or "", header_note=tpl.get("header_note") or "")
 
     # ── 문서 개정 이력 ──
     story.append(Paragraph(T("문서 개정 이력"), st["h2"]))   # h2(목차 미등록) — 목차엔 안 넣는다

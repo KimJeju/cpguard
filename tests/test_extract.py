@@ -44,7 +44,7 @@ def test_zip_bomb_ratio_blocked(tmp_path):
 
 def test_long_path_extract(tmp_path):
     # Windows 260자(MAX_PATH) 를 넘기는 깊은 경로도 풀려야 한다(\\?\ 확장 경로).
-    # 실제 대형 프로젝트(예: sparrow)에서 한 파일의 긴 경로가 해제 전체를 crash 시키던 회귀.
+    # 실제 대형 프로젝트에서 한 파일의 긴 경로가 해제 전체를 crash 시키던 회귀.
     deep = "/".join("seg%02d_padding_to_make_it_long" % i for i in range(9)) + "/f.js"
     assert len(deep) > 260
     z = _zip(tmp_path, [(deep, "const x=1;")])

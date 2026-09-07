@@ -906,3 +906,34 @@ def test_a_report_template_controls_which_sections_are_written():
     assert "분석목록표(xlsx)를 참조한다" in ltxt      # 상세 대신 안내 문구
     assert "부록 D. 분석 대상 현황" in ltxt           # 켠 절은 남는다
     assert len(lean) < len(full)
+
+
+def test_template_cover_options_actually_reach_the_report():
+    """표지 제목·머리말을 저장해 놓고 아무 일도 일어나지 않으면 설정이 거짓말을 한다."""
+    from pypdf import PdfReader
+
+    from cpguard.web.models import ReportTemplate
+
+    c = Client()
+    pk = _seed_scan(c)
+    t = ReportTemplate.objects.create(
+        name="표지시험", title_override="○○공사 정보시스템 보안약점 진단",
+        header_note="2026년 상반기 정기진단", include_detail=True)
+
+    pdf = c.get(f"/scan/{pk}/report.pdf?tpl={t.pk}", SERVER_NAME="127.0.0.1").content
+    txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf)).pages)
+    assert "○○공사 정보시스템 보안약점 진단" in txt
+    assert "2026년 상반기 정기진단" in txt
+
+
+def test_a_missing_logo_file_does_not_break_the_report():
+    """로고 경로가 틀려도 표지가 죽으면 안 된다 — 산출물은 나가야 한다."""
+    from pypdf import PdfReader
+
+    from cpguard.web.models import ReportTemplate
+
+    c = Client()
+    pk = _seed_scan(c)
+    t = ReportTemplate.objects.create(name="로고없음", logo_path=r"C:\없는경로\logo.png")
+    pdf = c.get(f"/scan/{pk}/report.pdf?tpl={t.pk}", SERVER_NAME="127.0.0.1").content
+    assert PdfReader(io.BytesIO(pdf)).pages
