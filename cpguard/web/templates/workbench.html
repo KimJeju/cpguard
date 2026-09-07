@@ -203,6 +203,7 @@
     <span class="sep">|</span>
     <span class="badge v-true_positive" title="이전 스캔({{ prev.created_at|date:'m-d H:i' }}) 대비">신규 +{{ scan.new_count }}</span>
     <span class="badge v-false_positive">해결 −{{ scan.resolved_count }}</span>
+    {% if carried %}<span class="badge" title="지문이 같은 이슈의 지난 판정·의견을 그대로 가져왔습니다">판정 승계 {{ carried }}</span>{% endif %}
   {% endif %}
   <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
     <span class="muted" style="font-size:11px"><kbd>Ctrl</kbd>+<kbd>P</kbd> 이동 · <kbd>j</kbd>/<kbd>k</kbd> 이슈 · <kbd>n</kbd>/<kbd>p</kbd> 단계 · <kbd>Esc</kbd> 패널</span>

@@ -599,10 +599,10 @@ def test_audit_rejects_an_index_that_is_not_a_finding():
 
     c = Client()
     pk = _seed_scan(c)
-    scan = Scan.objects.get(pk=pk)
+    before = Scan.objects.get(pk=pk).open_count
     r = c.post(f"/scan/{pk}/audit/", {"index": 999999, "status": "fixed"})
     assert r.status_code == 400
-    assert Scan.objects.get(pk=pk).open_count == scan.finding_count
+    assert Scan.objects.get(pk=pk).open_count == before   # 집계가 흔들리지 않는다
 
 
 def test_workbench_ships_the_live_count_hooks():
@@ -715,3 +715,34 @@ def test_running_scans_feed_the_return_banner():
         assert any(r["name"] == "live.zip" and "/scan/progress/j2/" in r["url"] for r in running)
     finally:
         views._JOBS.pop("j2", None)
+
+
+def test_a_rescan_inherits_the_previous_verdicts():
+    """재점검에서 지난번 오탐을 다시 판정하지 않는다 — 지문이 같으면 판정을 잇는다."""
+    from cpguard.web.models import Scan
+
+    c = Client()
+    first = _seed_scan(c)
+    s1 = Scan.objects.get(pk=first)
+    s1.set_audit(0, "false_positive")
+    s1.set_audit_note(0, "테스트 픽스처라 제외")
+
+    second = _seed_scan(c)                     # 같은 내용 재업로드 = 같은 프로젝트
+    s2 = Scan.objects.get(pk=second)
+    assert s2.pk != s1.pk
+
+    fp0 = s1.findings[0]["fp"]
+    carried = [f for f in s2.findings if f["fp"] == fp0]
+    assert carried, "지문이 같은 이슈가 있어야 한다"
+    idx = str(carried[0]["id"])
+    assert s2.audit.get(idx) == "false_positive"
+    assert s2.audit_notes.get(idx) == "테스트 픽스처라 제외"
+    assert s2.open_count == s2.finding_count - 1      # 승계된 오탐만큼 조치대상이 준다
+
+
+def test_a_project_with_no_history_inherits_nothing():
+    """이력이 없는 프로젝트는 승계할 것도 없다."""
+    from cpguard.web.views import _carry_over_audit
+
+    audit, notes = _carry_over_audit("존재하지-않는-프로젝트", [], Path("."))
+    assert audit == {} and notes == {}

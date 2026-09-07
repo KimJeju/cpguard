@@ -271,6 +271,12 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         _job_set(job_id, status="running", phase="save", findings=len(findings))
         _job_log(job_id, "결과 집계·저장 중…")
         project = _project_of(zip_name)
+        # 이전 진단의 판정을 이어받는다. 재점검(2·3차 진단)에서 지난번에 오탐으로
+        # 정리한 것을 처음부터 다시 판정하는 게 현장의 가장 큰 낭비다. 지문(fp)이
+        # 같으면 같은 이슈로 보고 감사 상태와 의견을 그대로 가져온다.
+        carried_audit, carried_notes = _carry_over_audit(project, findings, base)
+        if carried_audit:
+            _job_log(job_id, f"이전 진단 판정 승계 {len(carried_audit)}건")
         from collections import Counter as _Counter
         sevc = _Counter(f.severity for f in findings)
         scan = Scan.objects.create(
@@ -280,6 +286,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 [_finding_to_dict(i, f, base) for i, f in enumerate(findings)], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
+            audit_json=json.dumps(carried_audit, ensure_ascii=False),
+            audit_notes_json=json.dumps(carried_notes, ensure_ascii=False),
             triage_note=triage_note, integrity_note=integrity_note, standards=standards,
             code_lines=scan_report.code_lines, languages=",".join(scan_report.languages),
             sev_critical=sevc.get("critical", 0), sev_high=sevc.get("high", 0),
@@ -858,6 +866,41 @@ def scan_finding_api(request, pk: int, idx: int):
     return JsonResponse({"finding": f, "sources": subset})
 
 
+def _carry_over_audit(project: str, findings: list, base: Path) -> tuple[dict, dict]:
+    """같은 프로젝트의 직전 스캔에서 감사 상태·의견을 지문 기준으로 가져온다.
+
+    반환은 (audit, audit_notes) — 새 스캔의 인덱스를 키로 하는 dict.
+    직전 스캔이 없으면 빈 dict. 지문이 같은 이슈가 여러 건이면 첫 건만 잇는다.
+    """
+    prev = (Scan.objects.filter(project=project).order_by("-created_at").first()
+            if project else None)
+    if prev is None:
+        return {}, {}
+    old_audit, old_notes = prev.audit, prev.audit_notes
+    if not old_audit and not old_notes:
+        return {}, {}
+    by_fp: dict[str, str] = {}
+    notes_by_fp: dict[str, str] = {}
+    for f in prev.findings:
+        fp = f.get("fp")
+        if not fp:
+            continue
+        key = str(f["id"])
+        if key in old_audit and fp not in by_fp:
+            by_fp[fp] = old_audit[key]
+        if key in old_notes and fp not in notes_by_fp:
+            notes_by_fp[fp] = old_notes[key]
+
+    audit, notes = {}, {}
+    for i, f in enumerate(findings):
+        fp = _fingerprint(f, _rel(f.sink.loc.file, base))
+        if fp in by_fp:
+            audit[str(i)] = by_fp[fp]
+        if fp in notes_by_fp:
+            notes[str(i)] = notes_by_fp[fp]
+    return audit, notes
+
+
 def _fingerprint(f: Finding, rel_file: str) -> str:
     """스캔 간 같은 이슈를 잇는 지문. 줄 번호는 넣지 않는다 — 위에 코드가 추가되면 밀리므로.
 
@@ -1268,6 +1311,8 @@ def detail(request, pk: int):
         # 위험도 배지는 조치대상 기준 — 오탐·보류·조치완료로 판정하면 줄어든다.
         # 탐지 총계(total)는 스캔이 찾은 사실이라 그대로 둔다.
         "counts": scan.open_severity_counts,
+        # 재점검이면 지난 판정을 몇 건 이어받았는지 — 이걸 보여줘야 사람이 믿고 넘어간다
+        "carried": len(scan.audit) if prev else 0,
         "rule_counts": scan.rule_counts,
         "file_counts": scan.file_counts[:40],
         "total": total,
