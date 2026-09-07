@@ -55,6 +55,18 @@ then hands the result to a three-pane review screen where a human confirms the v
 - **Data-flow visualization** — the Source→Sink step graph stays in sync with the code viewer.
 - **AI analysis panel** — asks about the selected issue with its rule, flow and surrounding code attached automatically.
 - Verdicts (confirmed / false positive / fixed / deferred) with auditor notes, rows tinted by verdict, an audit-state filter, and new/resolved comparison between scans.
+- **A verdict moves the numbers immediately** — marking a finding a false positive, deferred or fixed drops the open count and the severity badges on the spot. The detection total stays: it is what the scan found, and a person's verdict does not change that.
+- **A rescan inherits the previous verdicts** — same fingerprint (rule, file, normalised sink code), same audit state and note. The second and third round of an assessment no longer re-judge what was already cleared.
+- **Judge the whole filtered list at once** — findings arrive in clusters of the same sink, and nobody clicks through them one at a time.
+- **Filter by what is inside the flow** — match calls and variables along the traced path (whole flow / source / sink, contains or not, regex allowed). Narrow to flows that went through `sanitize`, then clear them in one action.
+- **Uncertain flows are marked** — a flow that passed through a function whose code is not in the analysed set is flagged and filterable, which is the pile to review first.
+- Similar-issue grouping (same rule, same sink), verdict history (from what, to what, when), and save-and-next.
+
+**Running an assessment**
+- **Cancel a scan or a batch** — a run started by mistake stops instead of being waited out.
+- **Get back to a running scan** — a sticky bar links to it from any screen.
+- **Delete scans in bulk** — a bad batch leaves hundreds of rows behind.
+- **Per-project exclusions** — path globs, rules and the stated reason are saved and applied to the next scan, and excluded files are never parsed. What was applied is stored on the scan, so the report reflects the run that produced it.
 
 **Scale: one analyst, hundreds of projects**
 - **Batch upload** — select many zips at once, or upload a single zip containing project zips; each becomes its own project.
@@ -63,7 +75,7 @@ then hands the result to a three-pane review screen where a human confirms the v
 - **Bulk deliverables** — select projects and download one ZIP with each project's PDF report and xlsx sheet, ready to hand to developers.
 
 **Assess against the standard your client asks for**
-- Tick the references before the scan starts: **MOIS Secure Coding Guide** (Korea's public-sector standard) · **Electronic Financial Supervision Regulation** web checklist (Korean finance) · **OWASP Top 10 (2021)** · **CWE**. Pick several — real Korean deliverables report against more than one at a time.
+- Tick the references before the scan starts: **MOIS Secure Coding Guide** (Korea's public-sector standard) · **Electronic Financial Supervision Regulation** web checklist (Korean finance) · **Mobile secure coding checklist** (draft) · **OWASP Top 10 (2021)** · **CWE**. Pick several — real Korean deliverables report against more than one at a time.
 - The mapping key is CWE, so **the scan runs once and the standards only shape the report** — switching or adding references never means rescanning.
 - Filter the review screen by check item, group the issue list by it, and tick which standards each export carries. The report's *check items* section becomes those standards' full checklists with a verdict per item, and the xlsx gains a *check items* sheet. Items are identified by category and weakness name, the way real assessment deliverables are written — never by an item number, which differs between editions of the guide. Items that were assessed and came back clean stay in the table — that is the evidence of what was checked.
 - **A check item with no rule behind it is never reported as "pass."** Items outside static analysis — directory indexing, admin page exposure, CSRF — are marked *Not assessed*, so the deliverable never claims a check that did not happen.
@@ -71,6 +83,8 @@ then hands the result to a three-pane review screen where a human confirms the v
 
 **Deliverables you can actually hand over**
 - **Consolidated assessment report** — tick the projects on the Reports screen and get one submission-ready document covering all of them: purpose and legal basis, schedule, tool, assessor, the standards' check items, **initial findings → false-positive review → final items to remediate**, per-project detail (files, lines of code, languages, weaknesses by severity), remediation by type, and appendices. Structured like the reports Korean assessment firms actually deliver.
+- **Report templates** — name a template and it decides which sections ship (detail, source and flow, reviewer comment, exclusions, applied rules, scope by language) plus the cover title, header note and logo. Client requirements differ and templates pile up per contract.
+- **Exclusions, applied rules and scope appendices** — what was excluded and why, every rule applied including the ones with no findings, and files/lines/findings/density per language. On a checklist-shaped deliverable "we checked and found nothing" carries as much weight as a finding.
 - **The review verdicts become the report.** Marking a finding as a false positive or excluding it on the review screen — with the note explaining why — is what turns a raw scanner dump into a deliverable. Section 3.2 is built from exactly those verdicts, and the initial/final totals differ accordingly.
 - **Word (.docx) and PDF.** The Word file is the editable master, so the analyst can drop it into the client's template, add on-site opinions, and ship it. Same sections, same tables, same wording as the PDF.
 - **Analysis sheet (xlsx)** — the fixed 14-column format Korean clients expect, plus a *check items* sheet.
@@ -233,6 +247,8 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] 11 languages — Java, Kotlin, Go, Ruby, C/C++, Swift, C# added
 - [x] Batch scanning, project portfolio and bulk deliverables for hundreds of projects
 - [x] Constant propagation · container taint · key-sensitive map tracking
+- [x] Verdict inheritance across rescans, bulk verdicts, flow-content filter, verdict history
+- [x] Per-project exclusions, report templates, scope/exclusion/applied-rule appendices
 - [ ] Framework-aware entry points (Spring, JPA) · stronger sanitizer recognition
 
 ## 📄 License
