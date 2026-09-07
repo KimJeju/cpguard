@@ -603,3 +603,13 @@ def test_audit_rejects_an_index_that_is_not_a_finding():
     r = c.post(f"/scan/{pk}/audit/", {"index": 999999, "status": "fixed"})
     assert r.status_code == 400
     assert Scan.objects.get(pk=pk).open_count == scan.finding_count
+
+
+def test_workbench_ships_the_live_count_hooks():
+    """감사 판정이 새로고침 없이 헤더 숫자에 반영되려면 훅과 초기값이 함께 나가야 한다."""
+    c = Client()
+    pk = _seed_scan(c)
+    html = c.get(f"/scan/{pk}/", SERVER_NAME="127.0.0.1").content.decode()
+    assert 'id="c-open"' in html and 'id="c-sev"' in html
+    assert 'data-open-counts' in html          # 위험도 초기값
+    assert "applyAuditDelta" in html           # 판정 시 증감

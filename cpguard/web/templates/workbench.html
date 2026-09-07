@@ -196,9 +196,9 @@
   <span class="sep">|</span>
   <span class="muted">파일 {{ scan.file_count }}</span>
   <span class="sep">|</span>
-  <span>탐지 <b>{{ total }}</b></span>
-  <span title="오탐·보류·조치완료를 뺀 나머지">조치대상 <b>{{ scan.open_count }}</b></span>
-  {% for sev, n in counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>{% endfor %}
+  <span title="오탐·보류·조치완료로 판정하면 즉시 줄어듭니다">조치대상 <b id="c-open">{{ scan.open_count }}</b></span>
+  <span class="muted" title="스캔이 찾은 최초 건수 — 감사로 바뀌지 않습니다">/ 최초 {{ total }}</span>
+  <span id="c-sev">{% for sev, n in counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>{% endfor %}</span>
   {% if prev %}
     <span class="sep">|</span>
     <span class="badge v-true_positive" title="이전 스캔({{ prev.created_at|date:'m-d H:i' }}) 대비">신규 +{{ scan.new_count }}</span>
@@ -352,6 +352,7 @@
 
 {{ findings|json_script:"data-findings" }}
 {{ sources|json_script:"data-sources" }}
+{{ counts|json_script:"data-open-counts" }}
 <script>
 (function () {
   const FINDINGS = JSON.parse(document.getElementById('data-findings').textContent);
@@ -362,6 +363,29 @@
   const TOTAL    = {{ total }};
   const PROJECT  = "{{ scan.project|default:scan.name|escapejs }}";
   const CSRF = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+
+  // 감사 판정이 화면 숫자에 바로 보이게 한다 — 오탐으로 내린 건 그 자리에서 조치대상에서 빠진다.
+  // 서버 값에서 출발해 판정마다 차이만 더하고 뺀다. 대량 모드처럼 목록이 잘려 있어도
+  // 전체를 다시 세지 않으므로 정확하다.
+  const CLOSED_AUDIT = new Set(['false_positive', 'deferred', 'fixed']);
+  let openCount = {{ scan.open_count }};
+  const openSev = JSON.parse(document.getElementById('data-open-counts').textContent);
+  const SEV_BADGE_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
+  function renderCounts() {
+    el('c-open').textContent = openCount;
+    el('c-sev').innerHTML = SEV_BADGE_ORDER.filter(s => openSev[s])
+      .map(s => `<span class="badge ${s}">${s.toUpperCase()} ${openSev[s]}</span>`).join('');
+  }
+  function applyAuditDelta(f, before, after) {
+    const wasOpen = !CLOSED_AUDIT.has(before || '');
+    const nowOpen = !CLOSED_AUDIT.has(after || '');
+    if (wasOpen === nowOpen) return;
+    const d = nowOpen ? 1 : -1;
+    openCount += d;
+    openSev[f.severity] = (openSev[f.severity] || 0) + d;
+    if (!openSev[f.severity]) delete openSev[f.severity];
+    renderCounts();
+  }
   const el = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
 
@@ -710,7 +734,13 @@
 
   function setAudit(f, status) {
     fetch(`/scan/${SCAN_PK}/audit/`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF }, body: new URLSearchParams({ index: f.id, status }) })
-      .then(r => r.json()).then(d => { if (!d.ok) return; f.audit = status; renderDetail(f); renderTree(); });
+      .then(r => r.json()).then(d => {
+        if (!d.ok) return;
+        const before = f.audit || '';
+        f.audit = status;
+        applyAuditDelta(f, before, status);
+        renderDetail(f); renderTree();
+      });
   }
 
   // ---------- 하단: 흐름 시각화 / AI / 로그 ----------
