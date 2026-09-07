@@ -66,6 +66,10 @@ def _luhn_ok(value: str) -> bool:
     d = re.sub(r"\D", "", value)
     if not (13 <= len(d) <= 19):
         return False
+    # 같은 숫자만 반복되는 값은 카드번호가 아니라 자리표시자·초기화 값이다.
+    # 0000…·1111… 은 Luhn 을 통과하므로 검사식만으로는 걸러지지 않는다.
+    if len(set(d)) == 1:
+        return False
     total, alt = 0, False
     for ch in reversed(d):
         n = int(ch)
@@ -277,6 +281,7 @@ def scan_text(src: str, file: str, rules: list[PatternRule]) -> list[Finding]:
         maskings = _line_maskings(line, rules)   # 줄 단위로 한 번만 계산해 모든 finding 에 적용
         fp = bool(FP_HINT.search(line))
         seen: set[tuple[str, str]] = set()
+        seen_masked: set[tuple[str, str]] = set()
         for rule in rules:
             if rule.skip_comments and is_comment:
                 continue
@@ -291,6 +296,14 @@ def scan_text(src: str, file: str, rules: list[PatternRule]) -> list[Finding]:
                 if rule.validator and not VALIDATORS[rule.validator](value):
                     continue
                 masked = MASKERS.get(rule.mask, MASKERS["none"])(value)
+                # 원문이 달라도 보고서에 실리는 마스킹 값이 같으면 사람 눈에는 같은 건이다
+                # (한 줄 안의 숫자 UUID 가 같은 규칙으로 두 번 잡히던 사례).
+                # seen 과 따로 둔다 — 마스킹하지 않는 규칙은 masked == value 라
+                # 같은 집합을 쓰면 모든 탐지가 자기 자신과 중복으로 판정된다.
+                mkey = (rule.id, masked)
+                if mkey in seen_masked:
+                    continue
+                seen_masked.add(mkey)
                 findings.append(_emit(rule, file, i, m.start(), m.end(),
                                       _masked_line(line, maskings), masked, fp))
                 if rule.mask == "none":

@@ -104,3 +104,45 @@ def test_a_size_limit_says_how_to_raise_it(tmp_path, monkeypatch):
     msg = str(e.value)
     assert "CPGUARD_MAX_BYTES" in msg, "올리는 방법을 말해야 한다"
     assert "0.0GB" not in msg, "작은 상한이 0.0GB 로 뭉개지면 안 된다"
+
+
+# ---------- 실제 대상 오탐 회귀 ----------
+# 아래는 전부 실제 진단에서 나온 오탐이다. 규칙을 손대다 되살아나기 쉬운 부류라 고정한다.
+
+@pytest.mark.parametrize("line,rule_id,expected", [
+    # 단어 경계가 없으면 IGNORECASE 탓에 'des)' 로 끝나는 식별자가 전부 걸린다.
+    ("  jvmtiError (JNICALL *GetBytecodes) (jvmtiEnv* env,", "crypto.weak-cipher", False),
+    ("  jvmtiError (JNICALL *AddModuleProvides) (jvmtiEnv* env,", "crypto.weak-cipher", False),
+    ('Cipher c = Cipher.getInstance("DES");', "crypto.weak-cipher", True),
+    ('Cipher c = Cipher.getInstance("AES/ECB/PKCS5Padding");', "crypto.weak-cipher", True),
+    # 값을 읽지 않으면 검증을 *켜는* 코드가 취약으로 보고된다.
+    ("this.current.jsonData.tlsSkipVerify = false;", "web.tls-verification-disabled", False),
+    ("requests.get(url, verify=False)", "web.tls-verification-disabled", True),
+    ("connect: { rejectUnauthorized: false },", "web.tls-verification-disabled", True),
+    ("process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';", "web.tls-verification-disabled", True),
+    # Luhn 만으로는 타임스탬프·숫자 UUID 가 카드번호가 된다.
+    ("startTime: 1585245700000000,", "pii.credit-card-number", False),
+    ("const NEW_VARIABLE_ID = '00000000-0000-0000-0000-000000000000';", "pii.credit-card-number", False),
+    ("card = 4111 1111 1111 1111", "pii.credit-card-number", True),
+    ("card = 5555555555554444", "pii.credit-card-number", True),
+])
+def test_real_world_false_positives_stay_dead(line, rule_id, expected):
+    rules = load_pattern_rules()
+    hit = any(f.rule_id == rule_id for f in scan_text(line, "a.java", rules))
+    assert hit is expected
+
+
+def test_the_same_masked_value_is_reported_once_per_line():
+    """마스킹 후 같은 값이면 사람 눈에 같은 건이다.
+
+    단, 마스킹하지 않는 규칙은 masked == value 라, 중복 판정을 원문 집합과 같이
+    쓰면 모든 탐지가 자기 자신과 중복으로 걸려 통째로 사라진다.
+    """
+    rules = load_pattern_rules()
+    line = "a = '4111111111111111'; b = '4111111111111111';"
+    cards = [f for f in scan_text(line, "a.js", rules) if f.rule_id == "pii.credit-card-number"]
+    assert len(cards) == 1
+
+    # 마스킹 없는 규칙이 살아 있는지 — 위 중복 제거의 부작용을 잡는 회귀
+    assert any(f.rule_id == "crypto.weak-cipher"
+               for f in scan_text('Cipher.getInstance("DES");', "a.java", rules))

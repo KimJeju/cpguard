@@ -25,7 +25,9 @@ rules:
     confidence: high
     validator: luhn
     mask: card
-    pattern: '(?<![\d.])(?:\d[ -]?){15,18}\d(?![\d.])'
+    # 첫 자리를 실제 카드 BIN 대역(2~6)으로 제한한다. 이게 없으면 유닉스 타임스탬프
+    # (1585…)와 숫자 UUID(0000-0000-…)가 Luhn 을 통과해 전부 카드번호가 된다.
+    pattern: '(?<![\d.])[2-6](?:[ -]?\d){15,18}(?![\d.])'
 
   - id: pii.kr-mobile-number
     message: "휴대폰번호 형식의 값이 소스에 있습니다."

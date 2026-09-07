@@ -58,6 +58,9 @@ DEFAULT_EXCLUDES = {
     "target", "bin", "obj", "coverage", ".next", ".nuxt", "vendor", "__pycache__",
     ".pytest_cache", ".mypy_cache", ".venv", "venv", "env", ".idea", ".vscode",
     ".gradle", ".terraform", "Pods", ".cache", "logs", "tmp", "temp",
+    # 동봉된 3rd party·런타임·라이선스 텍스트. 진단 대상은 발주처가 만든 코드인데
+    # 여기를 같이 훑으면 결과가 남의 코드로 덮인다(실측: 한 제품에서 전체의 70%).
+    "licenses", "jre", "jdk", "third_party", "thirdparty", "3rdparty",
 }
 
 MAX_FILE_BYTES = 2_000_000        # 파서에 넣을 소스 상한 (미니파이 번들 등)

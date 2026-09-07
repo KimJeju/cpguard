@@ -49,7 +49,9 @@ rules:
     severity: critical
     cwe: CWE-295
     owasp: "A02:2021-Cryptographic Failures"
-    pattern: '(rejectUnauthorized\s*:\s*false|verify\s*=\s*False|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["'']?0|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|InsecureSkipVerify\s*:\s*true)'
+    # 접미사만 같은 식별자에 걸리지 않게 \b 를 건다. 'tlsSkipVerify = false' 는
+    # 검증을 *켜는* 코드인데 'verify=False' 로 잡혀 크리티컬로 보고됐다.
+    pattern: '(\brejectUnauthorized\s*:\s*false|\bverify\s*=\s*False|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*["'']?0|CURLOPT_SSL_VERIFYPEER\s*,\s*(0|false)|\bInsecureSkipVerify\s*:\s*true)'
 
   - id: web.insecure-cookie-flags
     message: "쿠키에 httpOnly/secure 플래그가 꺼져 있습니다."
@@ -71,7 +73,9 @@ rules:
     severity: high
     cwe: CWE-327
     owasp: "A02:2021-Cryptographic Failures"
-    pattern: '(["'']?(DES|RC4|3DES)["'']?\s*[,)]|/ECB/|AES/ECB|MODE_ECB)'
+    # \b 가 없으면 IGNORECASE 탓에 'GetBytecodes)'·'AddModuleProvides)' 가 'des)' 로
+    # 걸린다 — JVM 헤더가 통째로 취약 암호로 잡혔다.
+    pattern: '(["'']?\b(DES|RC4|3DES)\b["'']?\s*[,)]|/ECB/|AES/ECB|MODE_ECB)'
 
   - id: crypto.insecure-random
     message: "보안 용도에 예측 가능한 난수를 사용하고 있습니다."
