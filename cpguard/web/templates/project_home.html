@@ -143,6 +143,28 @@
         <span class="muted" style="font-size:11px;margin-left:8px">다음 진단부터 적용됩니다{% if applied_excludes %} · 최근 진단에 적용된 경로 {{ applied_excludes|length }}개{% endif %}</span></div>
     </form>
   </details>
+
+  <details style="margin-top:8px">
+    <summary class="muted" style="cursor:pointer;font-size:12.5px">최근 진단 수행 조건 · 규칙 조정 {{ tuned_specs|length }}건 · SCA {% if sca_done %}수행{% else %}미수행{% endif %}</summary>
+    <div class="muted" style="font-size:12px;margin-top:8px;display:grid;gap:6px;max-width:720px">
+      <div>
+        <b>사용자 규칙 조정</b> —
+        {% if tuned_specs %}동봉 규칙 위에 겹쳐 적용됨: {% for s in tuned_specs %}<code>{{ s }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+        {% else %}없음. 오탐이 나는 규칙은 <code>~/.cpguard/specs/</code> 에 같은 <code>id</code> 의 yml 을 두면
+        sink·sanitizer 를 더하거나 위험도를 낮출 수 있습니다 (제외보다 정밀합니다).{% endif %}
+      </div>
+      <div>
+        <b>오픈소스 컴포넌트(SCA)</b> —
+        {% if sca_note %}{{ sca_note }}
+        {% else %}이번 진단에서는 수행하지 않았습니다. 업로드 화면에서 켤 수 있습니다
+        (패키지명·버전이 OSV.dev 로 전송됩니다).{% endif %}
+      </div>
+      {% if sca_done %}
+      <div style="font-size:11px">직전 진단과 SCA 수행 여부가 다르면 오픈소스 항목은 신규/해결 비교에서 제외됩니다 —
+        점검하지 않은 것을 조치했다고 셀 수 없기 때문입니다.</div>
+      {% endif %}
+    </div>
+  </details>
 </div>
 
 <div class="grid2">
@@ -152,7 +174,8 @@
       <div class="prio">
         <span class="sev-ico"><i class="sd sd-{{ f.severity }}"></i></span>
         <div style="flex:1;min-width:0">
-          <a href="{% url 'detail' latest.pk %}#f{{ f.id }}">{{ f.rule_id }}</a>
+          {# SCA 탐지는 규칙 id 가 전부 같다. 구분되는 것은 컴포넌트와 CVE 다. #}
+          <a href="{% url 'detail' latest.pk %}#f{{ f.id }}">{% if f.category == "dependency" and f.matched_value %}{{ f.matched_value }}{% else %}{{ f.rule_id }}{% endif %}</a>
           {% if prev and f.fp in new_fps %}<span class="newtag">NEW</span>{% endif %}
           <span class="muted" style="font-size:12px"> · {{ f.cwe }}</span>
           <div class="loc">{{ f.file }}:{{ f.line }}</div>
@@ -289,6 +312,8 @@
     info: {c: col('--muted'), ko:'정보'}
   };
   var SEVORDER = ['critical','high','medium','low','info'];
+  var CAT_LABEL = { flow:'데이터 흐름', secret:'비밀정보', pii:'개인정보', config:'설정',
+                    infra:'인프라', hygiene:'코드 정리', dependency:'오픈소스 컴포넌트' };
   var state = { severity:'', rule:'', category:'', q:'', page:1, size:50, sort:'severity' };
 
   // ── 도넛 (SVG) ──
@@ -359,7 +384,7 @@
       var rs=document.getElementById('f-rule');
       (d.top_rules||[]).forEach(function(r){ var o=document.createElement('option'); o.value=r[0]; o.textContent=r[0]+' ('+r[1]+')'; rs.appendChild(o); });
       var cs2=document.getElementById('f-cat');
-      (d.by_category||[]).forEach(function(r){ var o=document.createElement('option'); o.value=r[0]; o.textContent=r[0]+' ('+r[1]+')'; cs2.appendChild(o); });
+      (d.by_category||[]).forEach(function(r){ var o=document.createElement('option'); o.value=r[0]; o.textContent=(CAT_LABEL[r[0]]||r[0])+' ('+r[1]+')'; cs2.appendChild(o); });
     });
   }
   function loadSummaryHighlight(){ if(_summary){ renderBars('chart-rules', _summary.top_rules||[], {filterKey:'rule'}); } }
@@ -386,7 +411,7 @@
             '<td class="rid">'+r.rule_id+'</td>'+
             '<td>'+(r.cwe||'')+owasp+'</td>'+
             '<td class="loc">'+r.file+':'+r.line+'</td>'+
-            '<td class="muted-c">'+(r.category||'')+'</td>'+
+            '<td class="muted-c">'+(CAT_LABEL[r.category]||r.category||'')+'</td>'+
             '<td>'+vd+'</td></tr>';
         }).join('');
         [].forEach.call(tb.querySelectorAll('tr.frow'), function(tr){

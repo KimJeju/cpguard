@@ -323,6 +323,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 "applied_rules": [{"id": r.id, "message": r.message, "severity": r.severity,
                                    "cwe": r.cwe} for r in rules],
                 "tuned_specs": tuned,
+                "sca": bool(do_sca),
                 "sca_note": sca_note,
             }, ensure_ascii=False),
             audit_json=json.dumps(carried_audit, ensure_ascii=False),
@@ -1495,6 +1496,11 @@ def project_home(request, name: str):
         "audited": sum(1 for f in latest.findings if audit.get(str(f["id"]))),
         "setting": ProjectSetting.objects.filter(project=name).first(),
         "applied_excludes": latest.scan_config.get("exclude_globs") or [],
+        # 이번 진단이 어떤 조건으로 돌았는지 — 규칙 오버레이와 SCA 수행 여부.
+        # 산출물에만 있고 화면에 없으면 진단원이 결과 차이의 이유를 못 찾는다.
+        "tuned_specs": latest.scan_config.get("tuned_specs") or [],
+        "sca_done": bool(latest.scan_config.get("sca")),
+        "sca_note": latest.scan_config.get("sca_note") or "",
     })
 
 

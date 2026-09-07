@@ -84,9 +84,17 @@ class Scan(models.Model):
                 .order_by("-created_at").first())
 
     def compare_with(self, prev) -> dict:
-        """지문(fp) 기준으로 신규/해결/유지 집합을 낸다. 줄 번호가 밀려도 같은 이슈로 본다."""
+        """지문(fp) 기준으로 신규/해결/유지 집합을 낸다. 줄 번호가 밀려도 같은 이슈로 본다.
+
+        한쪽만 SCA 를 돌린 두 스캔을 그냥 비교하면, 껐다는 이유로 오픈소스 취약점이
+        전부 '해결됨' 으로 잡힌다. 조치하지 않은 것을 조치했다고 쓰는 산출물이 되므로
+        두 스캔이 함께 본 축만 비교한다.
+        """
         cur = {k: f for f in self.findings if (k := stored_fp(f))}
         old = {k: f for f in (prev.findings if prev else []) if (k := stored_fp(f))}
+        if prev is not None and self.scan_config.get("sca") != prev.scan_config.get("sca"):
+            cur = {k: f for k, f in cur.items() if f.get("category") != "dependency"}
+            old = {k: f for k, f in old.items() if f.get("category") != "dependency"}
         return {
             "new": [cur[k] for k in cur.keys() - old.keys()],
             "resolved": [old[k] for k in old.keys() - cur.keys()],

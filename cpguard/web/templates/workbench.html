@@ -260,6 +260,7 @@
           <select id="fcat">
             <option value="">유형 전체</option><option value="flow">데이터 흐름</option><option value="secret">비밀정보</option>
             <option value="pii">개인정보</option><option value="config">설정</option><option value="infra">인프라</option><option value="hygiene">코드 정리</option>
+            <option value="dependency">오픈소스 컴포넌트</option>
           </select>
         </div>
         <div style="display:flex;gap:6px">
@@ -458,7 +459,7 @@
   const AUDIT_LABEL = { '': '미확인', confirmed: '취약 확정', false_positive: '오탐', fixed: '조치완료', deferred: '보류' };
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
   const SEV_ICON  = { critical: '<i class="sd sd-critical"></i>', high: '<i class="sd sd-high"></i>', medium: '<i class="sd sd-medium"></i>', low: '<i class="sd sd-low"></i>', info: '<i class="sd sd-info"></i>' };
-  const CAT_LABEL = { flow: '데이터 흐름', secret: '비밀정보', pii: '개인정보', config: '설정', infra: '인프라', hygiene: '코드 정리' };
+  const CAT_LABEL = { flow: '데이터 흐름', secret: '비밀정보', pii: '개인정보', config: '설정', infra: '인프라', hygiene: '코드 정리', dependency: '오픈소스 컴포넌트' };
   const sevTag = s => `<span class="sev sev-${s}">${SEV_ICON[s] || ''} ${String(s).toUpperCase()}</span>`;
 
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
@@ -648,9 +649,13 @@
     });
     el('tree').querySelectorAll('.group-hd').forEach(n => n.onclick = () => n.parentElement.classList.toggle('closed'));
   }
+  // SCA 탐지는 rule_id 가 sca.vulnerable-dependency 로 전부 같아 목록에서 구분이 안 된다.
+  // 구분되는 것은 컴포넌트와 CVE 이고, 그건 matched_value 에 있다.
+  const label = f => (f.category === 'dependency' && f.matched_value) ? f.matched_value : f.rule_id;
+
   function issueHtml(f) {
     return `<div class="issue${sel === f.id ? ' sel' : ''}${f.audit ? ' audited a-' + f.audit : ''}" data-id="${f.id}">
-      <div>${sevTag(f.severity)}<span class="rid">${esc(f.rule_id)}</span>${f.is_new ? '<span class="newtag">NEW</span>' : ''}${f.fp_hint ? '<span class="fptag" title="같은 줄에 환경변수/예시 신호 — 오탐 가능">?</span>' : ''}</div>
+      <div>${sevTag(f.severity)}<span class="rid">${esc(label(f))}</span>${f.is_new ? '<span class="newtag">NEW</span>' : ''}${f.fp_hint ? '<span class="fptag" title="같은 줄에 환경변수/예시 신호 — 오탐 가능">?</span>' : ''}</div>
       <div class="loc" title="${esc(f.file)}:${f.line}">${esc(f.file)}:${f.line}${f.audit ? ' · ' + esc(AUDIT_LABEL[f.audit]) : ''}${f.uncertain ? ' · <span class="muted" title="분석 대상에 코드가 없는 함수를 거친 흐름">불확실</span>' : ''}</div></div>`;
   }
   const COLS = [['severity','위험도'],['rule_id','규칙'],['file','파일'],['line','줄'],['cwe','CWE'],['precision','신뢰도'],['audit','감사']];
@@ -662,7 +667,7 @@
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     });
     let html = '<table class="ft"><tr>' + COLS.map(([c, l]) => `<th data-col="${c}" class="${ws.sort === c ? 'sorted' + (ws.asc ? ' asc' : '') : ''}">${l}</th>`).join('') + '</tr>';
-    for (const f of rows) html += `<tr data-id="${f.id}" class="${sel === f.id ? 'sel' : ''}"><td>${sevTag(f.severity)}</td><td><b>${esc(f.rule_id)}</b>${f.is_new ? '<span class="newtag">NEW</span>' : ''}</td><td class="mono" title="${esc(f.file)}">${esc(f.file)}</td><td class="mono">${f.line}</td><td class="mono">${esc(f.cwe || '')}</td><td>${esc(f.precision || 'high')}${f.fp_hint ? ' ?' : ''}</td><td>${esc(AUDIT_LABEL[f.audit || ''])}</td></tr>`;
+    for (const f of rows) html += `<tr data-id="${f.id}" class="${sel === f.id ? 'sel' : ''}"><td>${sevTag(f.severity)}</td><td><b>${esc(label(f))}</b>${f.is_new ? '<span class="newtag">NEW</span>' : ''}</td><td class="mono" title="${esc(f.file)}">${esc(f.file)}</td><td class="mono">${f.line}</td><td class="mono">${esc(f.cwe || '')}</td><td>${esc(f.precision || 'high')}${f.fp_hint ? ' ?' : ''}</td><td>${esc(AUDIT_LABEL[f.audit || ''])}</td></tr>`;
     el('tree').innerHTML = html + '</table>';
     el('tree').querySelectorAll('tr[data-id]').forEach(n => {
       n.onclick = () => select(Number(n.dataset.id));
@@ -772,7 +777,9 @@
       <dt>CWE</dt><dd>${esc(f.cwe || '-')}</dd><dt>OWASP</dt><dd>${esc(f.owasp || '-')}</dd>
       <dt>위치</dt><dd><code>${esc(f.file)}:${f.line}</code></dd>
       <dt>신뢰도</dt><dd>${esc(f.precision || 'high')}${f.fp_hint ? ' <span class="fptag">? 오탐 신호</span>' : ''}</dd>
-      ${f.matched_value ? `<dt>탐지값</dt><dd><code>${esc(f.matched_value)}</code> <span class="muted">(마스킹)</span></dd>` : ''}
+      ${f.matched_value ? (f.category === 'dependency'
+          ? `<dt>컴포넌트</dt><dd><code>${esc(f.matched_value)}</code></dd>`
+          : `<dt>탐지값</dt><dd><code>${esc(f.matched_value)}</code> <span class="muted">(마스킹)</span></dd>`) : ''}
       ${f.uncertain ? `<dt>정확도</dt><dd><span class="badge" title="분석 대상에 코드가 없는 함수를 거친 흐름입니다. 그 함수 안에서 정제됐다면 오탐입니다.">흐름 불확실</span></dd>` : ''}
       <dt>설명</dt><dd>${esc(f.message)}</dd>
       <dt>LLM</dt><dd>${v}</dd>${f.triage_reason ? `<dt>근거</dt><dd class="muted">${esc(f.triage_reason)}</dd>` : ''}</dl>`;

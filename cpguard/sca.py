@@ -45,6 +45,18 @@ class Component:
     license: str = ""       # 잠금파일이 들고 있을 때만
 
 
+def _line_of(lines: list[str], *needles: str) -> int:
+    """잠금파일에서 그 컴포넌트가 적힌 줄. 못 찾으면 1.
+
+    구조화 파서(json/xml)는 줄 번호를 주지 않는데, 검토 화면의 코드 뷰어는 줄로 이동한다.
+    파일 첫 줄로 보내면 진단원이 직접 찾아야 하므로 원문에서 한 번 훑는다.
+    """
+    for i, raw in enumerate(lines, 1):
+        if all(n in raw for n in needles):
+            return i
+    return 1
+
+
 # ── 잠금파일 파서 ────────────────────────────────────────────────────────────
 # 각 파서는 실패해도 빈 목록을 돌려준다. 의존성 하나 못 읽었다고 진단이 멈추면 안 된다.
 
@@ -63,7 +75,9 @@ def _requirements(path: Path) -> list[Component]:
 
 def _package_lock(path: Path) -> list[Component]:
     """package-lock.json v2/v3 의 ``packages`` 맵. v1 의 ``dependencies`` 도 훑는다."""
-    d = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    text = path.read_text(encoding="utf-8", errors="replace")
+    d = json.loads(text)
+    lines = text.splitlines()
     out = []
     for key, meta in (d.get("packages") or {}).items():
         if not key or not isinstance(meta, dict) or not meta.get("version"):
@@ -73,12 +87,14 @@ def _package_lock(path: Path) -> list[Component]:
             continue
         lic = meta.get("license")
         out.append(Component("npm", name, meta["version"], str(path),
+                             line=_line_of(lines, f'"{key}"'),
                              license=lic if isinstance(lic, str) else ""))
 
     def walk(deps: dict) -> None:
         for name, meta in (deps or {}).items():
             if isinstance(meta, dict) and meta.get("version"):
-                out.append(Component("npm", name, meta["version"], str(path)))
+                out.append(Component("npm", name, meta["version"], str(path),
+                                     line=_line_of(lines, f'"{name}"')))
                 walk(meta.get("dependencies") or {})
 
     if not out:
@@ -114,6 +130,7 @@ def _pom(path: Path) -> list[Component]:
     root = _parse_xml(path)
     if root is None:
         return []
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     ns = {"m": root.tag.split("}")[0].strip("{")} if "}" in root.tag else {}
     def find(el, tag):
         r = el.find(f"m:{tag}", ns) if ns else el.find(tag)
@@ -122,7 +139,8 @@ def _pom(path: Path) -> list[Component]:
     for dep in (root.iter("{%s}dependency" % ns["m"]) if ns else root.iter("dependency")):
         g, a, v = find(dep, "groupId"), find(dep, "artifactId"), find(dep, "version")
         if g and a and v and "${" not in v:
-            out.append(Component("Maven", f"{g}:{a}", v, str(path)))
+            out.append(Component("Maven", f"{g}:{a}", v, str(path),
+                                 line=_line_of(lines, f"<artifactId>{a}<")))
     return out
 
 
@@ -158,13 +176,16 @@ def _gemfile_lock(path: Path) -> list[Component]:
 
 
 def _composer_lock(path: Path) -> list[Component]:
-    d = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    text = path.read_text(encoding="utf-8", errors="replace")
+    d = json.loads(text)
+    lines = text.splitlines()
     out = []
     for section in ("packages", "packages-dev"):
         for p in d.get(section) or []:
             if p.get("name") and p.get("version"):
                 lic = p.get("license") or []
                 out.append(Component("Packagist", p["name"], p["version"].lstrip("v"), str(path),
+                                     line=_line_of(lines, f'"{p["name"]}"'),
                                      license=", ".join(lic) if isinstance(lic, list) else str(lic)))
     return out
 
@@ -173,7 +194,9 @@ def _packages_config(path: Path) -> list[Component]:
     root = _parse_xml(path)
     if root is None:
         return []
-    return [Component("NuGet", e.get("id", ""), e.get("version", ""), str(path))
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return [Component("NuGet", e.get("id", ""), e.get("version", ""), str(path),
+                      line=_line_of(lines, f'id="{e.get("id")}"'))
             for e in root.iter("package") if e.get("id") and e.get("version")]
 
 
@@ -320,7 +343,8 @@ def to_findings(components: list[Component], vulns: dict[int, list[dict]]) -> li
             rule_id=RULE_ID, message=msg, severity=m["sev"], cwe=CWE, owasp=OWASP,
             steps=[Step("sink", loc, f"{c.ecosystem}:{c.name}@{c.version}  {cve}")],
             category="dependency", precision="high",
-            matched_value=f"{c.name}@{c.version}",
+            # 검토 화면의 라벨. 규칙 id 는 SCA 탐지 전부 같아서 목록에서 구분이 안 된다
+            matched_value=f"{c.name}@{c.version} · {cve}",
         ))
     return out
 
