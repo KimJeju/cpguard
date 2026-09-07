@@ -357,6 +357,52 @@ def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str
     return env
 
 
+def _guarded_paths(test: ir.Node, ctx: Ctx) -> set[str]:
+    """조건문이 검증한 경로들.
+
+    `if (isNumeric(p)) { use(p); }` 처럼 값을 바꾸지 않고 **검사만** 하는 코드가 흔한데,
+    지금까지는 p 가 그대로 오염으로 남아 오탐이 됐다(벤치마크 오탐의 주 원인).
+    조건이 규칙의 sanitizer 를 그 경로에 적용했다면, 참 분기 안에서는 검증된 것으로 본다.
+
+    부정형(`!isNumeric(p)`)은 참 분기가 오히려 위험한 쪽이므로 아무것도 지우지 않는다 —
+    모르면 오염으로 두는 기존 과대근사를 유지한다. 부정은 노드 타입으로 판별할 수 없다:
+    언어에 따라 `!expr` 이 Unary 가 아니라 Opaque 로 정규화되기 때문에 원본을 본다.
+    """
+    out: set[str] = set()
+    for call in _iter_calls(test):
+        cp = path_of(call.callee)
+        if not cp or not _is_sanitizer(cp, ctx.rule):
+            continue
+        if _negated(call, ctx):
+            continue
+        for a in call.args:                      # isNumeric(p) / Integer.parseInt(p)
+            p = path_of(a)
+            if p:
+                out.add(p)
+        if "." in cp:                            # p.matches("...") — 수신자가 검증 대상
+            out.add(cp.rpartition(".")[0])
+    return out
+
+
+def _negated(call: ir.Call, ctx: Ctx) -> bool:
+    """이 호출 앞에 부정 연산자가 붙어 있는가. 원본 바이트를 되짚어 본다."""
+    i = call.loc.start_byte - 1
+    src = ctx.src
+    while i >= 0 and src[i:i + 1] in (b" ", b"\t", b"(", b"\n", b"\r"):
+        i -= 1
+    if i >= 0 and src[i:i + 1] == b"!":
+        return True
+    return src[max(0, i - 3):i + 1].lower().endswith(b"not")
+
+
+def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
+    """검증된 경로와 그 하위 경로를 오염 상태에서 뺀다."""
+    if not guarded:
+        return env
+    return {k: v for k, v in env.items()
+            if not any(k == g or k.startswith(g + ".") for g in guarded)}
+
+
 def _run_nested(node: ir.Node, ctx: Ctx) -> None:
     for fn in _iter_functions(node):
         _run_function(fn, ctx)
@@ -405,8 +451,9 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.If):
             _check_sinks(s.test, env, ctx)
-            # 두 분기를 같은 진입 상태에서 각각 분석한 뒤 합류시킨다
-            then_env = _run(s.then, dict(env), ctx)
+            # 조건이 검증한 경로는 참 분기에서만 오염을 뺀다(경로 민감도 최소판).
+            guarded = _guarded_paths(s.test, ctx)
+            then_env = _run(s.then, _drop_guarded(dict(env), guarded), ctx)
             else_env = _run(s.orelse, dict(env), ctx)
             env = _merge(then_env, else_env)
 

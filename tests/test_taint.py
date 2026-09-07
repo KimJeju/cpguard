@@ -165,3 +165,39 @@ def test_loop_reports_once():
 def test_branch_sanitized_still_clean():
     src = 'function f(req,flag){ let c="ls"; if(flag){c=shellQuote(req.query.c);} child_process.exec(c); }'
     assert "js.command-injection" not in ids(src)
+
+
+def _php(tmp_path, code):
+    from cpguard.scanner import scan_file
+    p = tmp_path / "a.php"
+    p.write_text(code, encoding="utf-8")
+    return [f for f in scan_file(p) if f.rule_id == "php.sqli"]
+
+
+def test_a_validating_guard_clears_the_true_branch(tmp_path):
+    """값을 바꾸지 않고 검사만 하는 코드가 흔하다 — 참 분기에서는 검증된 것으로 본다."""
+    hits = _php(tmp_path, '<?php function a(){ $x = $_GET["id"];'
+                          ' if (is_numeric($x)) { mysqli_query($c, "SELECT " . $x); } }')
+    assert hits == []
+
+
+def test_an_unguarded_flow_is_still_reported(tmp_path):
+    hits = _php(tmp_path, '<?php function b(){ $y = $_GET["id"];'
+                          ' mysqli_query($c, "SELECT " . $y); }')
+    assert len(hits) == 1
+
+
+def test_a_negated_guard_does_not_clear_the_dangerous_branch(tmp_path):
+    """`if (!is_numeric($z))` 의 참 분기는 오히려 위험한 쪽이다.
+
+    부정은 노드 타입으로 안 드러난다(언어에 따라 Opaque 로 온다) — 원본을 봐야 한다.
+    """
+    hits = _php(tmp_path, '<?php function c(){ $z = $_GET["id"];'
+                          ' if (!is_numeric($z)) { mysqli_query($c, "SELECT " . $z); } }')
+    assert len(hits) == 1
+
+
+def test_the_else_branch_of_a_guard_stays_tainted(tmp_path):
+    hits = _php(tmp_path, '<?php function d(){ $w = $_GET["id"];'
+                          ' if (is_numeric($w)) { echo 1; } else { mysqli_query($c, "SELECT " . $w); } }')
+    assert len(hits) == 1

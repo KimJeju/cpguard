@@ -127,3 +127,18 @@ def test_report_is_only_built_from_the_reports_screen(two_projects):
     page = c.get("/reports/", SERVER_NAME="127.0.0.1").content.decode("utf-8")
     assert 'name="scan"' in page and 'name="std"' in page
     assert "/reports/consolidated" in page
+
+
+def test_the_consolidated_report_honours_a_template(two_projects):
+    """합본도 단일 보고서와 같은 양식을 따라야 한다 — 발주처는 둘을 같은 문서로 본다."""
+    from pypdf import PdfReader
+
+    from cpguard.web.models import ReportTemplate
+
+    c, a, b = two_projects
+    t = ReportTemplate.objects.create(name="합본표지", title_override="○○사업 통합 진단 결과")
+    r = c.get(f"/reports/consolidated?scan={a.pk}&scan={b.pk}&fmt=pdf&tpl={t.pk}",
+              SERVER_NAME="127.0.0.1")
+    assert r.status_code == 200
+    txt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(r.content)).pages)
+    assert "○○사업 통합 진단 결과" in txt

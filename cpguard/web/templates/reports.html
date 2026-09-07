@@ -27,6 +27,15 @@
     <div>
       <div class="muted" style="font-size:11.5px;margin-bottom:6px">포함할 프로젝트 — 아래 표에서 선택</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        {% if report_templates %}
+        <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;margin-right:10px"
+               title="저장한 보고서 양식대로 절을 넣고 뺍니다 (PDF)">양식
+          <select name="tpl">
+            <option value="">기본 (전부 포함)</option>
+            {% for t in report_templates %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
         <button class="btn" type="submit" name="fmt" value="docx">합본 보고서 (Word)</button>
         <button class="btn ghost" type="submit" name="fmt" value="pdf">합본 보고서 (PDF)</button>
         <span class="muted" id="pickinfo" style="font-size:12px"></span>

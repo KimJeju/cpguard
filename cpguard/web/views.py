@@ -504,8 +504,10 @@ def reports(request):
     latest = {s.project or s.name: s.pk for s in reversed(scans)}   # 프로젝트별 최신
     for s in scans:
         s.checked = (s.pk in picked) if picked else (latest.get(s.project or s.name) == s.pk)
+    from .models import ReportTemplate
     return render(request, "reports.html", {
         "scans": scans,
+        "report_templates": ReportTemplate.objects.all(),
         "standards": _standard_choices(_stds(request) or None, lang),
     })
 
@@ -520,7 +522,10 @@ def consolidated_report(request):
         return HttpResponse("포함할 프로젝트를 하나 이상 선택하세요.", status=400)
 
     lang = _lang(request)
+    tpl, tobj = _template_for(request)
     stds = [s for s in request.GET.getlist("std") if _standard_id(s)]
+    if tobj and tobj.reference_list:
+        stds = tobj.reference_list          # 양식이 기준을 고정했으면 그쪽을 따른다
     fmt = "docx" if request.GET.get("fmt", "docx") == "docx" else "pdf"
     meta = appcfg.report_meta()
 
@@ -533,7 +538,8 @@ def consolidated_report(request):
                      ".wordprocessingml.document")
         else:
             from ..report import pdf as pdfmod
-            pdfmod.consolidated_report(scans, tmp, lang=lang, meta=meta, standards=stds)
+            pdfmod.consolidated_report(scans, tmp, lang=lang, meta=meta, standards=stds,
+                                       template=tpl)
             ctype = "application/pdf"
         data = tmp.read_bytes()
     finally:

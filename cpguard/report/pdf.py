@@ -970,7 +970,8 @@ def _scale_table(rows, total, SEV, T):
 
 
 def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
-                        standards: list[str] | str | None = None) -> None:
+                        standards: list[str] | str | None = None,
+                        template: dict | None = None) -> None:
     """합본 진단 결과 보고서 — 선택한 프로젝트를 한 건의 진단으로 묶어 낸다.
 
     구성은 실제 제출 산출물을 따른다. 최초 검출과 최종 조치대상을 나눠 싣는 것이 핵심이다 —
@@ -978,6 +979,10 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
     3.2 에 함께 실어야 산출물이 된다.
     """
     from . import consolidated as C
+
+    tpl = template or {}
+    def _on(key: str) -> bool:      # noqa: E306 — 보고서 양식의 절 on/off
+        return bool(tpl.get(key, True))
 
     _register_font(lang)
     st = _styles()
@@ -1005,8 +1010,10 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
              (T("수행 기관/회사"), meta.get("org") or "-"),
              (T("진단 수행 기간"), meta.get("period") or "-"),
              (T("보고서 버전"), version), (T("작성일"), today), (T("작성자"), author)]
-    _cover(story, st, title + "\n" + T("소스코드 취약점 진단 결과 보고서"),
-           T("정적 보안 진단 · CPGuard"), cover)
+    _cover(story, st,
+           tpl.get("title_override") or (title + "\n" + T("소스코드 취약점 진단 결과 보고서")),
+           T("정적 보안 진단 · CPGuard"), cover,
+           logo_path=tpl.get("logo_path") or "", header_note=tpl.get("header_note") or "")
 
     # ── 제·개정 이력 ── (h2 = 목차 미등록)
     story.append(Paragraph(T("제·개정 이력"), st["h2"]))
@@ -1213,4 +1220,11 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
          f"매우위험·위험 항목을 우선 조치하고, 유형별 조치 방안에 따라 입력 검증·출력 인코딩·"
          f"비밀정보 분리·안전한 알고리즘 적용을 권고한다."), st["body"]))
 
+    # 합본에도 단일 보고서와 같은 부록을 붙인다 — 여러 프로젝트를 한 건으로 묶는
+    # 산출물일수록 "무엇을 점검했고 무엇을 왜 뺐는가"가 더 필요하다.
+    if len(scans) == 1:
+        if _on("include_scope"):
+            _scope_table(story, st, scans[0], T)
+        _appendix_scope(story, st, scans[0], T, SEV,
+                        show_excl=_on("include_exclusions"), show_rules=_on("include_rule_list"))
     _build_report(story, path, title + " " + T("진단 결과 보고서"))
