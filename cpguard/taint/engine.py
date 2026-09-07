@@ -31,9 +31,20 @@ from .. import ir
 from ..cpg.callgraph import FuncInfo, collect_functions
 from ..report.finding import Finding, Step
 from .spec import Rule, SinkPattern
-from .summary import Summary
+from .summary import BLOCK, PROPAGATE, LibraryModel, Summary, load_library_model
 
 Trace = list[Step]
+
+_LIBRARY: LibraryModel | None = None
+
+
+def _library() -> LibraryModel:
+    """라이브러리 요약 모델(프로세스당 1회 로드)."""
+    global _LIBRARY
+    if _LIBRARY is None:
+        _LIBRARY = load_library_model()
+    return _LIBRARY
+
 
 # 요약 고정점 반복 상한 (재귀 함수에서 무한 반복 방지)
 MAX_SUMMARY_ITERATIONS = 5
@@ -49,8 +60,6 @@ class Ctx:
     out: list[Finding]
     summaries: dict[str, Summary] = field(default_factory=dict)
     return_traces: list[Trace] = field(default_factory=list)  # 요약 계산용: 오염된 리턴들
-    # 이번 흐름이 '분석 대상에 코드가 없는 함수'를 거쳤는가(과대근사 통과 표시)
-    unknown_call: bool = False
 
 
 # ---------- 경로/스니펫 유틸 ----------
@@ -183,13 +192,25 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                     return tr + [step]
             return None  # 인자가 오염돼도 리턴으로 흐르지 않으면 오염 아님(정밀도)
 
-        # 알 수 없는 함수(라이브러리 등): 인자 오염이 결과로 흐른다고 과대근사.
-        # 그 함수 안에서 정제됐을 수도 있으므로 이 흐름은 '불확실'로 표시해 둔다.
+        # 분석 대상 밖 함수. 표준 라이브러리처럼 동작이 선언된 것은 그대로 쓴다.
+        # 수신자가 리터럴이면("abc".equals(x)) 점 경로가 안 나온다 — 메서드 이름은 쓸 수 있다.
+        lookup = cp or (node.callee.prop if isinstance(node.callee, ir.Member) else None)
+        verdict = _library().verdict(lookup, ctx.rule.languages) if lookup else None
+        if verdict == BLOCK:
+            # 리턴이 길이·불리언이라 payload 를 sink 로 옮길 수 없다 — 오염이 여기서 끊긴다.
+            return None
+
+        # 나머지는 인자 오염이 결과로 흐른다고 과대근사한다. 그 함수 안에서 정제됐을 수도
+        # 있으므로 '불확실'로 표시해 둔다 — 동작이 선언된 함수는 확정이라 표시하지 않는다.
         for a in node.args:
             tr = _taint(a, env, ctx)
             if tr:
-                ctx.unknown_call = True
-                return tr + [step]
+                if verdict == PROPAGATE:
+                    return tr + [step]
+                # 이 단계에 표시를 남긴다. 값이 변수에 담겼다가 나중에 sink 로 가도
+                # 표시는 트레이스 안에 그대로 따라간다.
+                return tr + [Step("propagation", node.loc, _snippet(node.loc, ctx.src),
+                                  uncertain=True)]
         return _taint(node.callee, env, ctx)
 
     if isinstance(node, ir.Assign):
@@ -254,9 +275,10 @@ def _emit(ctx: Ctx, steps: list[Step]) -> None:
     ctx.out.append(Finding(
         rule_id=ctx.rule.id, message=ctx.rule.message,
         severity=ctx.rule.severity, cwe=ctx.rule.cwe,
-        owasp=ctx.rule.owasp, steps=steps, uncertain=ctx.unknown_call,
+        owasp=ctx.rule.owasp, steps=steps,
+        # 흐름이 미해석 함수를 지났는지는 트레이스가 들고 있다.
+        uncertain=any(s.uncertain for s in steps),
     ))
-    ctx.unknown_call = False   # 다음 흐름과 섞이지 않게 되돌린다
 
 
 def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:

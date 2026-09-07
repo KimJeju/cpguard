@@ -1,0 +1,95 @@
+# 표준 라이브러리 함수 요약.
+#
+# 분석 대상에 코드가 없는 함수를 만나면 엔진은 "인자 오염이 리턴으로 흐른다"고 과대근사하고
+# 그 흐름을 '불확실'로 표시한다. 안전한 기본값이지만, 표준 라이브러리처럼 동작이 확정된
+# 함수까지 불확실로 넘기면 진단원이 확인할 것 없는 항목을 계속 보게 되고, 값을 옮기지도
+# 않는 호출이 오탐을 만든다. 여기서 그 함수들의 동작을 선언한다.
+#
+#   block     리턴값이 인자의 내용을 담을 수 없다(길이·불리언·비교 결과). 오염이 끊긴다.
+#   propagate 인자 오염이 리턴으로 흐른다. 과대근사와 결과는 같지만 '확정'이라 불확실 표시를 안 한다.
+#
+# 정제(sanitizer)는 여기 넣지 않는다. 정제는 규칙마다 다르므로 규칙 YAML 의 sanitizers 가
+# 담당하고 엔진도 그쪽을 먼저 본다. 여기에는 규칙과 무관한 자료 흐름만 적는다.
+#
+# languages 를 적으면 그 언어의 규칙에만 적용된다. 비우면 전 언어.
+# 사용자 조정: ~/.cpguard/summaries/*.yml (또는 CPGUARD_SUMMARIES). 나중에 읽은 값이 이긴다.
+
+id: stdlib.core
+
+# 리턴 타입이 스칼라·불리언이라 payload 를 sink 로 옮길 수 없는 호출.
+# 이걸 오염으로 두면 `if (name.equals(userInput))` 같은 코드가 통째로 오탐이 된다.
+block:
+  method:
+    - length
+    - size
+    - count
+    - isEmpty
+    - isBlank
+    - isPresent
+    - hashCode
+    - equals
+    - equalsIgnoreCase
+    - compareTo
+    - compareToIgnoreCase
+    - matches
+    - contains
+    - containsKey
+    - containsValue
+    - containsAll
+    - startsWith
+    - endsWith
+    - indexOf
+    - lastIndexOf
+    - ordinal
+  name:
+    - Objects.hash
+    - Objects.equals
+    - Objects.isNull
+    - Objects.nonNull
+    - Arrays.hashCode
+    - Array.isArray
+    - Number.isNaN
+    - Number.isInteger
+
+# 인자의 내용이 리턴값에 그대로 남는 호출. 오염은 이어지되 '확정'이라 불확실 표시를 하지 않는다.
+propagate:
+  method:
+    - substring
+    - subSequence
+    - slice
+    - trim
+    - strip
+    - stripLeading
+    - stripTrailing
+    - toString
+    - toLowerCase
+    - toUpperCase
+    - toLocaleLowerCase
+    - toLocaleUpperCase
+    - lower
+    - upper
+    - concat
+    - repeat
+    - padStart
+    - padEnd
+    - split
+    - replace
+    - replaceAll
+    - replaceFirst
+    - intern
+    - getBytes
+    - toCharArray
+    - toByteArray
+    - append
+    - insert
+  name:
+    - String.format
+    - String.join
+    - String.valueOf
+    - String.copyValueOf
+    - Arrays.toString
+    - Arrays.asList
+    - StringBuilder.toString
+    - StringBuffer.toString
+    - Objects.toString
+    - Objects.requireNonNull

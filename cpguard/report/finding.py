@@ -8,10 +8,16 @@ from ..ir import Loc
 
 @dataclass
 class Step:
-    """흐름의 한 단계. kind: 'source' | 'propagation' | 'sink'."""
+    """흐름의 한 단계. kind: 'source' | 'propagation' | 'sink'.
+
+    uncertain 은 이 단계가 '분석 대상에 코드가 없는 함수'를 지났다는 표시다. 불확실성은
+    흐름의 성질이라 단계가 들고 다녀야 한다 — 분석 문맥에 두면 finding 을 내지 않은
+    앞선 계산의 흔적이 남거나(오표시), 변수에 담겼다가 나중에 쓰이는 흐름에서 사라진다.
+    """
     kind: str
     loc: Loc
     code: str
+    uncertain: bool = False
 
 
 @dataclass
