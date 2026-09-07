@@ -11,6 +11,7 @@ urlpatterns = [
     path("projects/", views.portfolio, name="portfolio"),
     path("projects/export.zip", views.portfolio_export, name="portfolio_export"),
     path("project/<str:name>/", views.project_home, name="project_home"),
+    path("project/<str:name>/settings", views.project_settings, name="project_settings"),
     path("scan/", views.upload, name="upload"),
     path("scan/progress/<str:job_id>/", views.scan_progress, name="scan_progress"),
     path("scan/progress/<str:job_id>/status", views.scan_status, name="scan_status"),

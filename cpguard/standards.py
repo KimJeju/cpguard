@@ -62,7 +62,7 @@ def _mois() -> tuple[Item, ...]:
     G = [
         ("입력데이터 검증 및 표현", "Input data validation and representation", [
             ("sql-injection", "SQL 삽입", "SQL injection", ("CWE-89",)),
-            ("code-injection", "코드 삽입", "Code injection", ("CWE-94", "CWE-95", "CWE-96", "CWE-502")),
+            ("code-injection", "코드 삽입", "Code injection", ("CWE-94", "CWE-95", "CWE-96")),
             ("path-resource-injection", "경로 조작 및 자원 삽입", "Path manipulation and resource injection",
              ("CWE-22", "CWE-23", "CWE-73", "CWE-99", "CWE-98")),
             ("xss", "크로스사이트 스크립트", "Cross-site scripting", ("CWE-79", "CWE-80")),
@@ -130,6 +130,10 @@ def _mois() -> tuple[Item, ...]:
             ("resource-leak", "부적절한 자원 해제", "Improper resource release", ("CWE-404", "CWE-772")),
             ("use-after-free", "해제된 자원 사용", "Use after free", ("CWE-416",)),
             ("uninitialized-variable", "초기화되지 않은 변수 사용", "Use of an uninitialized variable", ("CWE-457",)),
+            # 가이드에 별도 항목(05.05)으로 있다. 예전엔 CWE-502 를 '코드 삽입'에 묶어
+            # 두어서 역직렬화 탐지가 점검표에서 엉뚱한 줄에 찍혔다.
+            ("untrusted-deserialization", "신뢰할 수 없는 데이터의 역직렬화",
+             "Deserialization of untrusted data", ("CWE-502",)),
         ]),
         ("캡슐화", "Encapsulation", [
             ("wrong-session-exposure", "잘못된 세션에 의한 데이터 정보 노출",

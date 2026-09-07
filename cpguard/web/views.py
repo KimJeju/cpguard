@@ -245,7 +245,20 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         if secrets_only:
             _job_log(job_id, "시크릿·개인정보·설정 패턴 점검 (데이터 흐름 축 생략)")
         jobs = int(os.environ.get("CPGUARD_JOBS", "1") or "1")
-        findings, scan_report = scan_path(src_dir, progress=prog, secrets_only=secrets_only, jobs=jobs)
+
+        # 프로젝트에 저장된 제외 설정을 적용한다 — 매 진단 반복하던 손작업을 없앤다.
+        from .models import ProjectSetting
+        from ..taint.spec import load_rules as _load_rules
+        setting = ProjectSetting.objects.filter(project=_project_of(zip_name)).first()
+        ex_globs = setting.glob_list if setting else ()
+        ex_rules = set(setting.rule_list) if setting else set()
+        rules = [r for r in _load_rules() if r.id not in ex_rules]
+        if ex_globs or ex_rules:
+            _job_log(job_id, f"제외 설정 적용 · 경로 {len(ex_globs)}개 · 규칙 {len(ex_rules)}개")
+
+        findings, scan_report = scan_path(src_dir, rules=rules, progress=prog,
+                                          secrets_only=secrets_only, jobs=jobs,
+                                          exclude_globs=ex_globs)
         integrity_note = "" if scan_report.complete else scan_report.summary()
         _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
@@ -286,6 +299,14 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 [_finding_to_dict(i, f, base) for i, f in enumerate(findings)], ensure_ascii=False),
             sarif_json=json.dumps(to_sarif(findings, base), ensure_ascii=False),
             sources_json=json.dumps(_collect_sources(findings, base), ensure_ascii=False),
+            scan_config_json=json.dumps({
+                "exclude_globs": list(ex_globs),
+                "exclude_rules": sorted(ex_rules),
+                "exclude_note": (setting.note if setting else ""),
+                # 적용한 규칙 전체 — 검출 0건도 "점검했음"으로 보고서에 남는다
+                "applied_rules": [{"id": r.id, "message": r.message, "severity": r.severity,
+                                   "cwe": r.cwe} for r in rules],
+            }, ensure_ascii=False),
             audit_json=json.dumps(carried_audit, ensure_ascii=False),
             audit_notes_json=json.dumps(carried_notes, ensure_ascii=False),
             triage_note=triage_note, integrity_note=integrity_note, standards=standards,
@@ -1323,11 +1344,24 @@ def detail(request, pk: int):
     })
 
 
+@require_POST
+def project_settings(request, name: str):
+    """프로젝트 제외 설정 저장 — 다음 진단부터 적용된다."""
+    from .models import ProjectSetting
+    st, _ = ProjectSetting.objects.get_or_create(project=name)
+    st.exclude_globs = (request.POST.get("exclude_globs") or "").strip()
+    st.exclude_rules = (request.POST.get("exclude_rules") or "").strip()
+    st.note = (request.POST.get("note") or "").strip()[:2000]
+    st.save()
+    return redirect("project_home", name=name)
+
+
 def project_home(request, name: str):
     """프로젝트 홈 — '지금 안전한가 / 뭐가 새로 생겼나 / 뭘 먼저 봐야 하나' 에 즉시 답한다.
 
     대시보드가 아니라 조사 시작점이다: 우선 조사 대상을 한 번의 클릭으로 열 수 있어야 한다.
     """
+    from .models import ProjectSetting
     scans = list(Scan.objects.filter(project=name).order_by("-created_at"))
     if not scans:
         return redirect("index")
@@ -1364,6 +1398,8 @@ def project_home(request, name: str):
         "trend_max": max((t["total"] for t in trend), default=1) or 1,
         "scans": scans,
         "audited": sum(1 for f in latest.findings if audit.get(str(f["id"]))),
+        "setting": ProjectSetting.objects.filter(project=name).first(),
+        "applied_excludes": latest.scan_config.get("exclude_globs") or [],
     })
 
 

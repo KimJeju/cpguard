@@ -130,6 +130,15 @@ def _parse_one(path_str: str):
         return (path_str, None, None, None, False, f"{type(e).__name__}: {e}")
 
 
+def _glob_excluded(rel: str, patterns: tuple[str, ...]) -> bool:
+    """진단원이 지정한 제외 경로(glob)에 걸리는지. 루트 기준 상대경로로 맞춘다.
+
+    테스트 코드·벤더 라이브러리·자동생성 코드를 빼는 건 매 진단 반복되는 작업이라
+    프로젝트 설정으로 저장해 두고 스캔 때 적용한다."""
+    from fnmatch import fnmatch
+    return any(fnmatch(rel, pat) or fnmatch(rel, pat.rstrip("/") + "/*") for pat in patterns)
+
+
 def _excluded(p: Path, root: Path, excludes: set[str]) -> bool:
     """제외 판정은 스캔 루트 기준 상대경로로만 한다.
 
@@ -143,6 +152,13 @@ def _excluded(p: Path, root: Path, excludes: set[str]) -> bool:
     return any(part in excludes for part in parts) or p.name.startswith("~$")
 
 
+def _rel_posix(p: Path, root: Path) -> str:
+    try:
+        return p.relative_to(root).as_posix()
+    except ValueError:
+        return p.name
+
+
 def _walk_root(root: Path) -> Path:
     r"""탐색용 루트. Windows 에서 \\?\ 접두를 붙여야 260자 넘는 경로가 열거된다.
 
@@ -154,12 +170,15 @@ def _walk_root(root: Path) -> Path:
 
 
 def iter_source_files(root: str | Path, excludes: set[str] | None = None,
-                      report: "ScanReport | None" = None):
+                      report: "ScanReport | None" = None,
+                      exclude_globs: tuple[str, ...] = ()):
     """파서가 있는 언어의 소스 파일."""
     root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
         if not p.is_file() or _excluded(p, root, excludes):
+            continue
+        if exclude_globs and _glob_excluded(_rel_posix(p, root), exclude_globs):
             continue
         if p.suffix.lower() not in loader.SUPPORTED_EXTENSIONS:
             continue
@@ -173,12 +192,15 @@ def iter_source_files(root: str | Path, excludes: set[str] | None = None,
         yield p
 
 
-def iter_text_files(root: str | Path, excludes: set[str] | None = None):
+def iter_text_files(root: str | Path, excludes: set[str] | None = None,
+                    exclude_globs: tuple[str, ...] = ()):
     """패턴 축이 볼 모든 텍스트 파일 (바이너리·잠금파일·미니파이 제외)."""
     root = _walk_root(Path(root))
     excludes = DEFAULT_EXCLUDES if excludes is None else excludes
     for p in root.rglob("*"):
         if not p.is_file() or _excluded(p, root, excludes):
+            continue
+        if exclude_globs and _glob_excluded(_rel_posix(p, root), exclude_globs):
             continue
         try:
             size = p.stat().st_size
@@ -263,7 +285,8 @@ def scan_file(path: str | Path, rules: list[Rule] | None = None,
 
 def scan_path(root: str | Path, rules: list[Rule] | None = None,
               excludes: set[str] | None = None, progress=None,
-              secrets_only: bool = False, jobs: int = 1) -> tuple[list[Finding], ScanReport]:
+              secrets_only: bool = False, jobs: int = 1,
+              exclude_globs: tuple[str, ...] = ()) -> tuple[list[Finding], ScanReport]:
     """디렉터리(또는 단일 파일) 스캔. 반환: (findings, 무결성 보고).
 
     jobs: 파싱 병렬 워커 수(기본 1=순차). 대형 프로젝트에서만 이득. frozen 앱에서
@@ -300,7 +323,7 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
 
     if not secrets_only:
         # 1) 소스 전부 파싱. 한 파일 실패가 전체를 죽이지는 않되, 조용히 넘기지도 않는다.
-        src_files = list(iter_source_files(root, excludes, report))
+        src_files = list(iter_source_files(root, excludes, report, exclude_globs))
         _p("parse", 0, len(src_files), 0)
         parsed: list[tuple[Path, ir.Module, bytes, str]] = []
 
@@ -366,7 +389,7 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
                 _p("dataflow", i, len(parsed), len(findings))
 
     # 3) 패턴 축: 모든 텍스트 파일 (소스는 언어 규칙까지, 그 외는 언어무관 규칙만)
-    text_files = list(iter_text_files(root, excludes))
+    text_files = list(iter_text_files(root, excludes, exclude_globs))
     _p("pattern", 0, len(text_files), len(findings))
     for i, path in enumerate(text_files, 1):
         lang: str | None = None

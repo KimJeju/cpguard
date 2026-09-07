@@ -1,5 +1,6 @@
 """대시보드 통합 테스트 — 업로드 → 안전해제 → 스캔 → 결과 렌더."""
 import io
+import json
 import os
 import tempfile
 import zipfile
@@ -778,3 +779,62 @@ def test_bulk_verdict_ignores_indexes_that_are_not_findings():
     r = c.post(f"/scan/{pk}/audit-bulk/", {"index": [0, 999999], "status": "fixed"})
     assert r.json()["count"] == 1
     assert "999999" not in Scan.objects.get(pk=pk).audit
+
+
+def test_the_report_records_what_was_excluded_and_what_was_checked(tmp_path):
+    """산출물이 '무엇을 점검했고 무엇을 왜 뺐는가'를 스스로 설명해야 한다."""
+    from pypdf import PdfReader
+
+    from cpguard.report import pdf as pdfmod
+    from cpguard.web.models import Scan
+
+    pk = _seed_scan(Client())
+    scan = Scan.objects.get(pk=pk)
+    scan.scan_config_json = json.dumps({
+        "exclude_globs": ["tests/*", "vendor/**"],
+        "exclude_rules": ["js.xss"],
+        "exclude_note": "테스트 코드와 벤더 라이브러리는 진단 범위 밖",
+        "applied_rules": [
+            {"id": "js.command-injection", "message": "m", "severity": "critical", "cwe": "CWE-78"},
+            {"id": "php.sqli", "message": "m", "severity": "critical", "cwe": "CWE-89"},
+        ],
+    }, ensure_ascii=False)
+    scan.save(update_fields=["scan_config_json"])
+
+    out = tmp_path / "r.pdf"
+    pdfmod.combined_report(scan, out)
+    txt = "".join((p.extract_text() or "") for p in PdfReader(str(out)).pages)
+
+    assert "제외 정보" in txt and "tests/*" in txt and "js.xss" in txt
+    assert "진단 범위 밖" in txt                      # 제외 사유가 남는다
+    assert "분석 기준" in txt and "php.sqli" in txt   # 검출 0건인 규칙도 실린다
+
+
+def test_project_exclusions_are_saved_and_applied_to_the_next_scan():
+    """제외 설정은 저장돼서 다음 진단에 적용되고, 그 사실이 스캔에 남는다."""
+    from cpguard.web.models import ProjectSetting, Scan
+
+    c = Client()
+    pk = _seed_scan(c)
+    project = Scan.objects.get(pk=pk).project
+
+    r = c.post(f"/project/{project}/settings",
+               {"exclude_globs": "app/conf.py\n**/vendor/**",
+                "exclude_rules": "js.command-injection",
+                "note": "설정 파일과 벤더는 범위 밖"}, follow=True)
+    assert r.status_code == 200
+    st = ProjectSetting.objects.get(project=project)
+    assert st.glob_list == ("app/conf.py", "**/vendor/**")
+    assert st.rule_list == ("js.command-injection",)
+
+    second = Scan.objects.get(pk=_seed_scan(c))
+    cfg = second.scan_config
+    assert cfg["exclude_globs"] == ["app/conf.py", "**/vendor/**"]
+    assert cfg["exclude_rules"] == ["js.command-injection"]
+    assert cfg["exclude_note"] == "설정 파일과 벤더는 범위 밖"
+    assert cfg["applied_rules"], "적용 규칙 목록이 보고서용으로 남아야 한다"
+    assert not any(r["id"] == "js.command-injection" for r in cfg["applied_rules"])
+
+    rules_hit = {f["rule_id"] for f in second.findings}
+    assert "js.command-injection" not in rules_hit          # 제외한 규칙은 안 돈다
+    assert not any(f["file"].endswith("conf.py") for f in second.findings)   # 제외 경로도

@@ -43,6 +43,9 @@ class Scan(models.Model):
     # 진단 규모 근거 — 합본 보고서의 '빌드 라인 수 / 개발언어' 열이 쓴다.
     code_lines = models.IntegerField(default=0)
     languages = models.CharField(max_length=200, blank=True, default="")
+    # 이 스캔에 실제로 적용된 설정 — 제외 경로·제외 규칙·적용 규칙 목록.
+    # 보고서의 '제외 정보'·'분석 기준' 절이 이걸 그대로 싣는다(재현·감리 대응).
+    scan_config_json = models.TextField(blank=True, default="{}")
 
     @property
     def language_list(self) -> list[str]:
@@ -129,6 +132,13 @@ class Scan(models.Model):
         self.save(update_fields=["audit_notes_json"])
 
     @property
+    def scan_config(self) -> dict:
+        try:
+            return json.loads(self.scan_config_json or "{}")
+        except ValueError:
+            return {}
+
+    @property
     def open_count(self) -> int:
         """조치대상 건수 — 오탐·보류·조치완료로 판정한 것을 뺀 나머지.
 
@@ -179,6 +189,34 @@ class Scan(models.Model):
     @property
     def severity_counts(self) -> dict[str, int]:
         return dict(Counter(f["severity"] for f in self.findings))
+
+
+class ProjectSetting(models.Model):
+    """프로젝트별 진단 설정 — 매 진단 반복되는 제외 작업을 저장해 둔다.
+
+    테스트 코드·벤더 라이브러리·자동생성 코드를 빼는 건 사업마다 고정인데, 지금은
+    진단원이 매번 손으로 걸러냈다. 제외 내역은 스캔에도 복사해 두어 보고서가
+    "무엇을 왜 뺐는가"를 설명할 수 있게 한다.
+    """
+    project = models.CharField(max_length=200, unique=True)
+    exclude_globs = models.TextField(blank=True, default="")   # 줄바꿈 구분 glob
+    exclude_rules = models.TextField(blank=True, default="")   # 줄바꿈 구분 규칙 id
+    note = models.TextField(blank=True, default="")            # 제외 사유(보고서에 실린다)
+
+    @staticmethod
+    def _lines(text: str) -> tuple[str, ...]:
+        return tuple(x.strip() for x in (text or "").splitlines() if x.strip())
+
+    @property
+    def glob_list(self) -> tuple[str, ...]:
+        return self._lines(self.exclude_globs)
+
+    @property
+    def rule_list(self) -> tuple[str, ...]:
+        return self._lines(self.exclude_rules)
+
+    def __str__(self) -> str:
+        return self.project
 
 
 class FindingRow(models.Model):

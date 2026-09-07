@@ -94,6 +94,14 @@ MSG: dict[str, str] = {
     "사용자 입력이 WebView 로드/스크립트 실행으로 흘러 들어갑니다 (WebView XSS).": "User input flows into a WebView load / script execution (WebView XSS).",
     "사용자 입력이 Intent 실행으로 흘러 들어갑니다 (Intent 리다이렉션).": "User input flows into an Intent launch (Intent redirection).",
     "사용자 입력이 라이브러리 로드 경로로 흘러 들어갑니다 (라이브러리 주입).": "User input flows into a library load path (library injection).",
+    "부록 B. 제외 정보": "Appendix B. Exclusions",
+    "제외 경로": "Excluded paths",
+    "경로 패턴": "Path pattern",
+    "제외 규칙": "Excluded rules",
+    "부록 C. 분석 기준 (적용 규칙 전체)": "Appendix C. Analysis scope (all applied rules)",
+    "이번 진단에 적용한 점검 규칙 전체다. 검출 0건인 규칙도 점검을 수행한 항목이므로 함께 싣는다.":
+        "Every rule applied in this assessment. Rules with no findings are listed too — they were checked.",
+    "검출": "Findings",
 }
 
 # ── PDF 문서 챔버(제목·표머리·라벨·정적 문단) ──────────────────────────────

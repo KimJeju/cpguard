@@ -697,7 +697,56 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     at.setStyle(TableStyle(astyle))
     story.append(at)
 
+    _appendix_scope(story, st, scan, T, SEV)
+
     _build_report(story, path, f"{project} " + T("진단 결과 보고서"))
+
+
+def _appendix_scope(story, st, scan, T, SEV) -> None:
+    """부록 B·C — 제외 정보와 분석 기준.
+
+    점검표 성격의 산출물은 "무엇이 나왔는가"만큼 "무엇을 점검했고 무엇을 왜 뺐는가"가
+    중요하다. 검출 0건인 규칙도 목록에 남아야 발주처가 점검 범위를 확인할 수 있고,
+    제외한 경로는 근거와 함께 남아야 "이 파일이 왜 빠졌나"에 답할 수 있다.
+    """
+    cfg = getattr(scan, "scan_config", {}) or {}
+    globs, ex_rules = cfg.get("exclude_globs") or [], cfg.get("exclude_rules") or []
+    applied = cfg.get("applied_rules") or []
+
+    if globs or ex_rules:
+        story.append(PageBreak())
+        story.append(Paragraph(T("부록 B. 제외 정보"), st["h1"]))
+        if cfg.get("exclude_note"):
+            story.append(Paragraph(_esc(cfg["exclude_note"]), st["body"]))
+            story.append(Spacer(1, 3 * mm))
+        if globs:
+            story.append(Paragraph(T("제외 경로"), st["h2sec"]))
+            rows = [[T("경로 패턴")]] + [[g] for g in globs]
+            story.append(_tbl(rows, [174 * mm], wrap_cols=(0,), st=st))
+            story.append(Spacer(1, 4 * mm))
+        if ex_rules:
+            story.append(Paragraph(T("제외 규칙"), st["h2sec"]))
+            rows = [[T("규칙")]] + [[r] for r in ex_rules]
+            story.append(_tbl(rows, [174 * mm], wrap_cols=(0,), st=st))
+
+    if not applied:
+        return
+    detected: dict[str, int] = {}
+    for f in scan.findings:
+        detected[f["rule_id"]] = detected.get(f["rule_id"], 0) + 1
+    story.append(PageBreak())
+    story.append(Paragraph(T("부록 C. 분석 기준 (적용 규칙 전체)"), st["h1"]))
+    story.append(Paragraph(T(
+        "이번 진단에 적용한 점검 규칙 전체다. 검출 0건인 규칙도 점검을 수행한 항목이므로 함께 싣는다."),
+        st["body"]))
+    story.append(Spacer(1, 3 * mm))
+    rows = [[T("규칙"), "CWE", T("위험도"), T("검출")]]
+    for r in sorted(applied, key=lambda x: (-detected.get(x["id"], 0), x["id"])):
+        rows.append([r["id"], r.get("cwe") or "-",
+                     SEV.get(r.get("severity"), r.get("severity", "")),
+                     str(detected.get(r["id"], 0))])
+    story.append(_tbl(rows, [92 * mm, 30 * mm, 26 * mm, 26 * mm],
+                      aligns={2: "CENTER", 3: "CENTER"}, wrap_cols=(0,), st=st))
 
 
 def remediation_guide(scan, path, lang: str = "ko", meta: dict | None = None) -> None:

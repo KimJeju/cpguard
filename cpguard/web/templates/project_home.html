@@ -116,6 +116,19 @@
     <span class="muted" style="margin-left:auto">오탐·보류·조치완료는 조치대상에서 빠집니다</span>
   </div>
   {% if latest.integrity_note %}<div class="err" style="margin-top:12px">스캔 무결성: {{ latest.integrity_note }}</div>{% endif %}
+  <details style="margin-top:12px">
+    <summary class="muted" style="cursor:pointer;font-size:12.5px">진단 제외 설정{% if setting %} · 경로 {{ setting.glob_list|length }} · 규칙 {{ setting.rule_list|length }}{% endif %}</summary>
+    <form method="post" action="{% url 'project_settings' project %}" style="margin-top:10px;display:grid;gap:8px;max-width:720px">{% csrf_token %}
+      <label class="muted" style="font-size:12px">제외 경로 (한 줄에 하나, glob) — 예: <code>tests/*</code>, <code>**/vendor/**</code>, <code>*.min.js</code>
+        <textarea name="exclude_globs" rows="3" style="width:100%">{{ setting.exclude_globs }}</textarea></label>
+      <label class="muted" style="font-size:12px">제외 규칙 (한 줄에 하나, 규칙 id) — 예: <code>hygiene.debug-enabled</code>
+        <textarea name="exclude_rules" rows="2" style="width:100%">{{ setting.exclude_rules }}</textarea></label>
+      <label class="muted" style="font-size:12px">제외 사유 (보고서 '제외 정보' 절에 실립니다)
+        <textarea name="note" rows="2" style="width:100%">{{ setting.note }}</textarea></label>
+      <div><button class="btn" type="submit">저장</button>
+        <span class="muted" style="font-size:11px;margin-left:8px">다음 진단부터 적용됩니다{% if applied_excludes %} · 최근 진단에 적용된 경로 {{ applied_excludes|length }}개{% endif %}</span></div>
+    </form>
+  </details>
 </div>
 
 <div class="grid2">
