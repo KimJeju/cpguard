@@ -870,3 +870,14 @@ def test_uncertain_flows_are_marked_for_the_reviewer():
              if f["rule_id"] == "js.command-injection"}
     assert flags.get("a.js") is True      # 미해석 함수를 거침
     assert flags.get("b.js") is False     # 직접 흐름
+
+
+def test_workbench_ships_the_flow_content_filter():
+    """흐름 안의 코드로 거르는 조건이 화면에 나가야 벌크 판정이 실효를 갖는다."""
+    c = Client()
+    pk = _seed_scan(c)
+    html = c.get(f"/scan/{pk}/", SERVER_NAME="127.0.0.1").content.decode()
+    assert 'id="fflow"' in html and 'id="fflowscope"' in html and 'id="fflowmode"' in html
+    assert "flowMatcher" in html and "flowText" in html
+    # 흐름 단계 코드가 페이지에 실려야 클라이언트가 조건을 걸 수 있다
+    assert '"steps"' in html

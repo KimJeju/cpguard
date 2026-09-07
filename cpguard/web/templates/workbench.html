@@ -288,6 +288,20 @@
       </div>
       <div class="filters" style="padding-top:0">
         <div style="display:flex;gap:6px;align-items:center">
+          <input id="fflow" type="search" style="flex:1"
+                 placeholder="흐름 내용 — 호출·변수명 (/정규식/ 가능)"
+                 title="추적 경로 안의 코드로 거릅니다. 예: sanitize 를 거친 흐름만 빼기">
+          <select id="fflowscope" title="흐름의 어느 구간을 볼지">
+            <option value="all">전체 흐름</option><option value="source">발생 원인(source)</option>
+            <option value="sink">발생 지점(sink)</option>
+          </select>
+          <select id="fflowmode">
+            <option value="has">포함</option><option value="not">미포함</option>
+          </select>
+        </div>
+      </div>
+      <div class="filters" style="padding-top:0">
+        <div style="display:flex;gap:6px;align-items:center">
           <select id="bulkstate" title="지금 목록에 보이는 이슈 전부를 한 번에 판정합니다">
             <option value="">일괄 판정…</option>
             <option value="confirmed">취약 확정</option>
@@ -449,7 +463,8 @@
   // ---------- 작업공간 상태 (패널 폭·표시·탭·필터) — 브라우저에 기억 ----------
   const WS_KEY = 'cpguard.ws.v1';
   let ws = { leftW: 320, rightW: 380, bottomH: 260, bottom: true, left: true, right: true, tab: 'ai', view: 'tree',
-             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true };
+             group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true,
+             flowq: '', flowScope: 'all', flowMode: 'has' };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
@@ -463,6 +478,7 @@
     el('v-tree').classList.toggle('on', ws.view === 'tree'); el('v-table').classList.toggle('on', ws.view === 'table'); el('v-files').classList.toggle('on', ws.view === 'files');
     el('group').value = ws.group; el('fsev').value = ws.sev; el('fcat').value = ws.cat; el('fnew').value = ws.fnew; el('hideAudited').checked = ws.hideAudited;
     el('faudit').value = ws.audit || 'all';
+    if (el('fflow')) { el('fflow').value = ws.flowq || ''; el('fflowscope').value = ws.flowScope || 'all'; el('fflowmode').value = ws.flowMode || 'has'; }
     // 저장된 선택이 없으면 진단 시 고른 기준을 기본으로 (없으면 기준 미적용)
     if (ws.std === undefined || ws.std === null) ws.std = '';
     if (!ws.std && !ws._stdInit) {
@@ -496,6 +512,25 @@
   let sel = null, curStep = 0;
 
   // ---------- 필터 ----------
+  // 흐름 내용 필터 — 정오탐은 대부분 "이 sanitizer 를 거쳤는가 / 이 sink 인가"로 갈린다.
+  // 경로 민감도가 없는 엔진의 오탐을 사람이 가장 싸게 걷어내는 자리라, 흐름 안의 코드를
+  // 조건으로 걸 수 있게 한다. /.../ 로 감싸면 정규식, 아니면 부분 문자열.
+  function flowMatcher(q) {
+    if (!q) return null;
+    const m = q.match(/^\/(.*)\/([a-z]*)$/);
+    if (m) { try { return new RegExp(m[1], m[2] || 'i'); } catch (e) { /* 잘못된 정규식은 문자열로 */ } }
+    const needle = q.toLowerCase();
+    return { test: (t) => String(t).toLowerCase().includes(needle) };
+  }
+  function flowText(f, scope) {
+    const steps = f.steps || [];
+    if (!steps.length) return '';
+    if (scope === 'source') return steps[0].code || '';
+    if (scope === 'sink') return steps[steps.length - 1].code || '';
+    return steps.map(s => s.code || '').join('\n');
+  }
+
+  let FLOW_RE = null;
   function visible() {
     const q = el('q').value.trim().toLowerCase();
     return FINDINGS.filter(f => {
@@ -507,6 +542,10 @@
       if (ws.fnew === 'uncertain' && !f.uncertain) return false;
       if (ws.fnew === 'certain' && f.uncertain) return false;
       if (ws.hideAudited && f.audit) return false;
+      if (FLOW_RE) {
+        const hit = FLOW_RE.test(flowText(f, ws.flowScope || 'all'));
+        if ((ws.flowMode === 'not') === hit) return false;
+      }
       // 감사 상태 필터: all=전체, none=미확인(상태 없음), 그 외=해당 상태만
       if (ws.audit === 'none' && f.audit) return false;
       if (ws.audit && ws.audit !== 'all' && ws.audit !== 'none' && (f.audit || '') !== ws.audit) return false;
@@ -987,6 +1026,19 @@
   el('fsev').onchange = () => { ws.sev = el('fsev').value; saveWS(); renderTree(); };
   el('fcat').onchange = () => { ws.cat = el('fcat').value; saveWS(); renderTree(); };
   el('fnew').onchange = () => { ws.fnew = el('fnew').value; saveWS(); renderTree(); };
+  if (el('fflow')) {
+    const applyFlow = () => {
+      ws.flowq = el('fflow').value.trim();
+      ws.flowScope = el('fflowscope').value;
+      ws.flowMode = el('fflowmode').value;
+      FLOW_RE = flowMatcher(ws.flowq);
+      saveWS(); renderTree();
+    };
+    el('fflow').oninput = applyFlow;
+    el('fflowscope').onchange = applyFlow;
+    el('fflowmode').onchange = applyFlow;
+    FLOW_RE = flowMatcher(ws.flowq);      // 저장된 조건 복원
+  }
   el('hideAudited').onchange = () => { ws.hideAudited = el('hideAudited').checked; saveWS(); renderTree(); };
   el('faudit').onchange = () => { ws.audit = el('faudit').value; saveWS(); renderTree(); };
 
