@@ -38,6 +38,15 @@
 <div class="pf-head">
   <h1>프로젝트 포트폴리오</h1>
   <span class="muted" style="font-size:13px">{{ total_projects }}개 프로젝트 · 프로젝트별 최신 스캔</span>
+  {% if report_templates %}
+  <label class="muted" style="font-size:12px;display:flex;gap:6px;align-items:center;margin-left:14px"
+         title="저장한 보고서 양식대로 절을 넣고 뺍니다">양식
+    <select id="tplsel">
+      <option value="">기본 (전부 포함)</option>
+      {% for t in report_templates %}<option value="{{ t.pk }}">{{ t.name }}</option>{% endfor %}
+    </select>
+  </label>
+  {% endif %}
   <div class="pf-sum">
     <span class="badge critical">심각 {{ agg.critical }}</span>
     <span class="badge high">높음 {{ agg.high }}</span>
@@ -115,7 +124,7 @@
       <td>{% if s.new_count %}<span class="newtag">+{{ s.new_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="rowact">
         <a href="{% url 'detail' s.pk %}">자세히</a>
-        <a download href="{% url 'export_pdf_report' s.pk %}">보고서</a>
+        <a class="rep" download data-base="{% url 'export_pdf_report' s.pk %}" href="{% url 'export_pdf_report' s.pk %}">보고서</a>
         <a download href="{% url 'export_xlsx' s.pk %}">xlsx</a>
       </td>
     </tr>
@@ -156,6 +165,19 @@
     window.location = "{% url 'portfolio_export' %}?kind=" + kind + "&ids=" + ids.join(',');
   });
   refresh();
+})();
+</script>
+<script>
+// 보고서 링크에 선택한 양식을 붙인다 — 행마다 셀렉트를 두면 화면이 시끄럽다.
+(function () {
+  var sel = document.getElementById('tplsel');
+  if (!sel) return;
+  function apply() {
+    var q = sel.value ? '?tpl=' + sel.value : '';
+    document.querySelectorAll('a.rep').forEach(function (a) { a.href = a.dataset.base + q; });
+  }
+  sel.addEventListener('change', apply);
+  apply();
 })();
 </script>
 {% endblock %}

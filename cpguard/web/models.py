@@ -204,6 +204,45 @@ class Scan(models.Model):
         return dict(Counter(f["severity"] for f in self.findings))
 
 
+class ReportTemplate(models.Model):
+    """보고서 양식 — 발주처마다 요구가 다르고 사업별로 쌓인다.
+
+    지금은 진단원이 Word 로 내려받아 매번 손으로 고쳤다. 어떤 절을 넣을지, 상세에
+    소스와 의견을 실을지, 표지 제목과 로고를 무엇으로 할지를 저장해 두고 내보낼 때 고른다.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    title_override = models.CharField(max_length=200, blank=True, default="")
+    header_note = models.CharField(max_length=300, blank=True, default="")   # 표지 아래 머리말
+    logo_path = models.CharField(max_length=500, blank=True, default="")     # 로컬 이미지 경로
+    references = models.CharField(max_length=200, blank=True, default="")    # 점검 기준 id, 쉼표
+    include_detail = models.BooleanField(default=True)      # 4. 상세 결과
+    include_source = models.BooleanField(default=True)      # 상세에 소스 스니펫
+    include_comment = models.BooleanField(default=True)     # 상세에 진단원 의견
+    include_exclusions = models.BooleanField(default=True)  # 부록 제외 정보
+    include_rule_list = models.BooleanField(default=True)   # 부록 분석 기준
+    include_scope = models.BooleanField(default=True)       # 부록 분석 대상 현황
+
+    class Meta:
+        ordering = ["name"]
+
+    def as_dict(self) -> dict:
+        return {
+            "title_override": self.title_override, "header_note": self.header_note,
+            "logo_path": self.logo_path,
+            "include_detail": self.include_detail, "include_source": self.include_source,
+            "include_comment": self.include_comment,
+            "include_exclusions": self.include_exclusions,
+            "include_rule_list": self.include_rule_list, "include_scope": self.include_scope,
+        }
+
+    @property
+    def reference_list(self) -> list[str]:
+        return [x.strip() for x in (self.references or "").split(",") if x.strip()]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class AuditEvent(models.Model):
     """이슈 판정 변경 이력.
 

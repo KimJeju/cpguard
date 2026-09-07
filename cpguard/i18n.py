@@ -94,6 +94,9 @@ MSG: dict[str, str] = {
     "사용자 입력이 WebView 로드/스크립트 실행으로 흘러 들어갑니다 (WebView XSS).": "User input flows into a WebView load / script execution (WebView XSS).",
     "사용자 입력이 Intent 실행으로 흘러 들어갑니다 (Intent 리다이렉션).": "User input flows into an Intent launch (Intent redirection).",
     "사용자 입력이 라이브러리 로드 경로로 흘러 들어갑니다 (라이브러리 주입).": "User input flows into a library load path (library injection).",
+    "진단원 의견": "Reviewer comment",
+    "이 보고서 양식은 상세 결과를 싣지 않는다. 건별 내용은 분석목록표(xlsx)를 참조한다.":
+        "This report template omits detailed findings; see the analysis sheet (xlsx) for each item.",
     "부록 D. 분석 대상 현황": "Appendix D. Analysis scope by language",
     "개발언어": "Language",
     "파일": "Files",

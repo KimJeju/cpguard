@@ -881,3 +881,28 @@ def test_workbench_ships_the_flow_content_filter():
     assert "flowMatcher" in html and "flowText" in html
     # 흐름 단계 코드가 페이지에 실려야 클라이언트가 조건을 걸 수 있다
     assert '"steps"' in html
+
+
+def test_a_report_template_controls_which_sections_are_written():
+    """발주처마다 요구 양식이 다르다 — 저장한 양식대로 절이 빠지거나 들어가야 한다."""
+    from pypdf import PdfReader
+
+    from cpguard.web.models import ReportTemplate
+
+    c = Client()
+    pk = _seed_scan(c)
+
+    r = c.post("/settings/templates", {"name": "요약본", "include_scope": "on"}, follow=True)
+    assert r.status_code == 200
+    t = ReportTemplate.objects.get(name="요약본")
+    assert not t.include_detail and t.include_scope     # 체크 안 한 항목은 꺼진다
+
+    full = c.get(f"/scan/{pk}/report.pdf", SERVER_NAME="127.0.0.1").content
+    lean = c.get(f"/scan/{pk}/report.pdf?tpl={t.pk}", SERVER_NAME="127.0.0.1").content
+    ftxt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(full)).pages)
+    ltxt = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(lean)).pages)
+
+    assert "4. 상세 진단 결과" in ftxt and "4. 상세 진단 결과" in ltxt
+    assert "분석목록표(xlsx)를 참조한다" in ltxt      # 상세 대신 안내 문구
+    assert "부록 D. 분석 대상 현황" in ltxt           # 켠 절은 남는다
+    assert len(lean) < len(full)

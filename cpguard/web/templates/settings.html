@@ -186,4 +186,43 @@
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
 })();
 </script>
+<div class="card">
+  <h2>보고서 양식</h2>
+  <p class="muted" style="font-size:12.5px">발주처마다 요구가 다르고 사업별로 양식이 쌓입니다.
+     어떤 절을 넣을지 저장해 두고 산출물을 내보낼 때 고릅니다.</p>
+  {% if templates %}
+  <table style="margin-bottom:14px">
+    <tr><th>이름</th><th>상세</th><th>소스</th><th>의견</th><th>제외</th><th>기준목록</th><th>대상현황</th><th></th></tr>
+    {% for t in templates %}
+    <tr>
+      <td><b>{{ t.name }}</b>{% if t.references %} <span class="muted">· {{ t.references }}</span>{% endif %}</td>
+      <td>{% if t.include_detail %}✔{% else %}—{% endif %}</td>
+      <td>{% if t.include_source %}✔{% else %}—{% endif %}</td>
+      <td>{% if t.include_comment %}✔{% else %}—{% endif %}</td>
+      <td>{% if t.include_exclusions %}✔{% else %}—{% endif %}</td>
+      <td>{% if t.include_rule_list %}✔{% else %}—{% endif %}</td>
+      <td>{% if t.include_scope %}✔{% else %}—{% endif %}</td>
+      <td style="text-align:right"><form method="post" action="{% url 'report_templates' %}" style="display:inline">{% csrf_token %}
+        <input type="hidden" name="delete" value="{{ t.pk }}"><button class="btn ghost" type="submit">삭제</button></form></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+  <form method="post" action="{% url 'report_templates' %}" style="display:grid;gap:8px;max-width:760px">{% csrf_token %}
+    <input name="name" placeholder="양식 이름 — 예: 행안부2021(소스 포함)" required>
+    <input name="title_override" placeholder="표지 제목 (비우면 기본)">
+    <input name="header_note" placeholder="표지 머리말 (선택)">
+    <input name="references" placeholder="점검 기준 id, 쉼표 — 예: mois,efs (비우면 내보낼 때 고른 기준)">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px" class="muted">
+      <label><input type="checkbox" name="include_detail" checked> 상세 결과</label>
+      <label><input type="checkbox" name="include_source" checked> 소스·흐름 포함</label>
+      <label><input type="checkbox" name="include_comment"> 진단원 의견 포함</label>
+      <label><input type="checkbox" name="include_exclusions" checked> 제외 정보</label>
+      <label><input type="checkbox" name="include_rule_list" checked> 분석 기준</label>
+      <label><input type="checkbox" name="include_scope" checked> 분석 대상 현황</label>
+    </div>
+    <div><button class="btn" type="submit">저장</button>
+      <span class="muted" style="font-size:11px;margin-left:8px">같은 이름이면 덮어씁니다</span></div>
+  </form>
+</div>
 {% endblock %}

@@ -321,8 +321,12 @@ _CRITERIA_EN = {
 }
 
 
-def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
-    """취약점 1건을 카드형(제목 바 + 항목별 상세)으로."""
+def _finding_card(idx, f, SEV, REM, DFT, T, st, en,
+                  show_source: bool = True, show_comment: bool = False, audit_notes=None):
+    """취약점 1건을 카드형(제목 바 + 항목별 상세)으로.
+
+    show_source / show_comment 는 보고서 양식이 정한다 — 발주처에 따라 소스를 빼거나
+    진단원 의견을 함께 싣는다."""
     sev = f["severity"]
     color = SEV_COLOR.get(sev, colors.black)
     cwe = f.get("cwe") or ""
@@ -337,7 +341,7 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
             [Paragraph(f'<b>{T("대상")}</b>  <font face="Courier" size=8>{_esc(f["file"])}:{f["line"]}</font>', body)],
             [Paragraph(f'<b>{T("설명")}</b>  {_esc(T(f.get("message", "")))}', body)]]
 
-    steps = f.get("steps") or []
+    steps = f.get("steps") or [] if show_source else []
     if steps:
         slabel = STEP_LABEL_EN if en else STEP_LABEL
         parts = []
@@ -352,6 +356,10 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en):
     if rem[3]:
         rows.append([Paragraph(f'<b>{T("안전한 코드 예시")}</b>', body)])
         rows.append([Paragraph(_esc(rem[3]), st["code"])])
+    if show_comment:
+        note = (audit_notes or {}).get(str(f.get("id", "")), "")
+        if note:
+            rows.append([Paragraph(f'<b>{T("진단원 의견")}</b>  {_esc(note)}', body)])
     ref = _cwe_ref(cwe) + (f' · OWASP {_esc(owasp)}' if owasp else "")
     rows.append([Paragraph(f'<b>{T("참고")}</b>  {ref}', st["small"])])
 
@@ -411,7 +419,8 @@ def _item_table(rows_std, std, V, T, st, en):
     return tbl
 
 
-def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
+def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",  # noqa: C901
+                    template: dict | None = None,
                     meta: dict | None = None,
                     standards: list[str] | str | None = None) -> None:
     """합본 진단 결과 보고서 — 표지·개정이력·목차·개요·요약·항목·상세·총평·부록.
@@ -427,6 +436,10 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     DFT = DEFAULT_REM_EN if en else _DEFAULT_REM
     CRIT = _CRITERIA_EN if en else _CRITERIA
     meta = meta or {}
+    # 보고서 양식 — 절 on/off·상세 옵션·표지 문안. 없으면 전부 포함(기존 동작).
+    tpl = template or {}
+    def _on(key: str) -> bool:
+        return bool(tpl.get(key, True))
     author = meta.get("author") or author
     version = meta.get("version") or "1.0"
     findings = scan.findings
@@ -662,9 +675,17 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
                 if en else f"위험도 상위 {CAP}건을 상세 기술하며, 전체 {total}건은 분석목록표(xlsx)를 참조한다.")
         story.append(Paragraph(f'<b>* {note}</b>', st["small"]))
         story.append(Spacer(1, 2 * mm))
-    for i, f in enumerate(shown, 1):
-        for fl in _finding_card(i, f, SEV, REM, DFT, T, st, en):
-            story.append(fl)
+    notes = getattr(scan, "audit_notes", {}) or {}
+    if _on("include_detail"):
+        for i, f in enumerate(shown, 1):
+            for fl in _finding_card(i, f, SEV, REM, DFT, T, st, en,
+                                    show_source=_on("include_source"),
+                                    show_comment=_on("include_comment"), audit_notes=notes):
+                story.append(fl)
+    else:
+        story.append(Paragraph(T(
+            "이 보고서 양식은 상세 결과를 싣지 않는다. 건별 내용은 분석목록표(xlsx)를 참조한다."),
+            st["body"]))
 
     # ── 5. 종합 의견 ──
     story.append(PageBreak())
@@ -700,8 +721,10 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
     at.setStyle(TableStyle(astyle))
     story.append(at)
 
-    _scope_table(story, st, scan, T)
-    _appendix_scope(story, st, scan, T, SEV)
+    if _on("include_scope"):
+        _scope_table(story, st, scan, T)
+    _appendix_scope(story, st, scan, T, SEV,
+                    show_excl=_on("include_exclusions"), show_rules=_on("include_rule_list"))
 
     _build_report(story, path, f"{project} " + T("진단 결과 보고서"))
 
@@ -726,7 +749,7 @@ def _scope_table(story, st, scan, T) -> None:
     story.append(Paragraph(T("밀도 = 1,000 라인당 검출 건수."), st["small"] if "small" in st else st["body"]))
 
 
-def _appendix_scope(story, st, scan, T, SEV) -> None:
+def _appendix_scope(story, st, scan, T, SEV, show_excl: bool = True, show_rules: bool = True) -> None:
     """부록 B·C — 제외 정보와 분석 기준.
 
     점검표 성격의 산출물은 "무엇이 나왔는가"만큼 "무엇을 점검했고 무엇을 왜 뺐는가"가
@@ -737,7 +760,7 @@ def _appendix_scope(story, st, scan, T, SEV) -> None:
     globs, ex_rules = cfg.get("exclude_globs") or [], cfg.get("exclude_rules") or []
     applied = cfg.get("applied_rules") or []
 
-    if globs or ex_rules:
+    if (globs or ex_rules) and show_excl:
         story.append(PageBreak())
         story.append(Paragraph(T("부록 B. 제외 정보"), st["h1"]))
         if cfg.get("exclude_note"):
@@ -753,7 +776,7 @@ def _appendix_scope(story, st, scan, T, SEV) -> None:
             rows = [[T("규칙")]] + [[r] for r in ex_rules]
             story.append(_tbl(rows, [174 * mm], wrap_cols=(0,), st=st))
 
-    if not applied:
+    if not applied or not show_rules:
         return
     detected: dict[str, int] = {}
     for f in scan.findings:

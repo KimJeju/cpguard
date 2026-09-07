@@ -465,9 +465,12 @@ def settings_page(request):
         stored = cfg.get(env) or os.environ.get(env, "")
         extras.append({"env": env, "label": label,
                        "value": stored, "set": bool(stored)})
+    from .models import ReportTemplate
     return render(request, "settings.html",
                   {"rows": rows, "extras": extras, "providers": available(),
-                   "report_fields": report_fields})
+                   "report_fields": report_fields,
+                   "templates": ReportTemplate.objects.all(),
+                   "standard_choices": _standard_choices(lang=_lang(request))})
 
 
 def compare(request):
@@ -607,12 +610,14 @@ def portfolio(request):
     # 전체 집계(필터 적용 후) — 헤더 요약
     agg = {k: sum(getattr(s, f"sev_{k}") for s in rows) for k in
            ("critical", "high", "medium", "low", "info")}
+    from .models import ReportTemplate
     return render(request, "portfolio.html", {
         "rows": page_rows, "total_projects": total_projects, "agg": agg,
         "q": request.GET.get("q") or "", "sev": sev, "sort": sort,
         "page": page, "pages": pages,
         "page_ids": ",".join(str(s.pk) for s in page_rows),
         "all_ids": ",".join(str(s.pk) for s in rows),
+        "report_templates": ReportTemplate.objects.all(),
     })
 
 
@@ -696,7 +701,18 @@ def _attachment(fname: str) -> str:
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(fname)}"
 
 
-def _pdf_response(scan, kind: str, lang: str = "ko", standards: list[str] | None = None):
+def _template_for(request):
+    """내보내기에 쓸 보고서 양식. ?tpl=<id> 로 고른다(없으면 기본 = 전부 포함)."""
+    from .models import ReportTemplate
+    tid = request.GET.get("tpl")
+    if not tid or not tid.isdigit():
+        return None, None
+    t = ReportTemplate.objects.filter(pk=int(tid)).first()
+    return (t.as_dict() if t else None), t
+
+
+def _pdf_response(scan, kind: str, lang: str = "ko", standards: list[str] | None = None,
+                  template: dict | None = None):
     from ..report import pdf as pdfmod
     from . import config as appcfg
     meta = appcfg.report_meta()          # 설정의 보고서 정보(작성자·기관·발주처·기간·버전)
@@ -706,7 +722,8 @@ def _pdf_response(scan, kind: str, lang: str = "ko", standards: list[str] | None
             pdfmod.remediation_guide(scan, tmp, lang=lang, meta=meta)
             suffix = "remediation-guide" if lang == "en" else "조치가이드"
         else:
-            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standards=standards)
+            pdfmod.combined_report(scan, tmp, lang=lang, meta=meta, standards=standards,
+                                   template=template)
             suffix = "assessment-report" if lang == "en" else "진단결과보고서"
         data = tmp.read_bytes()
     finally:
@@ -720,7 +737,9 @@ def _pdf_response(scan, kind: str, lang: str = "ko", standards: list[str] | None
 def export_pdf_report(request, pk: int):
     """합본 진단 결과 보고서(PDF)."""
     scan = get_object_or_404(Scan, pk=pk)
-    return _pdf_response(scan, "combined", _lang(request), _stds(request, scan))
+    tpl, tobj = _template_for(request)
+    stds = (tobj.reference_list if tobj and tobj.reference_list else _stds(request, scan))
+    return _pdf_response(scan, "combined", _lang(request), stds, template=tpl)
 
 
 @never_cache
@@ -1378,6 +1397,28 @@ def detail(request, pk: int):
         # 진단 시 고른 기준 — 검토 화면의 기준 셀렉트를 여기에 맞춘다
         "scan_standards": _standard_choices(scan.standard_ids, _lang(request)),
     })
+
+
+@require_POST
+def report_templates(request):
+    """보고서 양식 저장·삭제. 발주처별 양식이 사업마다 쌓이므로 이름 붙여 재사용한다."""
+    from .models import ReportTemplate
+    if request.POST.get("delete"):
+        ReportTemplate.objects.filter(pk=request.POST.get("delete")).delete()
+        return redirect("settings")
+    name = (request.POST.get("name") or "").strip()
+    if not name:
+        return redirect("settings")
+    flags = {k: bool(request.POST.get(k)) for k in
+             ("include_detail", "include_source", "include_comment",
+              "include_exclusions", "include_rule_list", "include_scope")}
+    ReportTemplate.objects.update_or_create(
+        name=name,
+        defaults={"title_override": (request.POST.get("title_override") or "").strip(),
+                  "header_note": (request.POST.get("header_note") or "").strip(),
+                  "logo_path": (request.POST.get("logo_path") or "").strip(),
+                  "references": (request.POST.get("references") or "").strip(), **flags})
+    return redirect("settings")
 
 
 @require_POST

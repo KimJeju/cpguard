@@ -1095,9 +1095,11 @@
     const picked = [...document.querySelectorAll('#exportbox input[name=xstd]:checked')]
       .map(i => i.value);
     // 아무것도 안 고르면 파라미터를 비워 보낸다 — 서버가 기준 없는 산출물을 낸다.
+    const tplSel = el('xtpl');
+    const tpl = tplSel && tplSel.value ? '&tpl=' + tplSel.value : '';
     const q = '?std=' + picked.join(',');
     document.querySelectorAll('#exportbox a[data-std]').forEach(a => {
-      a.href = a.getAttribute('href').split('?')[0] + q;
+      a.href = a.getAttribute('href').split('?')[0] + q + (a.hasAttribute('data-tpl') ? tpl : '');
     });
     const n = picked.length;
     const sum = document.querySelector('#exportbox > summary');
@@ -1105,6 +1107,7 @@
   }
   document.querySelectorAll('#exportbox input[name=xstd]')
     .forEach(i => i.addEventListener('change', applyStdLinks));
+  if (el('xtpl')) el('xtpl').addEventListener('change', applyStdLinks);
   applyStdLinks();
   document.addEventListener('click', e => {          // 바깥을 누르면 닫기
     const box = el('exportbox');
