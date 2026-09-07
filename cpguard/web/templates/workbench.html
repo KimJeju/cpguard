@@ -285,6 +285,20 @@
           <input type="checkbox" id="hideAudited" style="flex:0 0 auto;width:auto;margin:0"> <span>감사 완료 숨기기</span>
         </label>
       </div>
+      <div class="filters" style="padding-top:0">
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="bulkstate" title="지금 목록에 보이는 이슈 전부를 한 번에 판정합니다">
+            <option value="">일괄 판정…</option>
+            <option value="confirmed">취약 확정</option>
+            <option value="false_positive">오탐</option>
+            <option value="fixed">조치완료</option>
+            <option value="deferred">보류</option>
+            <option value="none">감사 해제</option>
+          </select>
+          <button class="toolbtn" id="bulkgo">적용</button>
+          <span class="muted" id="bulkhint" style="font-size:11px"></span>
+        </div>
+      </div>
     </div>
     <div class="pane-body" id="tree"></div>
   </div>
@@ -473,6 +487,7 @@
   el('tgl-right').onclick = () => { ws.right = !ws.right; applyWS(); saveWS(); };
   el('tgl-bottom').onclick = () => { ws.bottom = !ws.bottom; applyWS(); saveWS(); };
   document.querySelectorAll('.tab').forEach(t => t.onclick = () => { ws.tab = t.dataset.tab; ws.bottom = true; applyWS(); saveWS(); });
+  if (el('bulkgo')) el('bulkgo').onclick = bulkAudit;
   el('v-tree').onclick = () => { ws.view = 'tree'; applyWS(); saveWS(); renderTree(); };
   el('v-table').onclick = () => { ws.view = 'table'; applyWS(); saveWS(); renderTree(); };
   el('v-files').onclick = () => { ws.view = 'files'; applyWS(); saveWS(); renderTree(); };
@@ -560,6 +575,7 @@
     const items = visible();
     if (ws.view === 'files') return renderFiles(items);
     el('shown').textContent = `(${items.length}/${FINDINGS.length})`;
+    syncBulkHint();
     if (ws.view === 'table') return renderTable(items);
 
     const key = ws.group;
@@ -732,6 +748,43 @@
       .catch(() => { btn.disabled = false; st.textContent = '저장 실패'; });
   }
   function gotoStep(f, i) { curStep = i; renderDetail(f); renderCode(f, curStep); renderVFlow(f); }
+
+  // 필터로 좁힌 결과를 통째로 판정한다. 같은 sink 에서 수십 건이 함께 나오는 게 정상이라
+  // 하나씩 누르는 건 실무에서 하지 않는다. 대량 모드에서는 목록이 잘려 있어 막는다.
+  function syncBulkHint() {
+    var hint = el('bulkhint'), go = el('bulkgo');
+    if (!hint || !go) return;
+    if (LARGE) { go.disabled = true; hint.textContent = '대량 모드에서는 사용할 수 없습니다'; return; }
+    go.disabled = false;
+    hint.textContent = '보이는 ' + visible().length + '건';
+  }
+  function bulkAudit() {
+    if (LARGE) return;
+    const sel = el('bulkstate');
+    const raw = sel.value;
+    if (!raw) { alert('적용할 판정을 고르세요.'); return; }
+    const status = raw === 'none' ? '' : raw;
+    const items = visible();
+    if (!items.length) { alert('보이는 이슈가 없습니다.'); return; }
+    const label = raw === 'none' ? '감사 해제' : AUDIT_LABEL[status];
+    if (!confirm('지금 보이는 ' + items.length + '건을 모두 "' + label + '" 으로 바꿀까요?')) return;
+    const body = new URLSearchParams();
+    body.append('status', status);
+    items.forEach(f => body.append('index', f.id));
+    fetch(`/scan/${SCAN_PK}/audit-bulk/`, {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+      body,
+    }).then(r => r.json()).then(d => {
+      if (!d.ok) { alert('실패: ' + (d.error || '')); return; }
+      items.forEach(f => { const before = f.audit || ''; f.audit = status; applyAuditDelta(f, before, status); });
+      sel.value = '';
+      renderTree();
+      const cur = FINDINGS.find(x => x.id === sel_id());
+      if (cur) renderDetail(cur);
+      syncBulkHint();
+    });
+  }
+  function sel_id() { return typeof sel === 'undefined' ? null : sel; }
 
   function setAudit(f, status) {
     fetch(`/scan/${SCAN_PK}/audit/`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF }, body: new URLSearchParams({ index: f.id, status }) })

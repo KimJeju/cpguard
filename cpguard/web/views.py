@@ -1386,6 +1386,32 @@ def set_audit(request, pk: int):
 
 
 @require_POST
+def set_audit_bulk(request, pk: int):
+    """여러 이슈를 한 번에 판정한다.
+
+    같은 sink·같은 파일에서 수십 건이 함께 나오는 게 정상이고, 그걸 하나씩 누르는
+    일은 실무에서 하지 않는다. 필터로 좁힌 결과를 통째로 판정하는 게 실제 사용법이다.
+    """
+    scan = get_object_or_404(Scan, pk=pk)
+    status = request.POST.get("status", "")
+    if status not in AUDIT_STATES:
+        return JsonResponse({"ok": False, "error": "알 수 없는 상태"}, status=400)
+    idxs = {int(x) for x in request.POST.getlist("index") if x.lstrip("-").isdigit()}
+    idxs = {i for i in idxs if 0 <= i < scan.finding_count}
+    if not idxs:
+        return JsonResponse({"ok": False, "error": "대상 없음"}, status=400)
+    a = scan.audit
+    for i in idxs:
+        if status:
+            a[str(i)] = status
+        else:
+            a.pop(str(i), None)
+    scan.audit_json = json.dumps(a)
+    scan.save(update_fields=["audit_json"])
+    return JsonResponse({"ok": True, "count": len(idxs), "status": status})
+
+
+@require_POST
 def set_audit_note(request, pk: int):
     """감사자 의견 메모 저장 — 평문으로만 저장하고 표시 시 escape 한다(HTML 렌더 안 함)."""
     scan = get_object_or_404(Scan, pk=pk)

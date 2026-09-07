@@ -746,3 +746,35 @@ def test_a_project_with_no_history_inherits_nothing():
 
     audit, notes = _carry_over_audit("존재하지-않는-프로젝트", [], Path("."))
     assert audit == {} and notes == {}
+
+
+def test_bulk_verdict_applies_to_every_listed_issue():
+    """필터로 좁힌 결과를 통째로 판정한다 — 같은 sink 수십 건을 하나씩 누르지 않게."""
+    from cpguard.web.models import Scan
+
+    c = Client()
+    pk = _seed_scan(c)
+    scan = Scan.objects.get(pk=pk)
+    idxs = [f["id"] for f in scan.findings]
+    assert len(idxs) >= 2
+
+    r = c.post(f"/scan/{pk}/audit-bulk/", {"index": idxs, "status": "false_positive"})
+    assert r.status_code == 200 and r.json()["count"] == len(idxs)
+
+    scan = Scan.objects.get(pk=pk)
+    assert all(scan.audit[str(i)] == "false_positive" for i in idxs)
+    assert scan.open_count == 0            # 전부 오탐이면 조치대상이 없다
+
+    # 빈 상태로 되돌리기(감사 해제)도 같은 경로
+    c.post(f"/scan/{pk}/audit-bulk/", {"index": idxs, "status": ""})
+    assert Scan.objects.get(pk=pk).open_count == len(idxs)
+
+
+def test_bulk_verdict_ignores_indexes_that_are_not_findings():
+    from cpguard.web.models import Scan
+
+    c = Client()
+    pk = _seed_scan(c)
+    r = c.post(f"/scan/{pk}/audit-bulk/", {"index": [0, 999999], "status": "fixed"})
+    assert r.json()["count"] == 1
+    assert "999999" not in Scan.objects.get(pk=pk).audit

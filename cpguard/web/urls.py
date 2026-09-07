@@ -24,6 +24,7 @@ urlpatterns = [
     path("scan/<int:pk>/sarif/", views.sarif_download, name="sarif"),
     path("scan/<int:pk>/delete/", views.delete, name="delete"),
     path("scan/<int:pk>/audit/", views.set_audit, name="set_audit"),
+    path("scan/<int:pk>/audit-bulk/", views.set_audit_bulk, name="set_audit_bulk"),
     path("scan/<int:pk>/note/", views.set_audit_note, name="set_audit_note"),
     path("scan/<int:pk>/ai/", views.ai_ask, name="ai_ask"),
     path("scan/<int:pk>/export.csv", views.export_csv, name="export_csv"),
