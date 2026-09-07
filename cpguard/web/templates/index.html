@@ -196,10 +196,14 @@
   <div class="card">
     <h2>스캔 이력</h2>
     {% if scans %}
+    <form method="post" action="{% url 'delete_many' %}" id="bulkform">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}">
     <table>
-      <tr><th>이름</th><th>일시</th><th>파일</th><th>탐지</th><th>위험도 분포</th><th></th></tr>
+      <tr><th style="width:24px"><input type="checkbox" id="checkall" title="전체 선택"></th>
+          <th>이름</th><th>일시</th><th>파일</th><th>탐지</th><th>위험도 분포</th><th></th></tr>
       {% for s in scans %}
       <tr>
+        <td><input type="checkbox" class="pick" name="pk" value="{{ s.pk }}"></td>
         <td><a href="{% url 'detail' s.pk %}">{{ s.name }}</a></td>
         <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
         <td class="muted">{{ s.file_count }}</td>
@@ -211,6 +215,32 @@
       </tr>
       {% endfor %}
     </table>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <button class="btn ghost" type="submit" id="bulkdel" disabled>선택 삭제</button>
+      <span class="muted" id="pickcount">선택 0건</span>
+    </div>
+    </form>
+    <script>
+    (function () {
+      var form = document.getElementById('bulkform');
+      if (!form) return;
+      var all = document.getElementById('checkall');
+      var picks = [].slice.call(form.querySelectorAll('.pick'));
+      var btn = document.getElementById('bulkdel'), cnt = document.getElementById('pickcount');
+      function sync() {
+        var n = picks.filter(function (p) { return p.checked; }).length;
+        btn.disabled = !n;
+        cnt.textContent = '선택 ' + n + '건';
+      }
+      picks.forEach(function (p) { p.onchange = sync; });
+      if (all) all.onchange = function () { picks.forEach(function (p) { p.checked = all.checked; }); sync(); };
+      form.onsubmit = function () {
+        var n = picks.filter(function (p) { return p.checked; }).length;
+        return confirm('선택한 ' + n + '건을 삭제할까요? 되돌릴 수 없습니다.');
+      };
+      sync();
+    })();
+    </script>
     {% else %}
       <p class="empty-hint">아직 스캔 기록이 없습니다.</p>
     {% endif %}

@@ -25,6 +25,7 @@
 <div class="b-head">
   <h1 id="btitle">배치 진단 진행 중</h1>
   <span class="b-meta" id="bcount">0 / {{ total }}</span>
+  <button class="btn ghost" id="bstop" style="margin-left:auto">중단</button>
 </div>
 <div class="pbar"><div class="pfill" id="pfill"></div></div>
 <div class="b-meta" id="bmeta">대기 중…</div>
@@ -49,7 +50,7 @@
   var bmeta = document.getElementById('bmeta');
   var btitle = document.getElementById('btitle');
   var bdone = document.getElementById('bdone');
-  var STLABEL = { queued: '대기', running: '진행 중', done: '완료', error: '실패' };
+  var STLABEL = { queued: '대기', running: '진행 중', done: '완료', error: '실패', cancelled: '중단됨' };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -79,6 +80,14 @@
     }
     return false;
   }
+
+  var stop = document.getElementById('bstop');
+  if (stop) stop.onclick = function () {
+    if (!confirm('배치 진단을 중단할까요? 진행 중인 항목은 멈추고 대기 항목은 시작하지 않습니다.')) return;
+    stop.disabled = true; stop.textContent = '중단 중…';
+    var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+  };
 
   function poll() {
     fetch(url).then(function (r) { return r.json(); }).then(function (d) {

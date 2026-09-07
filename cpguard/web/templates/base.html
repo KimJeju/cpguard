@@ -170,6 +170,16 @@
   .mi kbd{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:var(--muted);border:1px solid var(--line);border-radius:0;padding:0 4px}
   .mi-sep{height:1px;background:var(--line);margin:5px 6px}
 </style>
+<style>
+#runbar { position:sticky; top:0; z-index:40; }
+#runbar a { display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none;
+  background:var(--accent-soft, #1e3a5f); color:var(--ink, #e6edf3); font-size:12.5px;
+  border-bottom:1px solid var(--line, #30363d); }
+#runbar a:hover { filter:brightness(1.15); }
+#runbar .dot { width:7px; height:7px; border-radius:50%; background:#4a9eff;
+  animation:runpulse 1.2s ease-in-out infinite; }
+@keyframes runpulse { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+</style>
 {% block head %}{% endblock %}
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
@@ -206,8 +216,31 @@
     <button class="winbtn winclose" id="win-close" title="닫기" aria-label="닫기">&#10005;</button>
   </div>
 </header>
+<div id="runbar" hidden></div>
 {% block content_raw %}<main>{% block content %}{% endblock %}</main>{% endblock %}
 <script>
+// 진행 중인 진단으로 돌아가는 띠. 진단을 걸어두고 다른 화면을 보다가 길을 잃는 일이
+// 잦아서, 어느 화면에 있든 한 번에 되돌아갈 수 있게 한다.
+(function () {
+  var bar = document.getElementById('runbar');
+  if (!bar) return;
+  var here = location.pathname;
+  function draw(list) {
+    var items = (list || []).filter(function (r) { return r.url !== here; });
+    if (!items.length) { bar.hidden = true; bar.innerHTML = ''; return; }
+    bar.innerHTML = items.map(function (r) {
+      return '<a href="' + r.url + '"><span class="dot"></span>진단 진행 중 · ' +
+             (r.name || '').replace(/[<>&]/g, '') + ' <b>보기 →</b></a>';
+    }).join('');
+    bar.hidden = false;
+  }
+  function tick() {
+    fetch('/scan/running').then(function (r) { return r.json(); })
+      .then(function (d) { draw(d.running); }).catch(function () {});
+  }
+  tick();
+  setInterval(tick, 5000);
+})();
   // 테마 선택 — 루트의 data-theme 로 팔레트 전환, 브라우저에 기억.
   (function () {
     var KEY = 'cpguard.theme';

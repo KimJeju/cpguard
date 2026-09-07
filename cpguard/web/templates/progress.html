@@ -73,11 +73,24 @@
   <div class="footer">
     <span class="meta" id="meta"></span>
     <a class="btn ghost" href="/">목록</a>
+    <button class="btn ghost" id="stop">중단</button>
     <button class="btn" id="goto" disabled>프로젝트로 이동 →</button>
   </div>
 </div>
 
 <script>
+// 중단 — 스캐너가 파일마다 부르는 진행 콜백에서 멈추므로, 누른 즉시는 아니고
+// 진행 중인 단계가 다음 파일로 넘어갈 때 끝난다.
+(function () {
+  var b = document.getElementById('stop');
+  if (!b) return;
+  b.onclick = function () {
+    if (!confirm('이 진단을 중단할까요? 지금까지의 결과는 저장되지 않습니다.')) return;
+    b.disabled = true; b.textContent = '중단 중…';
+    var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+    fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+  };
+})();
 (function () {
   var JOB = "{{ job_id|escapejs }}";
   var LABEL = { extract: '압축 해제', parse: '소스 파싱', dataflow: '데이터 흐름 분석',

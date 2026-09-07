@@ -125,6 +125,10 @@ def _worker_loop() -> None:
     while True:
         args = _QUEUE.get()
         try:
+            if _cancelled(args[0]):      # 대기하는 동안 배치가 중단됐다
+                _job_set(args[0], status="cancelled", ended=time.time())
+                shutil.rmtree(args[1], ignore_errors=True)
+                continue
             _run_scan_job(*args)
         except Exception:  # 워커는 죽지 않는다 — 개별 잡 오류는 _run_scan_job 이 기록
             pass
@@ -178,6 +182,19 @@ def _job_prune() -> None:
             _JOBS.pop(jid, None)
 
 
+class ScanCancelled(Exception):
+    """사용자가 진단을 중단했다."""
+
+
+def _cancelled(job_id: str) -> bool:
+    """이 잡(또는 그 잡이 속한 배치)이 중단됐는지."""
+    j = _job_get(job_id)
+    if j.get("cancel"):
+        return True
+    bid = j.get("batch_id")
+    return bool(bid and _batch_get(bid).get("cancel"))
+
+
 def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                   do_triage: bool, provider: str, secrets_only: bool = False,
                   model: str = "", standards: str = "") -> None:
@@ -210,6 +227,9 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         _pstate = {"last": None}
 
         def prog(phase, done, total, nf):
+            # 스캐너가 파일마다 부르는 자리 — 중단 신호를 확인하기 좋은 유일한 지점이다.
+            if _cancelled(job_id):
+                raise ScanCancelled
             if phase == "done":   # 스캐너 종료 신호 — 체크리스트는 save 단계로 이어간다
                 return
             _job_set(job_id, status="running", phase=phase, done=done, total=total, findings=nf)
@@ -283,6 +303,9 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
 
         _job_log(job_id, f"저장 완료 · 스캔 #{scan.pk} · 진단 종료")
         _job_set(job_id, status="done", pk=scan.pk, findings=len(findings), ended=time.time())
+    except ScanCancelled:
+        _job_log(job_id, "사용자 요청으로 중단")
+        _job_set(job_id, status="cancelled", ended=time.time())
     except Exception as e:  # 스캔 중 예외 — 진행 페이지에 그대로 보여준다
         _job_log(job_id, f"오류: {type(e).__name__}: {e}")
         _job_set(job_id, status="error", error=f"{type(e).__name__}: {e}", ended=time.time())
@@ -1067,7 +1090,7 @@ def upload(request):
     job_ids = []
     for job_id, args in jobs:
         _job_set(job_id, status="queued", phase="대기", done=0, total=0, findings=0,
-                 name=args[2], batch=batch_id)
+                 name=args[2], batch_id=batch_id)
         job_ids.append(job_id)
     _batch_set(batch_id, job_ids=job_ids, total=len(job_ids),
                started=time.time(), skipped=skipped)
@@ -1099,6 +1122,7 @@ def scan_status(request, job_id: str):
     started = job.get("started")
     return JsonResponse({
         "status": job.get("status", "running"),
+        "cancel": bool(job.get("cancel")),
         "phase": job.get("phase", ""),
         "steps": job.get("steps", []),
         "done": job.get("done", 0),
@@ -1131,7 +1155,7 @@ def batch_status(request, batch_id: str):
         st = j.get("status", "queued")
         if st == "done":
             done += 1
-        elif st == "error":
+        elif st in ("error", "cancelled"):
             errored += 1
         jobs.append({
             "name": j.get("name", ""), "status": st, "phase": j.get("phase", ""),
@@ -1145,6 +1169,58 @@ def batch_status(request, batch_id: str):
         "started": b.get("started"),
         "elapsed": int(time.time() - b["started"]) if b.get("started") else 0,
     })
+
+
+@require_POST
+def cancel_scan(request, job_id: str):
+    """진행 중인 스캔 중단 — 다음 진행 콜백에서 멈춘다."""
+    if not _job_get(job_id):
+        return JsonResponse({"ok": False, "error": "없는 작업"}, status=404)
+    _job_set(job_id, cancel=True)
+    _job_log(job_id, "중단 요청 접수 — 진행 중인 단계가 끝나는 대로 멈춥니다")
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def cancel_batch(request, batch_id: str):
+    """배치 전체 중단 — 진행 중인 항목은 멈추고 대기 항목은 시작하지 않는다."""
+    b = _batch_get(batch_id)
+    if not b:
+        return JsonResponse({"ok": False, "error": "없는 배치"}, status=404)
+    _batch_set(batch_id, cancel=True)
+    for jid in b.get("job_ids", []):
+        _job_set(jid, cancel=True)
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+def delete_many(request):
+    """선택한 스캔 일괄 삭제 — 배치를 잘못 돌리면 수백 건이 쌓인다."""
+    pks = [int(x) for x in request.POST.getlist("pk") if x.isdigit()]
+    n = Scan.objects.filter(pk__in=pks).delete()[0] if pks else 0
+    return redirect(request.POST.get("next") or "index")
+
+
+def running_scans(request):
+    """지금 돌고 있는 진단 — 어느 화면에서든 되돌아갈 수 있게 배너가 이걸 읽는다."""
+    from django.urls import reverse
+    with _JOBS_LOCK:
+        jobs = {j: dict(v) for j, v in _JOBS.items()}
+        batches = {b: dict(v) for b, v in _BATCHES.items()}
+    out = []
+    for bid, b in batches.items():
+        if b.get("cancel"):
+            continue
+        ids = b.get("job_ids", [])
+        fin = sum(1 for j in ids if jobs.get(j, {}).get("status") in ("done", "error", "cancelled"))
+        if ids and fin < len(ids):
+            out.append({"kind": "batch", "name": f"배치 진단 {fin}/{len(ids)}",
+                        "url": reverse("batch_progress", args=[bid])})
+    for jid, j in jobs.items():
+        if j.get("status") in ("running", "queued") and not j.get("cancel") and not j.get("batch_id"):
+            out.append({"kind": "scan", "name": j.get("name", "진단"),
+                        "url": reverse("scan_progress", args=[jid])})
+    return JsonResponse({"running": out})
 
 
 def detail(request, pk: int):

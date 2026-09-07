@@ -661,3 +661,57 @@ def test_a_single_inner_zip_is_not_a_batch(tmp_path):
     z = tmp_path / "one.zip"
     z.write_bytes(_nested_zip({"only.zip": {"a.js": "const x = 1;\n"}}).getvalue())
     assert _split_batch_zip(z) is None
+
+
+def test_bulk_delete_removes_only_the_checked_scans():
+    """배치를 잘못 돌리면 수백 건이 쌓인다 — 골라서 지울 수 있어야 한다."""
+    from cpguard.web.models import Scan
+
+    c = Client()
+    keep, drop1, drop2 = _seed_scan(c), _seed_scan(c), _seed_scan(c)
+    before = Scan.objects.count()          # 다른 테스트가 남긴 스캔이 있을 수 있다
+
+    r = c.post("/scan/delete-many/", {"pk": [drop1, drop2]}, follow=True)
+    assert r.status_code == 200
+    assert Scan.objects.count() == before - 2
+    assert Scan.objects.filter(pk=keep).exists()
+    assert not Scan.objects.filter(pk__in=[drop1, drop2]).exists()
+
+
+def test_cancelling_a_scan_marks_it_cancelled():
+    """중단은 진행 콜백에서 걸린다 — 요청은 플래그만 세우고 즉시 응답한다."""
+    from cpguard.web import views
+
+    job_id = "testjob"
+    views._job_set(job_id, status="running", name="x.zip")
+    try:
+        r = Client().post(f"/scan/progress/{job_id}/cancel")
+        assert r.status_code == 200 and r.json()["ok"]
+        assert views._cancelled(job_id)
+    finally:
+        views._JOBS.pop(job_id, None)
+
+
+def test_a_batch_cancel_reaches_its_queued_jobs():
+    from cpguard.web import views
+
+    views._job_set("j1", status="queued", batch_id="b1")
+    views._batch_set("b1", job_ids=["j1"], total=1)
+    try:
+        assert Client().post("/scan/batch/b1/cancel").status_code == 200
+        assert views._cancelled("j1")          # 대기 중이던 항목도 시작하지 않는다
+    finally:
+        views._JOBS.pop("j1", None)
+        views._BATCHES.pop("b1", None)
+
+
+def test_running_scans_feed_the_return_banner():
+    """다른 화면에 있어도 진행 중인 진단으로 돌아갈 수 있어야 한다."""
+    from cpguard.web import views
+
+    views._job_set("j2", status="running", name="live.zip")
+    try:
+        running = Client().get("/scan/running").json()["running"]
+        assert any(r["name"] == "live.zip" and "/scan/progress/j2/" in r["url"] for r in running)
+    finally:
+        views._JOBS.pop("j2", None)
