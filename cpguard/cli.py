@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sca:
         from . import sca
-        dep_findings, sca_note = sca.scan(root)
+        dep_findings, sca_note, _comps = sca.scan(root)
         findings += dep_findings
         print(sca_note)
 

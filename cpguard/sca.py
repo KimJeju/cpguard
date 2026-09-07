@@ -349,21 +349,29 @@ def to_findings(components: list[Component], vulns: dict[int, list[dict]]) -> li
     return out
 
 
-def scan(root: str | Path, timeout: float = 30.0) -> tuple[list[Finding], str]:
-    """(탐지, 요약 한 줄). 컴포넌트가 없거나 조회가 막히면 탐지는 비고 사유만 남는다."""
+def scan(root: str | Path, timeout: float = 30.0) -> tuple[list[Finding], str, list[Component]]:
+    """(탐지, 요약 한 줄, 컴포넌트 목록).
+
+    컴포넌트 목록은 취약점이 없어도 돌려준다 — 그 자체가 산출물(SBOM)이다.
+    """
     comps = collect(root)
     if not comps:
-        return [], "SCA: 잠금파일을 찾지 못해 오픈소스 컴포넌트 점검을 수행하지 않았다."
+        return [], "SCA: 잠금파일을 찾지 못해 오픈소스 컴포넌트 점검을 수행하지 않았다.", []
     vulns = query_osv(comps, timeout)
     if not vulns:
         # 취약점이 없어서 비었는지, 조회가 막혀서 비었는지 구분이 안 된다. 산출물에는
         # 확정할 수 있는 것만 쓴다 — 진단원이 오프라인이면 다시 돌린다.
         return [], (f"SCA: 컴포넌트 {len(comps)}건을 조회했다. 알려진 취약점 없음 "
-                    f"(외부 조회가 차단된 환경이면 결과가 비어 보일 수 있다).")
+                    f"(외부 조회가 차단된 환경이면 결과가 비어 보일 수 있다)."), comps
     findings = to_findings(comps, vulns)
-    return findings, f"SCA: 컴포넌트 {len(comps)}건 중 {len(findings)}건의 알려진 취약점을 확인했다."
+    return (findings,
+            f"SCA: 컴포넌트 {len(comps)}건 중 {len(findings)}건의 알려진 취약점을 확인했다.",
+            comps)
 
 
-def license_rows(components: list[Component]) -> list[tuple[str, str, str, str]]:
-    """(생태계, 이름, 버전, 라이선스). 잠금파일이 라이선스를 들고 있는 것만 값이 찬다."""
-    return sorted((c.ecosystem, c.name, c.version, c.license or "-") for c in components)
+def sbom_rows(components: list[Component]) -> list[list[str]]:
+    """[생태계, 이름, 버전, 라이선스]. 라이선스는 잠금파일이 들고 있는 것만 값이 찬다.
+
+    보고서에 그대로 실리는 형태(JSON 직렬화 가능)로 낸다.
+    """
+    return sorted([c.ecosystem, c.name, c.version, c.license or "-"] for c in components)

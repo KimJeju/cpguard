@@ -153,6 +153,13 @@ PDF_UI: dict[str, str] = {
     "4. 상세 진단 결과": "4. Detailed Findings",
     "5. 종합 의견": "5. Overall Assessment",
     "부록 A. 위험도 판정 기준": "Appendix A. Severity Rating Criteria",
+    "부록 E. 오픈소스 컴포넌트 목록": "Appendix E. Open-Source Component Inventory (SBOM)",
+    "생태계": "Ecosystem", "컴포넌트": "Component", "버전": "Version",
+    "라이선스": "License", "취약점": "Vulns",
+    "잠금파일에서 식별한 오픈소스 컴포넌트다. 라이선스는 잠금파일이 값을 들고 있는 "
+    "생태계(npm·composer)만 표시되며, 나머지는 '-' 로 둔다.":
+        "Open-source components identified from lock files. Licenses are shown only for "
+        "ecosystems whose lock files carry them (npm, composer); others are left as '-'.",
     "프로젝트": "Project", "대상 파일 수": "Source files", "탐지 이슈 수": "Total findings",
     "분석 언어": "Languages", "진단 도구": "Tool", "진단 기준": "Standards", "진단 일시": "Date",
     "대상": "Target", "항목": "Item", "값": "Value",

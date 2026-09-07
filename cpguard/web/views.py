@@ -268,12 +268,13 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                                           exclude_globs=ex_globs)
         integrity_note = "" if scan_report.complete else scan_report.summary()
 
-        sca_note = ""
+        sca_note, sbom = "", []
         if do_sca:
             _job_set(job_id, status="running", phase="sca", done=0, total=0)
             from .. import sca as _sca
-            dep_findings, sca_note = _sca.scan(src_dir)
+            dep_findings, sca_note, _comps = _sca.scan(src_dir)
             findings += dep_findings
+            sbom = _sca.sbom_rows(_comps)
             _job_log(job_id, sca_note)
         _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
@@ -325,6 +326,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 "tuned_specs": tuned,
                 "sca": bool(do_sca),
                 "sca_note": sca_note,
+                # 컴포넌트 목록은 취약점이 없어도 산출물이다 — 보고서 부록 E 로 실린다
+                "sbom": sbom,
             }, ensure_ascii=False),
             audit_json=json.dumps(carried_audit, ensure_ascii=False),
             audit_notes_json=json.dumps(carried_notes, ensure_ascii=False),

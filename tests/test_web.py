@@ -798,6 +798,7 @@ def test_the_report_records_what_was_excluded_and_what_was_checked(tmp_path):
             {"id": "js.command-injection", "message": "m", "severity": "critical", "cwe": "CWE-78"},
             {"id": "php.sqli", "message": "m", "severity": "critical", "cwe": "CWE-89"},
         ],
+        "sbom": [["npm", "lodash", "4.17.15", "MIT"], ["PyPI", "django", "4.2.1", "-"]],
     }, ensure_ascii=False)
     scan.save(update_fields=["scan_config_json"])
 
@@ -808,6 +809,9 @@ def test_the_report_records_what_was_excluded_and_what_was_checked(tmp_path):
     assert "제외 정보" in txt and "tests/*" in txt and "js.xss" in txt
     assert "진단 범위 밖" in txt                      # 제외 사유가 남는다
     assert "분석 기준" in txt and "php.sqli" in txt   # 검출 0건인 규칙도 실린다
+    # 부록 E — 컴포넌트 목록은 취약점이 0건이어도 실린다(점검했다는 근거가 목록이다)
+    assert "오픈소스 컴포넌트 목록" in txt
+    assert "lodash" in txt and "django" in txt and "전체 2건" in txt
 
 
 def test_project_exclusions_are_saved_and_applied_to_the_next_scan(request):

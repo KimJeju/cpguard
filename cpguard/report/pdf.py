@@ -878,8 +878,37 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",  # no
         _scope_table(story, st, scan, T)
     _appendix_scope(story, st, scan, T, SEV,
                     show_excl=_on("include_exclusions"), show_rules=_on("include_rule_list"))
+    _appendix_sbom(story, st, scan, T)
 
     _build_report(story, path, f"{project} " + T("진단 결과 보고서"))
+
+
+#: 부록의 SBOM 표에 실을 최대 행 수. 모노레포는 컴포넌트가 수천 개라 표가 보고서를
+#: 삼킨다. 취약점이 있는 것부터 싣고, 잘린 만큼은 총계로 밝힌다.
+SBOM_MAX_ROWS = 500
+
+
+def sbom_table(scan):
+    """(행 목록, 전체 건수, 취약 컴포넌트 수). 행 = [생태계, 이름, 버전, 라이선스, 취약점].
+
+    취약점이 있는 컴포넌트를 위로 올린다 — 발주처가 먼저 보는 것이 그쪽이다.
+    """
+    cfg = getattr(scan, "scan_config", {}) or {}
+    rows = cfg.get("sbom") or []
+    if not rows:
+        return [], 0, 0
+    hits: dict[str, int] = {}
+    for f in getattr(scan, "findings", []) or []:
+        if f.get("category") != "dependency":
+            continue
+        mv = (f.get("matched_value") or "").split(" · ")[0]
+        if mv:
+            hits[mv] = hits.get(mv, 0) + 1
+    out = []
+    for eco, name, ver, lic in rows:
+        out.append([eco, name, ver, lic, hits.get(f"{name}@{ver}", 0)])
+    out.sort(key=lambda r: (-r[4], r[0], r[1]))
+    return out[:SBOM_MAX_ROWS], len(out), sum(1 for r in out if r[4])
 
 
 def _scope_table(story, st, scan, T) -> None:
@@ -900,6 +929,41 @@ def _scope_table(story, st, scan, T) -> None:
                       aligns={1: "RIGHT", 2: "RIGHT", 3: "RIGHT", 4: "RIGHT"}, st=st))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(T("밀도 = 1,000 라인당 검출 건수."), st["small"] if "small" in st else st["body"]))
+
+
+def _sbom_note(total: int, shown: int, vulnerable: int, T) -> str:
+    """SBOM 표 아래 한 줄. 표가 잘렸을 수 있으므로 전체 건수를 반드시 밝힌다."""
+    if T("취약점") == "Vulns":       # 영문 보고서
+        return (f"Showing {shown:,} of {total:,} components · "
+                f"{vulnerable:,} with known vulnerabilities.")
+    return (f"전체 {total:,}건 중 {shown:,}건 표시 · "
+            f"알려진 취약점이 있는 컴포넌트 {vulnerable:,}건.")
+
+
+def _appendix_sbom(story, st, scan, T) -> None:
+    """부록 E. 오픈소스 컴포넌트 목록(SBOM).
+
+    "어떤 오픈소스를 쓰고 있는가" 는 취약점과 별개로 요구되는 산출물이다. 취약점이
+    0건이어도 목록은 실린다 — 점검했다는 근거가 목록 자체이기 때문이다.
+    """
+    rows_src, total, vulnerable = sbom_table(scan)
+    if not rows_src:
+        return
+    story.append(PageBreak())
+    story.append(Paragraph(T("부록 E. 오픈소스 컴포넌트 목록"), st["h1"]))
+    story.append(Paragraph(T(
+        "잠금파일에서 식별한 오픈소스 컴포넌트다. 라이선스는 잠금파일이 값을 들고 있는 "
+        "생태계(npm·composer)만 표시되며, 나머지는 '-' 로 둔다."), st["body"]))
+    story.append(Spacer(1, 2 * mm))
+    story.append(_tbl(
+        [[T("생태계"), T("컴포넌트"), T("버전"), T("라이선스"), T("취약점")]]
+        + [[r[0], r[1], r[2], r[3], str(r[4]) if r[4] else "-"] for r in rows_src],
+        [24 * mm, 74 * mm, 26 * mm, 32 * mm, 18 * mm],
+        aligns={4: "CENTER"}, wrap_cols=(1, 3), sizes=8, st=st))
+    story.append(Spacer(1, 2 * mm))
+    story.append(Paragraph(
+        _sbom_note(total, len(rows_src), vulnerable, T),
+        st["small"] if "small" in st else st["body"]))
 
 
 def _appendix_scope(story, st, scan, T, SEV, show_excl: bool = True, show_rules: bool = True) -> None:
@@ -1361,4 +1425,5 @@ def consolidated_report(scans, path, lang: str = "ko", meta: dict | None = None,
             _scope_table(story, st, scans[0], T)
         _appendix_scope(story, st, scans[0], T, SEV,
                         show_excl=_on("include_exclusions"), show_rules=_on("include_rule_list"))
+        _appendix_sbom(story, st, scans[0], T)
     _build_report(story, path, title + " " + T("진단 결과 보고서"))

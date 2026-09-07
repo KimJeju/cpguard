@@ -26,7 +26,7 @@ from ..i18n import (DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, STEP_LABEL,
                     STEP_LABEL_EN, tr)
 from . import style as S
 from .pdf import (SEV_KR, SEV_ORDER, REMEDIATION, _CRITERIA, _CRITERIA_EN,
-                  _DEFAULT_REM, _PRIORITY, VULN_EXAMPLE, _rule_key)
+                  _DEFAULT_REM, _PRIORITY, VULN_EXAMPLE, _rule_key, _sbom_note, sbom_table)
 
 _FONT_KO = "맑은 고딕"
 _FONT_MONO = "D2Coding"       # 없으면 Word 가 대체 폰트를 쓴다
@@ -376,9 +376,26 @@ def combined_report(scan, path, author: str = "CPGuard", lang: str = "ko",
         rows.append([(SEV.get(s, s), S.SEV_INK[s], True), CRIT[s], T(_PRIORITY[s])])
     _table(doc, rows, [2.8, 11.8, 2.8], sizes=9)
 
+    _appendix_sbom(doc, scan, T)
+
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(out))
+
+
+def _appendix_sbom(doc, scan, T) -> None:
+    """부록 E. 오픈소스 컴포넌트 목록 — PDF 부록 E 와 같은 표를 담는다."""
+    rows_src, total, vulnerable = sbom_table(scan)
+    if not rows_src:
+        return
+    _para(doc, "", space_after=10)
+    _heading(doc, T("부록 E. 오픈소스 컴포넌트 목록"), 1)
+    _para(doc, T("잠금파일에서 식별한 오픈소스 컴포넌트다. 라이선스는 잠금파일이 값을 들고 있는 "
+                 "생태계(npm·composer)만 표시되며, 나머지는 '-' 로 둔다."), size=9.5, space_after=6)
+    rows = [[T("생태계"), T("컴포넌트"), T("버전"), T("라이선스"), T("취약점")]]
+    rows += [[r[0], r[1], r[2], r[3], str(r[4]) if r[4] else "-"] for r in rows_src]
+    _table(doc, rows, [2.0, 6.6, 2.4, 3.0, 1.4], sizes=8, aligns=[None, None, None, None, CENTER])
+    _para(doc, _sbom_note(total, len(rows_src), vulnerable, T), size=8.5, space_after=4)
 
 
 def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:

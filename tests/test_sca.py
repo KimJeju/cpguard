@@ -38,8 +38,8 @@ def test_package_lock_v3_with_license(tmp_path):
     comps = {c.name: c for c in sca.collect(tmp_path)}
     assert comps["lodash"].version == "4.17.15"
     assert comps["lodash"].ecosystem == "npm"
-    assert sca.license_rows(list(comps.values()))
     assert comps["lodash"].license == "MIT"
+    assert sca.sbom_rows(list(comps.values())) == [["npm", "lodash", "4.17.15", "MIT"]]
 
 
 def test_pom_skips_property_versions(tmp_path):
@@ -147,8 +147,8 @@ def test_same_cve_from_two_advisories_is_one_finding():
 
 
 def test_scan_without_lockfiles_says_so(tmp_path):
-    findings, note = sca.scan(tmp_path)
-    assert findings == [] and "수행하지 않았다" in note
+    findings, note, comps = sca.scan(tmp_path)
+    assert findings == [] and comps == [] and "수행하지 않았다" in note
 
 
 if __name__ == "__main__":
