@@ -237,9 +237,30 @@ def _emit(rule: PatternRule, file: str, line_no: int, col: int, end: int,
     )
 
 
-def _masked_line(line: str, value: str, masked: str) -> str:
+def _line_maskings(line: str, rules: list["PatternRule"]) -> list[tuple[str, str]]:
+    """이 줄에서 마스킹이 필요한 (원값, 마스킹값) 전부.
+
+    한 규칙이 자기 매치만 가려서는 부족하다. 같은 줄에 주민번호와 사설 IP 가 함께 있으면
+    mask 가 없는 IP 규칙이 주민번호가 든 원문 줄을 그대로 산출물에 실어 보낸다 —
+    산출물이 유출원이 되지 않게 줄을 내보내기 전에 모든 민감 매치를 가린다."""
+    out: list[tuple[str, str]] = []
+    for rule in rules:
+        if rule.mask == "none":
+            continue
+        masker = MASKERS.get(rule.mask, MASKERS["none"])
+        for m in rule.regex.finditer(line):
+            v = m.group(rule.group) if rule.group else m.group(0)
+            if rule.validator and not VALIDATORS[rule.validator](v):
+                continue
+            masked = masker(v)
+            if v and masked != v:
+                out.append((v, masked))
+    return out
+
+
+def _masked_line(line: str, maskings: list[tuple[str, str]]) -> str:
     out = line.strip()
-    if value and masked != value:
+    for value, masked in maskings:
         out = out.replace(value, masked)
     if len(out) > 200:
         out = out[:200] + "…"
@@ -253,6 +274,7 @@ def scan_text(src: str, file: str, rules: list[PatternRule]) -> list[Finding]:
     for i, raw in enumerate(lines, 1):
         line = raw if len(raw) <= MAX_LINE_CHARS else raw[:MAX_LINE_CHARS]
         is_comment = bool(_COMMENT_LINE.match(line))
+        maskings = _line_maskings(line, rules)   # 줄 단위로 한 번만 계산해 모든 finding 에 적용
         fp = bool(FP_HINT.search(line))
         seen: set[tuple[str, str]] = set()
         for rule in rules:
@@ -270,7 +292,7 @@ def scan_text(src: str, file: str, rules: list[PatternRule]) -> list[Finding]:
                     continue
                 masked = MASKERS.get(rule.mask, MASKERS["none"])(value)
                 findings.append(_emit(rule, file, i, m.start(), m.end(),
-                                      _masked_line(line, value, masked), masked, fp))
+                                      _masked_line(line, maskings), masked, fp))
                 if rule.mask == "none":
                     break  # 같은 규칙은 줄당 1건이면 충분 (값을 안 남기는 규칙)
     return findings

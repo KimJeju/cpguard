@@ -1243,6 +1243,9 @@ def set_audit(request, pk: int):
         idx = int(request.POST.get("index", ""))
     except ValueError:
         return JsonResponse({"ok": False, "error": "잘못된 index"}, status=400)
+    if not 0 <= idx < scan.finding_count:
+        # 범위 밖 index 를 받아주면 조치대상 집계가 실재하지 않는 항목만큼 어긋난다.
+        return JsonResponse({"ok": False, "error": "범위 밖 index"}, status=400)
     status = request.POST.get("status", "")
     if status not in AUDIT_STATES:
         return JsonResponse({"ok": False, "error": "알 수 없는 상태"}, status=400)
@@ -1332,10 +1335,12 @@ def export_csv(request, pk: int):
     else:
         w.writerow(["번호", "위험도", "규칙", "CWE", "OWASP", "파일", "라인",
                     "설명", "LLM판정", "감사상태", "흐름단계수"])
+    from ..report.excel import csv_safe   # 파일명·코드가 엑셀 수식으로 실행되지 않게
     for f in scan.findings:
-        w.writerow([f["id"], f["severity"], f["rule_id"], f["cwe"], f.get("owasp", ""),
-                    f["file"], f["line"], tr(f["message"], lang), f.get("verdict") or "",
-                    audit.get(str(f["id"]), ""), len(f["steps"])])
+        w.writerow([csv_safe(v) for v in
+                    [f["id"], f["severity"], f["rule_id"], f["cwe"], f.get("owasp", ""),
+                     f["file"], f["line"], tr(f["message"], lang), f.get("verdict") or "",
+                     audit.get(str(f["id"]), ""), len(f["steps"])]])
     return resp
 
 

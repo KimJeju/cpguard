@@ -49,15 +49,32 @@ def safe_extract_zip(zip_path: str | Path, dest: str | Path) -> int:
             if not str(target).startswith(str(dest)):
                 raise UnsafeArchive(f"대상 디렉터리 밖 경로(zip-slip): {i.filename!r}")
 
-        import shutil
+        # 위의 크기·압축률 검사는 아카이브가 스스로 신고한 값을 본다. 헤더는 거짓말할 수
+        # 있으므로 실제로 쓰는 바이트를 세어 같은 상한을 다시 건다 — 이게 없으면 1KB 라고
+        # 적힌 항목이 100GB 로 부풀어도 그대로 디스크에 쏟아진다.
+        budget = MAX_TOTAL_BYTES
         for i in infos:
             name = i.filename.replace("\\", "/")
             target = dest / name
             os.makedirs(_longpath(target.parent), exist_ok=True)
             with z.open(i) as src, open(_longpath(target), "wb") as out:
-                shutil.copyfileobj(src, out)
+                budget -= _copy_bounded(src, out, budget, i.filename)
 
     return len(infos)
+
+
+def _copy_bounded(src, out, budget: int, name: str) -> int:
+    """남은 예산 안에서만 복사한다. 헤더가 신고한 크기는 믿지 않는다."""
+    written = 0
+    while True:
+        chunk = src.read(1 << 20)
+        if not chunk:
+            return written
+        written += len(chunk)
+        if written > budget:
+            raise UnsafeArchive(
+                f"해제 용량 초과(헤더 신고값과 다름, zip bomb 의심): {name!r}")
+        out.write(chunk)
 
 
 LONG_PREFIX = "\\\\?\\"

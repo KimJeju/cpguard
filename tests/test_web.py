@@ -591,3 +591,15 @@ def test_audit_moves_the_open_count_not_the_detection_total():
     assert scan.audit_summary["confirmed"] == 1
     assert scan.audit_summary["unaudited"] == total - 2
     assert sum(scan.open_severity_counts.values()) == total - 1
+
+
+def test_audit_rejects_an_index_that_is_not_a_finding():
+    """범위 밖 index 를 받아주면 조치대상 집계가 실재하지 않는 항목만큼 어긋난다."""
+    from cpguard.web.models import Scan
+
+    c = Client()
+    pk = _seed_scan(c)
+    scan = Scan.objects.get(pk=pk)
+    r = c.post(f"/scan/{pk}/audit/", {"index": 999999, "status": "fixed"})
+    assert r.status_code == 400
+    assert Scan.objects.get(pk=pk).open_count == scan.finding_count

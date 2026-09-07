@@ -132,6 +132,17 @@ def _rel(path: str, base: Path | None) -> str:
         return Path(path).name
 
 
+def csv_safe(v):
+    """엑셀 수식으로 해석될 셀을 무력화한다.
+
+    파일명·소스 코드는 진단 대상에서 온 값이다. `=cmd|'/c calc'!A1` 같은 이름이 그대로
+    셀에 들어가면 산출물을 여는 발주처·진단원 엑셀에서 실행된다. 보안 보고서라는
+    신뢰를 타고 들어가므로 더 위험하다."""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@"):
+        return "'" + v
+    return v
+
+
 def to_rows(findings: list[Finding], base: str | Path | None = None,
             audit: dict[str, str] | None = None, lang: str = "ko") -> list[list]:
     from ..i18n import tr
@@ -165,7 +176,7 @@ def to_rows(findings: list[Finding], base: str | Path | None = None,
             _remediation(f.rule_id, lang),
             _source_text(f),
         ])
-    return rows
+    return [[csv_safe(v) for v in r] for r in rows]
 
 
 def write_workbook(findings: list[Finding], out_path: str | Path,

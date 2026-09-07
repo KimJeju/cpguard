@@ -140,10 +140,19 @@ class Scan(models.Model):
 
     @property
     def open_severity_counts(self) -> dict[str, int]:
-        """조치대상만 센 위험도 분포."""
-        a = self.audit
-        return dict(Counter(f["severity"] for f in self.findings
-                            if a.get(str(f["id"])) not in CLOSED_AUDIT))
+        """조치대상만 센 위험도 분포.
+
+        인덱스 테이블(FindingRow)로 센다. 목록 화면은 행마다 이걸 부르는데, findings_json
+        블롭을 파싱하면 5천 건짜리 스캔 하나가 목록 전체를 느리게 만든다. 인덱스가 없는
+        옛 스캔만 블롭으로 되돌아간다."""
+        closed = [int(k) for k, v in self.audit.items() if v in CLOSED_AUDIT]
+        if self.finding_count and not self.rows.exists():
+            a = self.audit                                    # 인덱스 이전에 만든 스캔
+            return dict(Counter(f["severity"] for f in self.findings
+                                if a.get(str(f["id"])) not in CLOSED_AUDIT))
+        qs = self.rows.exclude(idx__in=closed) if closed else self.rows
+        return {r["severity"]: r["n"] for r in
+                qs.values("severity").annotate(n=models.Count("id"))}
 
     @property
     def audit_summary(self) -> dict[str, int]:

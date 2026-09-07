@@ -263,8 +263,15 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
         # (a) 직접 sink 호출
         sink = _sink_for(cp, ctx.rule)
         if sink is not None:
-            targets = ([call.args[sink.arg]] if sink.arg is not None and sink.arg < len(call.args)
-                       else call.args)
+            # arg 미지정 = 모든 인자가 대상. arg 를 지정했는데 그 자리가 없는 호출은
+            # 규칙이 말하는 sink 가 아니다 — 예전엔 이 경우도 전부 검사로 떨어져서
+            # 규칙이 명시적으로 제외한 인자를 잡아 오탐을 냈다.
+            if sink.arg is None:
+                targets = call.args
+            elif sink.arg < len(call.args):
+                targets = [call.args[sink.arg]]
+            else:
+                targets = []
             for arg in targets:
                 tr = _taint(arg, env, ctx)
                 if tr:
