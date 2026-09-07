@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import queue
 import shutil
 import tempfile
@@ -136,17 +137,27 @@ def _enqueue_scan(args: tuple) -> None:
     _QUEUE.put(args)
 
 
+# 압축 프로그램이 끼워 넣는 부산물 — 배치 판정에서 무시한다.
+_ARCHIVE_JUNK = re.compile(r"(^__MACOSX/|(^|/)\.DS_Store$|(^|/)Thumbs\.db$)")
+
+
 def _split_batch_zip(zip_path: Path) -> list[tuple[str, Path]] | None:
     """'zip 안에 프로젝트 zip 여러 개'(배치 zip)면 각 내부 zip 을 개별 프로젝트로 펼친다.
 
-    내부 .zip 멤버가 하나도 없으면 None(= 단일 프로젝트로 취급). 있으면 각 내부 zip 을
-    자체 workdir/upload.zip 으로 풀어 (이름, workdir) 목록을 돌려준다.
+    판정은 "안에 zip 이 있다"가 아니라 "**zip 들만** 있다"로 한다. 전자로 하면 의존성
+    캐시를 zip 으로 들고 다니는 프로젝트(yarn PnP 의 .yarn/cache/*.zip 등)를 통째로
+    수천 개 프로젝트로 쪼개 버린다 — 실제로 5GB 프로젝트 하나가 1,762건이 됐다.
+    배치로 올리는 zip 은 프로젝트 zip 만 담으므로 이 기준으로 충분하다.
+
+    단일 프로젝트로 볼 때는 None 을 돌려준다.
     """
     try:
         with zipfile.ZipFile(zip_path) as zf:
-            inner = [n for n in zf.namelist()
-                     if n.lower().endswith(".zip") and not n.endswith("/")]
-            if not inner:
+            files = [n for n in zf.namelist()
+                     if not n.endswith("/") and not _ARCHIVE_JUNK.search(n)]
+            inner = [n for n in files if n.lower().endswith(".zip")]
+            # zip 이 아닌 파일이 섞여 있으면 그건 소스가 든 프로젝트다
+            if len(inner) < 2 or len(inner) != len(files):
                 return None
             out: list[tuple[str, Path]] = []
             for name in inner[:2000]:               # 폭주 방지 상한

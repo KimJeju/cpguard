@@ -613,3 +613,51 @@ def test_workbench_ships_the_live_count_hooks():
     assert 'id="c-open"' in html and 'id="c-sev"' in html
     assert 'data-open-counts' in html          # 위험도 초기값
     assert "applyAuditDelta" in html           # 판정 시 증감
+
+
+def _nested_zip(inner: dict[str, dict[str, str]], extra: dict[str, str] | None = None) -> io.BytesIO:
+    """zip 안에 zip 을 넣은 아카이브. extra 는 zip 이 아닌 동봉 파일."""
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as zf:
+        for name, files in inner.items():
+            zf.writestr(name, _zip_bytes(files).getvalue())
+        for name, text in (extra or {}).items():
+            zf.writestr(name, text)
+    outer.seek(0)
+    return outer
+
+
+def test_a_project_carrying_zip_dependencies_is_one_project(tmp_path):
+    """yarn PnP 처럼 의존성을 zip 으로 들고 다니는 프로젝트를 쪼개면 안 된다.
+
+    실제로 5GB 프로젝트 하나가 1,762건의 '프로젝트'로 갈라졌다.
+    """
+    from cpguard.web.views import _split_batch_zip
+
+    z = tmp_path / "proj.zip"
+    z.write_bytes(_nested_zip(
+        {".yarn/cache/@babel-parser-npm-7.29.2.zip": {"index.js": "module.exports = 1;\n"},
+         ".yarn/cache/@babel-runtime-npm-7.29.2.zip": {"index.js": "module.exports = 2;\n"}},
+        extra={"src/app.js": "app.get('/x', (req,res) => eval(req.query.c));\n"},
+    ).getvalue())
+    assert _split_batch_zip(z) is None
+
+
+def test_an_archive_of_project_zips_is_still_a_batch(tmp_path):
+    from cpguard.web.views import _split_batch_zip
+
+    z = tmp_path / "batch.zip"
+    z.write_bytes(_nested_zip({
+        "alpha.zip": {"a.js": "const x = 1;\n"},
+        "beta.zip": {"b.js": "const y = 2;\n"},
+    }, extra={"__MACOSX/._alpha.zip": "junk"}).getvalue())     # 부산물은 무시한다
+    parts = _split_batch_zip(z)
+    assert parts is not None and sorted(n for n, _ in parts) == ["alpha.zip", "beta.zip"]
+
+
+def test_a_single_inner_zip_is_not_a_batch(tmp_path):
+    from cpguard.web.views import _split_batch_zip
+
+    z = tmp_path / "one.zip"
+    z.write_bytes(_nested_zip({"only.zip": {"a.js": "const x = 1;\n"}}).getvalue())
+    assert _split_batch_zip(z) is None
