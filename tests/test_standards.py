@@ -224,3 +224,19 @@ def test_the_mobile_standard_matches_the_official_annex():
 
     for std in STANDARDS.values():
         assert not std.draft_note, f"{std.id} 는 초안이 아니다"
+
+
+def test_the_design_phase_standard_never_reports_a_pass():
+    """설계단계 기준은 설계서를 보는 항목이라 코드로는 확인되지 않는다.
+
+    양호로 찍히면 산출물이 거짓말을 한다 — 전부 '진단 대상 아님'이어야 한다.
+    """
+    from cpguard.standards import STANDARDS, NOT_COVERED, coverage, rule_cwes
+
+    std = STANDARDS["mois-design"]
+    assert len(std.items) == 20
+    assert std.cwes == frozenset(), "설계 항목에는 CWE 매핑이 없다"
+
+    # 탐지가 있든 없든 판정은 달라지지 않는다.
+    rows = coverage(std, {"CWE-89": 3}, rule_cwes())
+    assert {r["verdict"] for r in rows} == {NOT_COVERED}

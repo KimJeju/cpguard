@@ -78,10 +78,10 @@ def _mois() -> tuple[Item, ...]:
             ("csrf", "크로스사이트 요청 위조", "Cross-site request forgery", ("CWE-352",)),
             ("ssrf", "서버사이드 요청 위조", "Server-side request forgery", ("CWE-918",)),
             ("http-response-splitting", "HTTP 응답분할", "HTTP response splitting", ("CWE-113",)),
-            ("integer-overflow", "정수형 오버플로", "Integer overflow", ("CWE-190", "CWE-191")),
+            ("integer-overflow", "정수형 오버플로우", "Integer overflow", ("CWE-190", "CWE-191")),
             ("untrusted-security-decision", "보안기능 결정에 사용되는 부적절한 입력값",
              "Untrusted input in a security decision", ("CWE-807", "CWE-350")),
-            ("buffer-overflow", "메모리 버퍼 오버플로", "Memory buffer overflow",
+            ("buffer-overflow", "메모리 버퍼 오버플로우", "Memory buffer overflow",
              ("CWE-119", "CWE-120", "CWE-125", "CWE-787", "CWE-121", "CWE-122")),
             ("format-string", "포맷 스트링 삽입", "Format string injection", ("CWE-134",)),
         ]),
@@ -109,7 +109,7 @@ def _mois() -> tuple[Item, ...]:
              "Information exposure through persistent cookies", ("CWE-539", "CWE-1004")),
             ("sensitive-comment", "주석문 안에 포함된 시스템 주요정보",
              "Sensitive information in comments", ("CWE-615", "CWE-546")),
-            ("hash-without-salt", "솔트 없이 일방향 해시함수 사용", "One-way hash without a salt",
+            ("hash-without-salt", "솔트 없이 일방향 해쉬함수 사용", "One-way hash without a salt",
              ("CWE-759", "CWE-760", "CWE-916")),
             ("code-download-without-integrity", "무결성 검사 없는 코드 다운로드",
              "Download of code without integrity check", ("CWE-494", "CWE-1392")),
@@ -357,12 +357,66 @@ def _mobile() -> tuple[Item, ...]:
                  for c, n, ne, g, cw in raw)
 
 
+def _mois_design() -> tuple[Item, ...]:
+    """설계단계 보안설계 기준 20개.
+
+    출처는 「행정기관 및 공공기관 정보시스템 구축·운영 지침」 [별표 3] 소프트웨어 보안약점
+    기준(제52조 관련)의 앞 절. 구현단계 49개와 짝을 이루는 기준인데, 이쪽은 코드가 아니라
+    설계서를 보는 항목이라 CWE 매핑이 없다 — coverage() 가 전부 '진단 대상 아님'으로
+    표시하므로, 산출물에는 "정적 분석으로는 확인하지 않았다"가 항목마다 남는다.
+    지침이 요구하는 점검표를 형태 그대로 싣되 양호로 위장하지 않는 것이 목적이다.
+    """
+    G = ("입력데이터 검증 및 표현", "Input data validation and representation")
+    S = ("보안기능", "Security features")
+    E = ("에러처리", "Error handling")
+    C = ("세션통제", "Session control")
+    raw = [
+        ("dbms-query-validation", "DBMS 조회 및 결과 검증", "DBMS query and result validation", G),
+        ("xml-query-validation", "XML 조회 및 결과 검증", "XML query and result validation", G),
+        ("directory-query-validation", "디렉토리 서비스 조회 및 결과 검증",
+         "Directory service query and result validation", G),
+        ("resource-command-input-validation", "시스템 자원 접근 및 명령어 수행 입력값 검증",
+         "Input validation for system resource access and command execution", G),
+        ("web-request-validation", "웹 서비스 요청 및 결과 검증",
+         "Web service request and response validation", G),
+        ("critical-function-request-validation", "웹 기반 중요 기능 수행 요청 유효성 검증",
+         "Validation of requests performing critical web functions", G),
+        ("http-protocol-validation", "HTTP 프로토콜 유효성 검증", "HTTP protocol validation", G),
+        ("memory-access-in-range", "허용된 범위내 메모리 접근", "Memory access within allowed bounds", G),
+        ("security-function-input-validation", "보안기능 입력값 검증",
+         "Input validation for security functions", G),
+        ("file-transfer-validation", "업로드·다운로드 파일 검증",
+         "Upload and download file validation", G),
+        ("auth-target-and-method", "인증 대상 및 방식", "Authentication scope and method", S),
+        ("auth-attempt-limit", "인증 수행 제한", "Authentication attempt limiting", S),
+        ("password-management", "비밀번호 관리", "Password management", S),
+        ("critical-resource-access-control", "중요자원 접근통제", "Critical resource access control", S),
+        ("key-management", "암호키 관리", "Cryptographic key management", S),
+        ("crypto-operation", "암호연산", "Cryptographic operations", S),
+        ("critical-data-storage", "중요정보 저장", "Storage of critical information", S),
+        ("critical-data-transmission", "중요정보 전송", "Transmission of critical information", S),
+        ("exception-design", "예외처리", "Exception handling design", E),
+        ("session-control", "세션통제", "Session control", C),
+    ]
+    return tuple(Item(code=c, name=n, name_en=ne, group=g[0], group_en=g[1], cwes=())
+                 for c, n, ne, g in raw)
+
+
 STANDARDS: dict[str, Standard] = {
     "mois": Standard("mois", "행정안전부 소프트웨어 개발보안 가이드",
                      "MOIS Secure Coding Guide (Korea)",
-                     "행정안전부 「소프트웨어 개발보안 가이드」 보안약점", _mois(),
+                     "「행정기관 및 공공기관 정보시스템 구축·운영 지침」 [별표 3] "
+                     "소프트웨어 보안약점 기준 — 구현단계 보안약점 제거 기준", _mois(),
                      source_en="MOIS Software Development Security Guide (Korea)",
                      show_code=False),
+    "mois-design": Standard("mois-design", "행정안전부 보안설계 기준(설계단계)",
+                            "MOIS Secure Design Criteria (Korea, design phase)",
+                            "「행정기관 및 공공기관 정보시스템 구축·운영 지침」 [별표 3] "
+                            "소프트웨어 보안약점 기준 — 설계단계 보안설계 기준",
+                            _mois_design(),
+                            source_en=("Information System Development and Operation Guideline "
+                                       "[Annex 3], design-phase secure design criteria (Korea)"),
+                            show_code=False),
     "mobile": Standard("mobile", "모바일 대응 보안약점 진단", "Mobile Secure Coding Checklist (Korea)",
                        "「모바일 전자정부 서비스 관리 지침」 [별표 3] 모바일 앱 보안약점 점검기준",
                        _mobile(),
