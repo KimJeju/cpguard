@@ -43,6 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--quiet", action="store_true", help="콘솔 상세 출력 생략")
     sc.add_argument("--triage", action="store_true",
                     help="LLM 트리아지로 오탐 재검증")
+    sc.add_argument("--sca", action="store_true",
+                    help="오픈소스 컴포넌트의 알려진 취약점 점검(잠금파일 → OSV.dev). "
+                         "패키지 이름·버전이 외부로 나가므로 기본은 꺼져 있다")
     sc.add_argument("--provider", choices=["claude", "openai", "gemini"],
                     help="트리아지에 쓸 LLM (생략 시 키가 있는 것을 자동 선택)")
     sc.add_argument("--model", help="프로바이더의 모델명 재정의")
@@ -83,6 +86,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     findings, report = scan_path(root, jobs=args.jobs)
+
+    if args.sca:
+        from . import sca
+        dep_findings, sca_note = sca.scan(root)
+        findings += dep_findings
+        print(sca_note)
 
     if args.triage and findings:
         from .triage import TriageUnavailable, triage_findings

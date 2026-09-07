@@ -166,13 +166,144 @@ REMEDIATION = {
                "MD5/SHA-1/DES/ECB 등 취약한 알고리즘 사용이 발견되었습니다.",
                "SHA-256 이상, AES-GCM 등 안전한 알고리즘으로 교체하고 비밀번호는 bcrypt/argon2 로 해시합니다.",
                "hashlib.sha256(x)  // bcrypt for passwords"),
+    "deserialization": ("안전하지 않은 역직렬화 (Insecure Deserialization)",
+             "신뢰할 수 없는 데이터가 객체 역직렬화에 사용되어 임의 코드 실행으로 이어질 수 있습니다.",
+             "역직렬화 대상 클래스를 허용목록으로 제한하거나 JSON 등 데이터 전용 포맷으로 교체하고, 서명·무결성 검증을 함께 적용합니다.",
+             "new ObjectMapper().readValue(body, Dto.class)"),
+    "ldap-injection": ("LDAP 삽입 (LDAP Injection)",
+             "사용자 입력이 LDAP 검색 필터에 결합되어 조회 조건을 변경할 수 있습니다.",
+             "필터에 넣는 값은 RFC 4515 규칙으로 이스케이프하고, 가능하면 바인딩을 지원하는 API 를 사용합니다.",
+             "(uid= + escapeLDAP(user) + )"),
+    "xpath-injection": ("XPath 삽입 (XPath Injection)",
+             "사용자 입력이 XPath 식에 결합되어 질의 구조를 바꿀 수 있습니다.",
+             "XPathVariableResolver 등 변수 바인딩을 사용하고 문자열 결합을 제거합니다.",
+             "xpath.setXPathVariableResolver(v);  /user[@id=$id]"),
+    "buffer-overflow": ("버퍼 오버플로 (Buffer Overflow)",
+             "길이 검사 없는 복사 함수가 사용되어 인접 메모리를 덮어쓸 수 있습니다.",
+             "strcpy/strcat/sprintf/gets 대신 길이를 받는 함수를 쓰고, 목적지 버퍼 크기를 명시적으로 검사합니다.",
+             "snprintf(dst, sizeof(dst), \"%s\", src)"),
+    "format-string": ("포맷 스트링 (Format String)",
+             "사용자 입력이 서식 문자열 자리에 직접 들어가 메모리 노출·변조가 가능합니다.",
+             "서식 문자열은 상수로 고정하고 사용자 입력은 인자로만 전달합니다.",
+             "printf(\"%s\", user)"),
+    "library-injection": ("라이브러리 삽입 (Library Injection)",
+             "사용자 입력이 동적 라이브러리 적재 경로에 사용되어 임의 모듈이 로드될 수 있습니다.",
+             "적재 경로를 절대경로·허용목록으로 고정하고 서명 검증 후 로드합니다.",
+             "dlopen(\"/opt/app/lib/plugin.so\", RTLD_NOW)"),
+    "intent-redirect": ("인텐트 리다이렉션 (Intent Redirection)",
+             "외부에서 받은 Intent 를 검증 없이 다시 실행해 비공개 컴포넌트가 호출될 수 있습니다.",
+             "전달받은 Intent 를 그대로 실행하지 않고 대상 컴포넌트를 허용목록으로 검사합니다.",
+             "if (target.component in ALLOWED) startActivity(target)"),
+    "webview": ("WebView 위험 설정",
+             "JavaScript 실행·파일 접근·JS 브리지가 열려 있어 원격 콘텐츠가 앱 권한으로 동작할 수 있습니다.",
+             "필요 없으면 JavaScript·파일 접근을 끄고, JS 브리지는 신뢰 가능한 로컬 콘텐츠에만 노출합니다.",
+             "settings.allowFileAccess = false"),
+    "token-storage": ("인증 토큰의 웹 스토리지 저장",
+             "토큰을 localStorage/sessionStorage 에 두면 XSS 한 건으로 곧바로 탈취됩니다.",
+             "토큰은 HttpOnly·Secure·SameSite 쿠키로 옮겨 스크립트에서 읽지 못하게 합니다.",
+             "Set-Cookie: token=...; HttpOnly; Secure; SameSite=Lax"),
+    "cookie-flags": ("쿠키 보안 속성 누락",
+             "Secure·HttpOnly·SameSite 가 빠져 평문 전송·스크립트 접근·CSRF 에 노출됩니다.",
+             "세션 쿠키에 Secure·HttpOnly·SameSite 를 모두 지정하고, 필요하면 __Host- 접두를 사용합니다.",
+             "res.cookie('sid', v, {secure:true, httpOnly:true, sameSite:'lax'})"),
+    "debug": ("디버그 코드·설정 잔존",
+             "운영 코드에 디버그 출력·디버그 모드가 남아 내부 정보와 스택트레이스가 노출됩니다.",
+             "배포 전 디버그 플래그를 끄고 디버그 출력을 제거하며, 오류 화면은 일반화된 메시지로 대체합니다.",
+             "DEBUG = False"),
+    "comment-leak": ("주석 내 정보 노출",
+             "소스 주석에 계정·내부 경로·미조치 사항이 남아 공격에 활용될 수 있습니다.",
+             "배포 산출물에서 내부 정보가 담긴 주석을 제거하고, 미조치 사항은 이슈 트래커로 옮깁니다.",
+             "// 상세 내용은 이슈 트래커 참조"),
+    "hardcoded-connection": ("접속 정보 하드코딩",
+             "DB·메일·디렉터리 서비스 접속 문자열과 계정이 소스에 그대로 있어 유출 시 즉시 악용됩니다.",
+             "접속 정보를 환경변수·비밀관리로 분리하고, 노출된 계정은 즉시 교체합니다.",
+             "url = os.environ['DB_URL']"),
+    "default-account": ("기본·시험 계정 사용",
+             "admin/test 같은 기본 계정과 추측 가능한 비밀번호가 소스에 남아 있습니다.",
+             "기본·시험 계정을 제거하고, 운영 계정은 비밀번호 정책과 최소권한 원칙에 맞게 발급합니다.",
+             "user = os.environ['APP_USER']"),
+    "dev-path": ("개발자 로컬 경로 노출",
+             "개발 PC 의 절대경로가 남아 내부 구조·사용자명이 드러나고 운영 환경에서 동작하지 않습니다.",
+             "경로를 설정값·상대경로로 바꾸고 빌드 산출물에서 절대경로를 제거합니다.",
+             "BASE = os.environ.get('APP_HOME', '/opt/app')"),
+    "dependency": ("알려진 취약점이 있는 오픈소스 컴포넌트",
+             "사용 중인 오픈소스 컴포넌트에 공개된 취약점(CVE)이 있어, 해당 취약점이 그대로 서비스에 노출됩니다.",
+             "취약점이 해결된 상위 버전으로 갱신합니다. 즉시 갱신이 어려우면 해당 기능의 노출을 차단하고 컴포넌트 목록(SBOM)을 관리해 재발을 막습니다.",
+             "// package.json / pom.xml 에서 해당 컴포넌트를 수정 버전으로 고정"),
+    "internal-info": ("내부 구성 정보 노출",
+             "사설 IP·관리자 경로 등 내부 정보가 소스에 하드코딩되어 정찰에 활용됩니다.",
+             "내부 주소·관리자 경로를 설정으로 분리하고, 관리자 화면은 접근통제(허용 IP·인증)로 보호합니다.",
+             "ADMIN_PATH = os.environ['ADMIN_PATH']"),
 }
 _DEFAULT_REM = ("보안약점", "탐지된 유형에 대한 조치가 필요합니다.",
                 "해당 CWE 의 권고사항에 따라 입력 검증·출력 인코딩·최소권한 원칙을 적용합니다.", "")
 
 
+#: 유형별 '취약한 코드 예시'. 조치 권고 옆에 고치기 전 모습을 같이 실어야 발주처 개발자가
+#: 자기 코드에서 무엇을 찾아야 하는지 안다. 코드라 번역하지 않는다(한/영 공용).
+VULN_EXAMPLE = {
+    "sqli": "db.query(\"SELECT * FROM users WHERE id = \" + userId)",
+    "command-injection": "exec(\"convert \" + req.query.file)",
+    "xss": "el.innerHTML = userInput",
+    "path-traversal": "readFile(base + req.query.name)",
+    "ssrf": "fetch(req.query.url)",
+    "code-injection": "eval(req.body.expr)",
+    "file-inclusion": "include($_GET['page'] . '.php');",
+    "open-redirect": "res.redirect(req.query.next)",
+    "secret": "apiKey = \"sk-live-8f2c9a...\"",
+    "pii": "TEST_USER = {\"rrn\": \"900101-1234567\"}",
+    "tls": "requests.get(url, verify=False)",
+    "crypto": "hashlib.md5(password).hexdigest()",
+    "deserialization": "new ObjectInputStream(req.getInputStream()).readObject()",
+    "ldap-injection": "\"(uid=\" + request.getParameter(\"user\") + \")\"",
+    "xpath-injection": "\"/user[@id='\" + id + \"']\"",
+    "buffer-overflow": "char dst[64]; strcpy(dst, argv[1]);",
+    "format-string": "printf(user);",
+    "library-injection": "dlopen(user_input, RTLD_NOW)",
+    "intent-redirect": "startActivity(intent.getParcelableExtra(\"forward\"))",
+    "webview": "settings.javaScriptEnabled = true; addJavascriptInterface(obj, \"app\")",
+    "token-storage": "localStorage.setItem('accessToken', token)",
+    "cookie-flags": "res.cookie('sid', v)",
+    "debug": "DEBUG = True",
+    "comment-leak": "// TODO: 임시 관리자 admin / admin1234",
+    "hardcoded-connection": "jdbc:oracle:thin:scott/tiger@10.0.0.5:1521:ORCL",
+    "default-account": "user = \"admin\"; password = \"admin1234\"",
+    "dev-path": "BASE = \"C:\\\\Users\\\\hong\\\\workspace\\\\app\"",
+    "internal-info": "ADMIN_URL = \"http://10.10.20.31/adminPage\"",
+    "dependency": "\"lodash\": \"4.17.15\"   // CVE-2020-8203",
+}
+
+#: 접미 매칭으로는 조치 유형이 안 잡히는 규칙. 여기 없으면 일반 문구로 떨어지므로
+#: tests/test_remediation_map.py 가 미매핑 규칙을 실패로 잡는다.
+_EXPLICIT_KEY = {
+    "sca.vulnerable-dependency": "dependency",
+    "infra.ado-connection": "hardcoded-connection",
+    "infra.jdbc-connection": "hardcoded-connection",
+    "infra.oracle-tns": "hardcoded-connection",
+    "infra.smtp-ldap-bind": "hardcoded-connection",
+    "infra.default-test-account": "default-account",
+    "infra.developer-local-path": "dev-path",
+    "infra.private-ip": "internal-info",
+    "infra.admin-path-hardcoded": "internal-info",
+    "infra.command-execution-api": "command-injection",
+    "infra.webview-dangerous-setting": "webview",
+    "hygiene.debug-code-left": "debug",
+    "hygiene.debug-enabled": "debug",
+    "hygiene.kr-leftover-comment": "comment-leak",
+    "web.document-write": "xss",
+    "web.inner-html-assign": "xss",
+    "web.react-dangerous-html": "xss",
+    "web.insecure-cookie-flags": "cookie-flags",
+    "web.token-in-web-storage": "token-storage",
+}
+
+
 def _rule_key(rule_id: str) -> str:
-    """rule_id -> 조치 맵 키. 언어 접두(js./php./py.) 제거 후 접미 매칭."""
+    """rule_id -> 조치 맵 키. 명시 매핑 우선, 없으면 언어 접두를 떼고 접미 매칭."""
+    if k := _EXPLICIT_KEY.get(rule_id):
+        return k
+    if rule_id.startswith("vendor."):
+        return "secret"                     # 벤더 키·토큰은 전부 하드코딩된 비밀정보
     tail = rule_id.split(".")[-1]
     for k in REMEDIATION:
         if k in tail or k in rule_id:
@@ -370,6 +501,9 @@ def _finding_card(idx, f, SEV, REM, DFT, T, st, en,
 
     rows.append([Paragraph(f'<b>{T("영향")}</b>  {_esc(rem[1])}', body)])
     rows.append([Paragraph(f'<b>{T("조치 방안")}</b>  {_esc(rem[2])}', body)])
+    if bad := VULN_EXAMPLE.get(rk):
+        rows.append([Paragraph(f'<b>{T("취약한 코드 예시")}</b>', body)])
+        rows.append([Paragraph(_esc(bad), st["code"])])
     if rem[3]:
         rows.append([Paragraph(f'<b>{T("안전한 코드 예시")}</b>', body)])
         rows.append([Paragraph(_esc(rem[3]), st["code"])])

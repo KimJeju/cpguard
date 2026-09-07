@@ -94,7 +94,8 @@
 (function () {
   var JOB = "{{ job_id|escapejs }}";
   var LABEL = { extract: '압축 해제', parse: '소스 파싱', dataflow: '데이터 흐름 분석',
-                triage: 'LLM 트리아지', pattern: '패턴 검사', save: '결과 집계·저장' };
+                triage: 'LLM 트리아지', pattern: '패턴 검사', sca: '오픈소스 취약점 조회',
+                save: '결과 집계·저장' };
   var DEFAULT_STEPS = ['extract', 'parse', 'dataflow', 'pattern', 'save'];
   var el = function (id) { return document.getElementById(id); };
   function fmt(s) { s = Math.max(0, Math.floor(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }

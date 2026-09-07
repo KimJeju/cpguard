@@ -148,6 +148,11 @@
         <input type="checkbox" name="triage" form="scanform" value="1">
         LLM 트리아지로 오탐 재검증
       </label>
+      <label class="muted" style="display:flex;gap:8px;align-items:center;cursor:pointer">
+        <input type="checkbox" name="sca" form="scanform" value="1">
+        오픈소스 컴포넌트 취약점(SCA)
+        <span class="muted" style="font-size:12px">(패키지명·버전이 OSV.dev 로 전송됩니다)</span>
+      </label>
       <select name="provider" form="scanform" data-custom>
         <option value="">자동 선택</option>
         <option value="claude">Claude</option>

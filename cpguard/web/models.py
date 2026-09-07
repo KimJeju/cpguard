@@ -6,6 +6,8 @@ from collections import Counter
 
 from django.db import models
 
+from cpguard.report.finding import stored_fp   # 지문 — 규칙이 개명돼도 판정을 잇는다
+
 # 조치대상에서 빠지는 감사 상태. 합본 보고서(report/consolidated.AUDIT_REASON)와 같은
 # 집합이어야 한다 — 어긋나면 화면과 제출 산출물의 건수가 달라진다(tests 가 감시한다).
 CLOSED_AUDIT = ("false_positive", "deferred", "fixed")
@@ -83,8 +85,8 @@ class Scan(models.Model):
 
     def compare_with(self, prev) -> dict:
         """지문(fp) 기준으로 신규/해결/유지 집합을 낸다. 줄 번호가 밀려도 같은 이슈로 본다."""
-        cur = {f.get("fp"): f for f in self.findings if f.get("fp")}
-        old = {f.get("fp"): f for f in (prev.findings if prev else []) if f.get("fp")}
+        cur = {k: f for f in self.findings if (k := stored_fp(f))}
+        old = {k: f for f in (prev.findings if prev else []) if (k := stored_fp(f))}
         return {
             "new": [cur[k] for k in cur.keys() - old.keys()],
             "resolved": [old[k] for k in old.keys() - cur.keys()],

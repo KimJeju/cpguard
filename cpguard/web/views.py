@@ -197,7 +197,7 @@ def _cancelled(job_id: str) -> bool:
 
 def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                   do_triage: bool, provider: str, secrets_only: bool = False,
-                  model: str = "", standards: str = "") -> None:
+                  model: str = "", standards: str = "", do_sca: bool = False) -> None:
     """백그라운드 스캔 — 압축 해제 → 진행 콜백과 함께 스캔 → Scan 레코드 생성.
 
     secrets_only 면 데이터 흐름 축을 건너뛰고 패턴(시크릿·개인정보·설정)만 돈다.
@@ -209,6 +209,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         steps = ["extract", "pattern", "save"]
     else:
         steps = ["extract", "parse", "dataflow"] + (["triage"] if do_triage else []) + ["pattern", "save"]
+    if do_sca:
+        steps.insert(-1, "sca")
     _job_set(job_id, steps=steps)
     _job_log(job_id, f"업로드 수신: {zip_name}")
     try:
@@ -255,11 +257,24 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
         rules = [r for r in _load_rules() if r.id not in ex_rules]
         if ex_globs or ex_rules:
             _job_log(job_id, f"제외 설정 적용 · 경로 {len(ex_globs)}개 · 규칙 {len(ex_rules)}개")
+        # 사용자 규칙 오버레이는 결과를 바꾸므로 산출물에 남긴다 — 재현 못 하는 진단은 안 된다
+        from ..taint.spec import user_spec_dir as _usd
+        tuned = sorted(p.stem for p in _usd().glob("*.yml")) if _usd().is_dir() else []
+        if tuned:
+            _job_log(job_id, f"사용자 규칙 오버레이 {len(tuned)}건 적용 · {_usd()}")
 
         findings, scan_report = scan_path(src_dir, rules=rules, progress=prog,
                                           secrets_only=secrets_only, jobs=jobs,
                                           exclude_globs=ex_globs)
         integrity_note = "" if scan_report.complete else scan_report.summary()
+
+        sca_note = ""
+        if do_sca:
+            _job_set(job_id, status="running", phase="sca", done=0, total=0)
+            from .. import sca as _sca
+            dep_findings, sca_note = _sca.scan(src_dir)
+            findings += dep_findings
+            _job_log(job_id, sca_note)
         _job_log(job_id, f"스캔 계산 완료 · 탐지 {len(findings)}건")
 
         triage_note = ""
@@ -307,6 +322,8 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
                 # 적용한 규칙 전체 — 검출 0건도 "점검했음"으로 보고서에 남는다
                 "applied_rules": [{"id": r.id, "message": r.message, "severity": r.severity,
                                    "cwe": r.cwe} for r in rules],
+                "tuned_specs": tuned,
+                "sca_note": sca_note,
             }, ensure_ascii=False),
             audit_json=json.dumps(carried_audit, ensure_ascii=False),
             audit_notes_json=json.dumps(carried_notes, ensure_ascii=False),
@@ -962,8 +979,9 @@ def _carry_over_audit(project: str, findings: list, base: Path) -> tuple[dict, d
         return {}, {}
     by_fp: dict[str, str] = {}
     notes_by_fp: dict[str, str] = {}
+    from cpguard.report.finding import stored_fp
     for f in prev.findings:
-        fp = f.get("fp")
+        fp = stored_fp(f)          # 그 사이 규칙이 개명됐으면 현재 이름으로 다시 계산된다
         if not fp:
             continue
         key = str(f["id"])
@@ -983,15 +1001,8 @@ def _carry_over_audit(project: str, findings: list, base: Path) -> tuple[dict, d
 
 
 def _fingerprint(f: Finding, rel_file: str) -> str:
-    """스캔 간 같은 이슈를 잇는 지문. 줄 번호는 넣지 않는다 — 위에 코드가 추가되면 밀리므로.
-
-    규칙 + 파일 + 위험 지점 코드(공백 정규화) 로 만든다. 같은 파일에 같은 sink 가 두 번
-    있으면 하나로 묶이는 한계가 있지만, 신규/해결 판정에는 이쪽이 더 안정적이다.
-    """
-    import hashlib
-    # 공백은 전부 버린다: 포맷터가 띄어쓰기를 바꿔도 같은 이슈여야 한다
-    code = "".join(f.sink.code.split())
-    return hashlib.sha1(f"{f.rule_id}|{rel_file}|{code}".encode("utf-8")).hexdigest()[:16]
+    from cpguard.report.finding import fingerprint
+    return fingerprint(f.rule_id, rel_file, f.sink.code)
 
 
 def _project_of(filename: str) -> str:
@@ -1182,6 +1193,7 @@ def upload(request):
     do_triage = bool(request.POST.get("triage"))
     provider = request.POST.get("provider", "")
     secrets_only = bool(request.POST.get("secrets_only"))
+    do_sca = bool(request.POST.get("sca"))
     model = request.POST.get("model", "")
     # 진단 전에 고른 점검 기준. 기준은 결과 산출 방식만 바꾸므로 스캔 자체는 동일하다.
     from .. import standards as _std
@@ -1191,7 +1203,7 @@ def upload(request):
     jobs = []   # (job_id, args)
     for name, wd in projects:
         job_id = uuid.uuid4().hex
-        args = (job_id, wd, name, do_triage, provider, secrets_only, model, chosen)
+        args = (job_id, wd, name, do_triage, provider, secrets_only, model, chosen, do_sca)
         jobs.append((job_id, args))
 
     async_ = _async_scan()

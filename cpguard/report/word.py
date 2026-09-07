@@ -26,7 +26,7 @@ from ..i18n import (DEFAULT_REM_EN, REMEDIATION_EN, SEV_EN, STEP_LABEL,
                     STEP_LABEL_EN, tr)
 from . import style as S
 from .pdf import (SEV_KR, SEV_ORDER, REMEDIATION, _CRITERIA, _CRITERIA_EN,
-                  _DEFAULT_REM, _PRIORITY, _rule_key)
+                  _DEFAULT_REM, _PRIORITY, VULN_EXAMPLE, _rule_key)
 
 _FONT_KO = "맑은 고딕"
 _FONT_MONO = "D2Coding"       # 없으면 Word 가 대체 폰트를 쓴다
@@ -391,7 +391,8 @@ def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:
     _set_font(p.add_run(f"[{SEV.get(sev, sev)}] {idx}. {f['rule_id']}{tail}"),
               size=10.5, bold=True, color=S.SEV_INK.get(sev, S.INK))
 
-    rem = REM.get(_rule_key(f["rule_id"]), DFT)
+    rk = _rule_key(f["rule_id"])
+    rem = REM.get(rk, DFT)
     rows = [(T("대상"), f"{f['file']}:{f['line']}"),
             (T("설명"), T(f.get("message", "")))]
     steps = f.get("steps") or []
@@ -402,6 +403,8 @@ def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:
             for s in steps[:12])
         rows.append((T("데이터 흐름"), flow))
     rows += [(T("영향"), rem[1]), (T("조치 방안"), rem[2])]
+    if bad := VULN_EXAMPLE.get(rk):
+        rows.append((T("취약한 코드 예시"), bad))
     if rem[3]:
         rows.append((T("안전한 코드 예시"), rem[3]))
     ref = cwe + (f" · OWASP {owasp}" if owasp else "")
@@ -415,7 +418,7 @@ def _finding_block(doc, idx, f, SEV, REM, DFT, T, en, slabel) -> None:
             run.font.bold = True
     # 데이터 흐름·코드 예시는 고정폭으로 (줄 맞춤이 의미를 갖는다)
     for r, (k, _v) in zip(t.rows, rows, strict=True):
-        if k in (T("데이터 흐름"), T("안전한 코드 예시")):
+        if k in (T("데이터 흐름"), T("취약한 코드 예시"), T("안전한 코드 예시")):
             for run in r.cells[1].paragraphs[0].runs:
                 run.font.name = _FONT_MONO
                 run.font.size = Pt(8)
