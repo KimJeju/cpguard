@@ -83,3 +83,24 @@ def test_sink_arg_out_of_range_is_not_a_sink(tmp_path):
 def test_declared_sink_arg_still_reports(tmp_path):
     hits = _findings_for(tmp_path, "function h(req){ danger('safe', req.query.x); }\n")
     assert len(hits) == 1 and hits[0].rule_id == "test.second-arg-only"
+
+
+def test_a_size_limit_says_how_to_raise_it(tmp_path, monkeypatch):
+    """대형 제품 아카이브는 실제로 기본 상한을 넘는다.
+
+    상한만 알려주고 끝내면 사용자는 도구가 고장난 줄 안다 — 올리는 방법이 같은
+    문장에 있어야 한다.
+    """
+    import cpguard.extract as ex
+
+    z = tmp_path / "a.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("a.txt", "x" * 100_000)
+    monkeypatch.setattr(ex, "MAX_TOTAL_BYTES", 1000)
+
+    with pytest.raises(UnsafeArchive) as e:
+        safe_extract_zip(z, tmp_path / "out")
+
+    msg = str(e.value)
+    assert "CPGUARD_MAX_BYTES" in msg, "올리는 방법을 말해야 한다"
+    assert "0.0GB" not in msg, "작은 상한이 0.0GB 로 뭉개지면 안 된다"

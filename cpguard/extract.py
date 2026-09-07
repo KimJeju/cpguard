@@ -22,6 +22,26 @@ class UnsafeArchive(ValueError):
     """안전하지 않은 아카이브."""
 
 
+def _size(n: int) -> str:
+    """사람이 읽는 크기. GB 로만 찍으면 작은 상한이 전부 '0.0GB' 가 된다."""
+    for unit, step in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if n >= step:
+            return f"{n / step:.1f}{unit}"
+    return f"{n}B"
+
+
+def _raise_limit(what: str, actual: str, limit: str, env: str) -> None:
+    """상한 초과를 알리되 **올리는 방법까지** 말한다.
+
+    대형 제품 아카이브는 실제로 8GB 를 넘는다. 상한만 알려주고 끝내면 사용자는
+    도구가 고장난 줄 안다 — 폭탄 방어를 유지하면서 정상 아카이브를 통과시키는 길을
+    같은 문장에 적는다.
+    """
+    raise UnsafeArchive(
+        f"{what} 초과: {actual} (상한 {limit}). "
+        f"정상 아카이브라면 환경변수 {env} 를 올리고 다시 실행하세요.")
+
+
 def safe_extract_zip(zip_path: str | Path, dest: str | Path) -> int:
     """zip 을 dest 아래로 안전하게 푼다. 반환: 푼 파일 수."""
     dest = Path(dest).resolve()
@@ -31,15 +51,16 @@ def safe_extract_zip(zip_path: str | Path, dest: str | Path) -> int:
         infos = [i for i in z.infolist() if not i.is_dir()]
 
         if len(infos) > MAX_FILES:
-            raise UnsafeArchive(f"파일 수 초과: {len(infos)} > {MAX_FILES}")
+            _raise_limit("파일 수", f"{len(infos):,}개", f"{MAX_FILES:,}개", "CPGUARD_MAX_FILES")
 
         total = sum(i.file_size for i in infos)
         if total > MAX_TOTAL_BYTES:
-            raise UnsafeArchive(f"해제 용량 초과: {total} bytes")
+            _raise_limit("해제 용량", _size(total), _size(MAX_TOTAL_BYTES), "CPGUARD_MAX_BYTES")
 
         compressed = sum(i.compress_size for i in infos) or 1
         if total / compressed > MAX_COMPRESSION_RATIO:
-            raise UnsafeArchive(f"압축률 비정상(zip bomb 의심): {total / compressed:.0f}x")
+            _raise_limit("압축률", f"{total / compressed:.0f}x",
+                         f"{MAX_COMPRESSION_RATIO}x", "CPGUARD_MAX_RATIO")
 
         for i in infos:
             name = i.filename.replace("\\", "/")
