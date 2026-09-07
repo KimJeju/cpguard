@@ -301,11 +301,12 @@ def _cwe_items() -> tuple[Item, ...]:
 
 
 def _mobile() -> tuple[Item, ...]:
-    """모바일 대응 보안약점 진단 — 안드로이드 앱 진단 사업에서 요구된다.
+    """모바일 앱 보안약점 점검기준 26개.
 
-    항목명은 공개 가이드의 목록을 따르고 CWE 매핑은 우리가 붙였다. 다만 확보한 목록에
-    5번 항목이 빠져 있어 24개만 싣는다 — 공식 가이드로 확인하기 전에는 초안이다
-    (Standard.draft_note 로 화면·산출물에 그대로 알린다).
+    출처는 「모바일 전자정부 서비스 관리 지침」 [별표 3] 모바일 앱 보안약점 점검기준
+    (국가법령정보센터). 항목명·순서는 별표를 그대로 따르고 CWE 매핑은 우리가 붙였다.
+    26번(소스코드 난독화 미적용)은 코드에서 찾는 약점이 아니라 빌드 산출물의 성질이라
+    대응하는 CWE 가 없다 — 매핑을 비워 두고 항목만 싣는다.
     """
     G = ("입력데이터 검증 및 표현", "Input data validation and representation")
     S = ("보안기능", "Security features")
@@ -320,6 +321,8 @@ def _mobile() -> tuple[Item, ...]:
          G, ("CWE-22", "CWE-23", "CWE-73", "CWE-99")),
         ("xss", "크로스사이트 스크립트", "Cross-site scripting", G, ("CWE-79",)),
         ("os-command-injection", "운영체제 명령어 삽입", "OS command injection", G, ("CWE-77", "CWE-78")),
+        ("overflow", "오버플로우(정수형, 메모리 버퍼)", "Overflow (integer, memory buffer)",
+         G, ("CWE-190", "CWE-119", "CWE-120", "CWE-680")),
         ("weak-crypto", "취약한 암호화 알고리즘 사용", "Use of a broken cryptographic algorithm",
          S, ("CWE-327", "CWE-326")),
         ("plaintext-storage", "중요정보 평문 저장", "Cleartext storage of sensitive information",
@@ -348,6 +351,7 @@ def _mobile() -> tuple[Item, ...]:
          "Storage used without access control", M, ("CWE-276", "CWE-922")),
         ("permission-bypass", "안드로이드의 권한 검사 우회", "Android permission check bypass", M, ("CWE-284",)),
         ("class-loading-hijack", "클래스 로딩 하이재킹", "Class loading hijacking", M, ("CWE-470",)),
+        ("no-obfuscation", "소스코드 난독화 미적용", "Source code not obfuscated", M, ()),
     ]
     return tuple(Item(code=c, name=n, name_en=ne, group=g[0], group_en=g[1], cwes=cw)
                  for c, n, ne, g, cw in raw)
@@ -360,12 +364,10 @@ STANDARDS: dict[str, Standard] = {
                      source_en="MOIS Software Development Security Guide (Korea)",
                      show_code=False),
     "mobile": Standard("mobile", "모바일 대응 보안약점 진단", "Mobile Secure Coding Checklist (Korea)",
-                       "행정안전부 「모바일 대응 소프트웨어 개발보안 가이드」 보안약점",
+                       "「모바일 전자정부 서비스 관리 지침」 [별표 3] 모바일 앱 보안약점 점검기준",
                        _mobile(),
                        source_en="MOIS Mobile Software Development Security Guide (Korea)",
-                       show_code=False,
-                       draft_note="초안 — 확보한 목록에 5번 항목이 빠져 있습니다. "
-                                  "고객 제출 전에 공식 가이드로 항목을 확인하세요."),
+                       show_code=False),
     "efs": Standard("efs", "전자금융감독규정 웹 취약점", "Electronic Financial Supervision (Korea)",
                     "전자금융감독규정 · KISA 「홈페이지 취약점 진단·제거 가이드」 점검항목",
                     _efs(),

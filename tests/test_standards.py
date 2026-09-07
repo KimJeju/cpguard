@@ -209,17 +209,18 @@ def test_en_deliverables_contain_no_korean():
     assert not han.search(cells), f"xlsx(en) 한글 잔존: {sorted(set(han.findall(cells)))[:20]}"
 
 
-def test_a_draft_standard_announces_itself():
-    """항목 목록이 공식 문서로 확인되지 않은 기준은 화면과 산출물에서 그렇다고 말해야 한다.
-
-    점검표는 빠진 항목이 조용히 없는 게 가장 위험하다.
-    """
+def test_the_mobile_standard_matches_the_official_annex():
+    """[별표 3] 모바일 앱 보안약점 점검기준 26개. 점검표는 항목이 조용히 빠지는 게 가장 위험하다."""
     from cpguard.standards import STANDARDS
 
     mobile = STANDARDS["mobile"]
-    assert mobile.draft_note, "초안 경고가 있어야 한다"
-    assert len(mobile.items) == 24
-    assert all(it.cwes for it in mobile.items), "모든 항목에 CWE 매핑이 있어야 한다"
+    assert len(mobile.items) == 26
+    codes = [it.code for it in mobile.items]
+    assert codes[4] == "overflow", "5번은 오버플로우(정수형, 메모리 버퍼)"
+    assert codes[-1] == "no-obfuscation", "26번은 소스코드 난독화 미적용"
 
-    for other in ("mois", "efs", "owasp", "cwe"):
-        assert not STANDARDS[other].draft_note, f"{other} 는 초안이 아니다"
+    # 난독화 미적용은 코드에서 찾는 약점이 아니라 대응 CWE 가 없다. 나머지는 매핑이 있어야 한다.
+    assert all(it.cwes for it in mobile.items if it.code != "no-obfuscation")
+
+    for std in STANDARDS.values():
+        assert not std.draft_note, f"{std.id} 는 초안이 아니다"
