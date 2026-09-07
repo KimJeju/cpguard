@@ -437,9 +437,6 @@ def reports(request):
     latest = {s.project or s.name: s.pk for s in reversed(scans)}   # 프로젝트별 최신
     for s in scans:
         s.checked = (s.pk in picked) if picked else (latest.get(s.project or s.name) == s.pk)
-        # 조치대상 = 오탐·제외·조치완료로 판정한 것을 뺀 나머지(합본 보고서의 최종 결과 기준)
-        s.open_count = s.finding_count - sum(
-            1 for v in (s.audit or {}).values() if v in ("false_positive", "deferred", "fixed"))
     return render(request, "reports.html", {
         "scans": scans,
         "standards": _standard_choices(_stds(request) or None, lang),
@@ -1181,7 +1178,9 @@ def detail(request, pk: int):
         # 템플릿에서 json_script 필터로 내보내 스크립트 태그 탈출을 막는다.
         "findings": findings,
         "sources": sources,
-        "counts": scan.severity_counts,
+        # 위험도 배지는 조치대상 기준 — 오탐·보류·조치완료로 판정하면 줄어든다.
+        # 탐지 총계(total)는 스캔이 찾은 사실이라 그대로 둔다.
+        "counts": scan.open_severity_counts,
         "rule_counts": scan.rule_counts,
         "file_counts": scan.file_counts[:40],
         "total": total,
@@ -1222,7 +1221,8 @@ def project_home(request, name: str):
         "project": name,
         "latest": latest,
         "prev": prev,
-        "counts": latest.severity_counts,
+        "counts": latest.open_severity_counts,
+        "audit_summary": latest.audit_summary,
         "priority": priority[:8],
         "new_count": len(diff["new"]),
         "resolved_count": len(diff["resolved"]),

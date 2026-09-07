@@ -90,7 +90,8 @@
 <div class="card">
   <h2>보안 상태 <span class="muted" style="font-weight:400;font-size:12px">— 배지를 누르면 아래 탐색기에서 해당 위험도만 봅니다</span></h2>
   <div class="status">
-    <span class="big">{{ latest.finding_count }} <span class="muted" style="font-size:13px;font-weight:400">건</span></span>
+    <span class="big">{{ latest.open_count }} <span class="muted" style="font-size:13px;font-weight:400">건 조치대상</span></span>
+    <span class="muted" title="스캔이 찾은 총 건수 — 감사로 바뀌지 않습니다">/ 탐지 {{ latest.finding_count }}</span>
     {% for sev, n in counts.items %}<span class="badge {{ sev }} sevbtn" data-sev="{{ sev }}" style="font-size:13px;padding:4px 10px">{{ sev|upper }} {{ n }}</span>{% endfor %}
     {% if prev %}
       <span class="sep muted">|</span>
@@ -104,6 +105,15 @@
       <span class="muted">첫 스캔 — 다음 스캔부터 신규/해결을 비교합니다</span>
     {% endif %}
     <span class="muted" style="margin-left:auto">감사 완료 {{ audited }}/{{ latest.finding_count }}</span>
+  </div>
+  <div class="status" style="margin-top:8px;font-size:13px">
+    <span class="muted">감사 상태</span>
+    <span class="badge v-true_positive">취약 확정 {{ audit_summary.confirmed|default:0 }}</span>
+    <span class="badge v-false_positive">오탐 {{ audit_summary.false_positive|default:0 }}</span>
+    <span class="badge">조치완료 {{ audit_summary.fixed|default:0 }}</span>
+    <span class="badge">보류 {{ audit_summary.deferred|default:0 }}</span>
+    <span class="muted">미확인 {{ audit_summary.unaudited|default:0 }}</span>
+    <span class="muted" style="margin-left:auto">오탐·보류·조치완료는 조치대상에서 빠집니다</span>
   </div>
   {% if latest.integrity_note %}<div class="err" style="margin-top:12px">스캔 무결성: {{ latest.integrity_note }}</div>{% endif %}
 </div>
@@ -227,7 +237,7 @@
       <td><b>{{ s.finding_count }}</b></td>
       <td>{% if s.new_count %}<span class="badge v-true_positive">+{{ s.new_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td>{% if s.resolved_count %}<span class="badge v-false_positive">−{{ s.resolved_count }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-      <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
+      <td>{% for sev, n in s.open_severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
       <td style="text-align:right">
         <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn ghost" type="submit">삭제</button></form>
       </td>

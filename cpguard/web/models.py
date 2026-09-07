@@ -6,6 +6,10 @@ from collections import Counter
 
 from django.db import models
 
+# 조치대상에서 빠지는 감사 상태. 합본 보고서(report/consolidated.AUDIT_REASON)와 같은
+# 집합이어야 한다 — 어긋나면 화면과 제출 산출물의 건수가 달라진다(tests 가 감시한다).
+CLOSED_AUDIT = ("false_positive", "deferred", "fixed")
+
 
 class Scan(models.Model):
     name = models.CharField(max_length=255)
@@ -123,6 +127,31 @@ class Scan(models.Model):
             n.pop(str(index), None)
         self.audit_notes_json = json.dumps(n)
         self.save(update_fields=["audit_notes_json"])
+
+    @property
+    def open_count(self) -> int:
+        """조치대상 건수 — 오탐·보류·조치완료로 판정한 것을 뺀 나머지.
+
+        탐지 총계(finding_count)는 스캔이 찾은 사실이라 감사로 바뀌지 않는다. 사람이
+        판정하면서 줄어드는 것은 '앞으로 처리해야 할 것'이고, 합본 보고서의 최종
+        조치대상과 같은 기준이어야 화면과 산출물의 숫자가 어긋나지 않는다."""
+        a = self.audit
+        return self.finding_count - sum(1 for v in a.values() if v in CLOSED_AUDIT)
+
+    @property
+    def open_severity_counts(self) -> dict[str, int]:
+        """조치대상만 센 위험도 분포."""
+        a = self.audit
+        return dict(Counter(f["severity"] for f in self.findings
+                            if a.get(str(f["id"])) not in CLOSED_AUDIT))
+
+    @property
+    def audit_summary(self) -> dict[str, int]:
+        """감사 상태별 건수. 미확인은 나머지 전부."""
+        a = self.audit
+        out = dict(Counter(v for v in a.values() if v))
+        out["unaudited"] = self.finding_count - sum(out.values())
+        return out
 
     @property
     def rule_counts(self) -> list[tuple[str, int]]:

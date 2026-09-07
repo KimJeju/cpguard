@@ -197,6 +197,7 @@
   <span class="muted">파일 {{ scan.file_count }}</span>
   <span class="sep">|</span>
   <span>탐지 <b>{{ total }}</b></span>
+  <span title="오탐·보류·조치완료를 뺀 나머지">조치대상 <b>{{ scan.open_count }}</b></span>
   {% for sev, n in counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span>{% endfor %}
   {% if prev %}
     <span class="sep">|</span>

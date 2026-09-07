@@ -185,7 +185,7 @@
           {% if s.resolved_count %}<span class="badge v-false_positive">−{{ s.resolved_count }}</span>{% endif %}
           {% if not s.new_count and not s.resolved_count %}<span class="muted">—</span>{% endif %}
         </td>
-        <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
+        <td>{% for sev, n in s.open_severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% endfor %}</td>
         <td style="text-align:right"><a class="btn ghost" href="{% url 'detail' s.pk %}">자세히</a></td>
       </tr>
       {% endfor %}
@@ -204,7 +204,7 @@
         <td class="muted">{{ s.created_at|date:"Y-m-d H:i" }}</td>
         <td class="muted">{{ s.file_count }}</td>
         <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
-        <td>{% for sev, n in s.severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% empty %}<span class="muted">—</span>{% endfor %}</td>
+        <td>{% for sev, n in s.open_severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% empty %}<span class="muted">—</span>{% endfor %}</td>
         <td style="text-align:right">
           <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn ghost" type="submit">삭제</button></form>
         </td>

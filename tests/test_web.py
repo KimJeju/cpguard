@@ -562,3 +562,32 @@ def test_readme_counts_match_reality():
         assert badge and int(badge.group(1)) == rules, f"{name} 배지: {badge and badge.group(1)} != {rules}"
         assert f"**{rules} rules**" in txt or f"**규칙 {rules}개**" in txt, f"{name} 본문 규칙 수"
         assert f"{exts} file extensions" in txt or f"확장자 {exts}종" in txt, f"{name} 확장자 수"
+
+
+def test_audit_moves_the_open_count_not_the_detection_total():
+    """감사 상태가 조치대상 건수를 줄인다 — 탐지 총계는 스캔이 찾은 사실이라 그대로다.
+
+    화면 숫자와 합본 보고서의 '최종 조치대상'이 같은 기준을 써야 제출물과 어긋나지 않는다.
+    """
+    from cpguard.report.consolidated import AUDIT_REASON
+    from cpguard.web.models import CLOSED_AUDIT, Scan
+
+    # 조치대상에서 빠지는 상태는 산출물 쪽 정의와 같아야 한다
+    assert set(CLOSED_AUDIT) == set(AUDIT_REASON)
+
+    c = Client()
+    pk = _seed_scan(c)
+    scan = Scan.objects.get(pk=pk)
+    total = scan.finding_count
+    assert scan.open_count == total          # 감사 전에는 전부 조치대상
+
+    scan.set_audit(0, "false_positive")
+    scan.set_audit(1, "confirmed")           # 취약 확정은 조치대상으로 남는다
+    scan = Scan.objects.get(pk=pk)
+
+    assert scan.finding_count == total
+    assert scan.open_count == total - 1
+    assert scan.audit_summary["false_positive"] == 1
+    assert scan.audit_summary["confirmed"] == 1
+    assert scan.audit_summary["unaudited"] == total - 2
+    assert sum(scan.open_severity_counts.values()) == total - 1
