@@ -1,0 +1,58 @@
+# 파이썬 표준 라이브러리·프레임워크 함수 요약.
+#
+# OWASP Benchmark for Python 을 돌려 '불확실' 표시를 만든 호출을 실제로 뽑아 채운
+# 목록이다. 추측으로 넣지 않는다 — 코퍼스에서 나온 것만 넣고, 넣은 뒤 다시 측정한다.
+#
+# propagate 는 오탐/미탐을 바꾸지 않는다(과대근사와 결과가 같다). 바뀌는 것은 진단원이
+# 확인해야 하는 '불확실' 항목 수다. 그래서 확신할 수 있는 것만 적는다.
+#
+# 넣지 않기로 한 것:
+#   eval        리턴이 인자의 내용을 담는다고 확정할 수 없다. 임의의 값이 나온다.
+#               그리고 eval(사용자입력) 은 진단원이 어차피 봐야 하는 자리다.
+#   subprocess.run  리턴은 CompletedProcess 객체다. 인자 payload 가 그대로 남는다고
+#               말할 수 없다.
+#   html.escape / markupsafe.escape  정제다. 정제는 규칙마다 다르므로 규칙 YAML 의
+#               sanitizers 가 담당한다(엔진도 그쪽을 먼저 본다).
+
+id: py.stdlib
+languages: [python]
+
+propagate:
+  method:
+    # bytes <-> str 변환. 인코딩만 바뀌고 내용은 그대로다.
+    - encode
+    - decode
+    # '...{0}...'.format(bar) — 인자가 결과 문자열에 그대로 들어간다.
+    - format
+  name:
+    # URL 디코딩·인코딩은 payload 를 그대로 옮긴다. 정제가 아니다.
+    - urllib.parse.unquote_plus
+    - urllib.parse.unquote
+    - urllib.parse.quote_plus
+    - urllib.parse.quote
+    - unquote_plus
+    - unquote
+    - quote_plus
+    - quote
+    # Base64 왕복도 마찬가지다.
+    - base64.b64encode
+    - base64.b64decode
+    - base64.urlsafe_b64encode
+    - base64.urlsafe_b64decode
+    - base64.standard_b64encode
+    - base64.standard_b64decode
+    - b64encode
+    - b64decode
+    - urlsafe_b64encode
+    - urlsafe_b64decode
+    # YAML 파싱 결과에는 입력의 내용이 그대로 담긴다. safe_load 는 임의 객체 생성만
+    # 막을 뿐 값을 정제하지 않는다 — 역직렬화 규칙의 sink 여부와는 별개다.
+    - yaml.load
+    - yaml.safe_load
+    # Flask 응답 래퍼. 인자를 응답 본문·Location 헤더로 그대로 싣는다.
+    - flask.redirect
+    - flask.make_response
+    - redirect
+    - make_response
+    # 내장 변환
+    - str
