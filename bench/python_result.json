@@ -1,5 +1,6 @@
 {
   "benchmark": "OWASP Benchmark for Python v0.1",
+  "scan_mode": "project",
   "files_scanned": 1230,
   "parse_errors": 0,
   "per_category": {
@@ -88,8 +89,8 @@
     "benchmark_score": 0.11489721205294284
   },
   "uncertain": {
-    "findings": 756,
-    "uncertain": 593,
-    "ratio": 0.7843915343915344
+    "findings": 292,
+    "uncertain": 129,
+    "ratio": 0.4417808219178082
   }
 }

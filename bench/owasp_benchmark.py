@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cpguard.scanner import scan_file  # noqa: E402
+from cpguard.scanner import scan_file, scan_path  # noqa: E402
 from cpguard.taint.spec import load_rules  # noqa: E402
 
 # Benchmark 카테고리 → CPGuard 규칙. 값이 None 이면 taint 분석 대상이 아니라는 뜻.
@@ -139,7 +139,32 @@ def metrics(c: dict[str, int]) -> dict:
             # OWASP Benchmark 공식 점수: 정탐률 - 오탐률 (Youden index)
             "benchmark_score": recall - fpr}
 
-def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -> dict:
+def _scan_project(root: Path, stems: set[str], workers: int | None
+                  ) -> dict[str, tuple[list[str], int, int]]:
+    """코퍼스 전체를 한 번에 스캔하고 결과를 테스트 파일별로 나눈다.
+
+    파일 단위 스캔과 달리 파일 경계를 넘는 함수 요약이 붙는다. 파이썬 코퍼스처럼
+    테스트가 공용 헬퍼(helpers/utils.py)를 부르는 구조에서는 이쪽이 실제 진단에
+    가깝다 — 파일 단위로 재면 그 헬퍼가 늘 미해석으로 남아 흐름 전부에 '불확실'
+    표시가 찍힌다.
+
+    흐름이 여러 파일에 걸치므로 finding 은 트레이스가 지나간 테스트 파일에 귀속시킨다.
+    """
+    results: dict[str, tuple[list[str], int, int]] = {
+        stem: ([], 0, 0) for stem in stems}
+    findings, _report = scan_path(root, jobs=workers or 1)
+    for f in findings:
+        touched = {Path(st.loc.file).stem for st in f.steps} & stems
+        for stem in touched:
+            hits, n_found, n_uncertain = results[stem]
+            if f.rule_id not in hits:
+                hits.append(f.rule_id)
+            results[stem] = (hits, n_found + 1, n_uncertain + bool(f.uncertain))
+    return {k: (sorted(v[0]), v[1], v[2]) for k, v in results.items()}
+
+
+def evaluate(root: Path, limit: int | None = None, workers: int | None = None,
+             mode: str = "project") -> dict:
     corpus = detect_corpus(root)
     category_rule = corpus.category_rule
     expected = load_expected(root, corpus)
@@ -148,8 +173,11 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
     if limit:
         files = files[:limit]
 
-    with ProcessPoolExecutor(max_workers=workers, initializer=_init) as pool:
-        results = dict(pool.map(_scan_one, [str(p) for p in files], chunksize=16))
+    if mode == "project":
+        results = _scan_project(root, {p.stem for p in files}, workers)
+    else:
+        with ProcessPoolExecutor(max_workers=workers, initializer=_init) as pool:
+            results = dict(pool.map(_scan_one, [str(p) for p in files], chunksize=16))
 
     # 카테고리별 혼동행렬
     cats: dict[str, dict[str, int]] = {}
@@ -183,6 +211,7 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
 
     return {
         "benchmark": corpus.name,
+        "scan_mode": mode,
         "files_scanned": len(results),
         "parse_errors": errors,
         "per_category": scored,
@@ -200,7 +229,8 @@ def render(r: dict) -> str:
         "=" * 86,
         f"{r['benchmark']} — CPGuard 탐지 성능",
         "=" * 86,
-        f"스캔한 파일 {r['files_scanned']}개 (파싱 오류 {r['parse_errors']}건)",
+        f"스캔한 파일 {r['files_scanned']}개 (파싱 오류 {r['parse_errors']}건) · "
+        f"{'프로젝트 단위(파일 간 요약 적용)' if r.get('scan_mode') == 'project' else '파일 단위'}",
         "",
         f"{'카테고리':<14}{'대상':>6}{'TP':>6}{'FN':>6}{'FP':>6}{'TN':>6}"
         f"{'재현율':>10}{'정밀도':>10}{'F1':>8}{'오탐률':>10}{'점수':>8}",
@@ -239,9 +269,12 @@ def main() -> int:
     ap.add_argument("--json", help="결과를 JSON 으로 저장")
     ap.add_argument("--limit", type=int, help="앞에서 N개만 (빠른 확인용)")
     ap.add_argument("--workers", type=int, help="병렬 프로세스 수")
+    ap.add_argument("--mode", choices=("project", "file"), default="project",
+                    help="project=코퍼스 전체를 한 번에(파일 간 요약 적용, 기본), "
+                         "file=파일 단위(예전 수치와 비교용)")
     args = ap.parse_args()
 
-    result = evaluate(Path(args.root), args.limit, args.workers)
+    result = evaluate(Path(args.root), args.limit, args.workers, args.mode)
     # JSON 을 먼저 저장한다 — cp949 콘솔에서 render() 출력이
     # UnicodeEncodeError 로 죽으면 몇 분 돌린 결과가 통째로 날아간다.
     if args.json:
