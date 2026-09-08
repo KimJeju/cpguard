@@ -257,13 +257,18 @@
       <tr><th>축</th><th>대상 언어</th><th>점검 항목</th></tr>
       <tr>
         <td><b>데이터 흐름</b><br><span class="muted" style="font-size:12px">CPG · 프로시저간</span></td>
-        <td class="muted">JS / TS / PHP / Python</td>
-        <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601)</td>
+        <td class="muted">Java / Kotlin / C# / JS / TS / Python / PHP / Go / Ruby / Swift / C·C++</td>
+        <td class="muted">SQL 주입(CWE-89) · 명령 주입(78) · 코드 주입(94) · XSS(79) · 경로 조작(22) · 파일 포함(98) · SSRF(918) · 오픈 리다이렉트(601) · 역직렬화(502) · LDAP 주입(90) · XPath 주입(643) · 버퍼 오버플로(120) · 포맷 스트링(134) · 라이브러리 주입(114) · Intent 리다이렉션(926)</td>
       </tr>
       <tr>
         <td><b>패턴</b><br><span class="muted" style="font-size:12px">단일 지점 · 빠른 점검</span></td>
-        <td class="muted">전 언어</td>
-        <td class="muted">하드코딩 비밀정보(798)·벤더키 · 개인정보(PII) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 예측 가능 난수(338) · 쿠키 플래그(1004) · 디버그 코드(489)</td>
+        <td class="muted">전 언어 · 설정 파일 포함</td>
+        <td class="muted">하드코딩 비밀정보(798)·벤더키 · 개인정보(PII, 359/200) · TLS 검증 비활성(295) · 취약 해시/암호(327) · 하드코딩 암호키(321) · 예측 가능 난수(338) · 쿠키 플래그(1004/614) · 디버그 코드(489) · 인프라 설정(1392 등)</td>
+      </tr>
+      <tr>
+        <td><b>오픈소스 컴포넌트</b><br><span class="muted" style="font-size:12px">SCA · OSV.dev 조회</span></td>
+        <td class="muted">npm / PyPI / Maven / Go / RubyGems / Packagist / NuGet</td>
+        <td class="muted">알려진 취약점(CVE) 매칭 · 컴포넌트 목록(SBOM, 부록 E) · 라이선스(잠금파일이 값을 들고 있는 npm·composer)</td>
       </tr>
     </table>
   </div>

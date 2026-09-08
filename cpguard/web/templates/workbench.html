@@ -123,9 +123,26 @@
   .kb { display:inline-block; margin-left:5px; padding:0 4px; font-size:10px; line-height:14px;
         border:1px solid var(--line); border-radius:2px; color:var(--muted) }
   .ab.on .kb { border-color:var(--on-accent); color:var(--on-accent) }
-  .audit-btns { display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px 0; border-top:1px solid var(--line) }
-  .ab { flex:1 1 auto; padding:6px 8px; font-size:11.5px; border-radius:0; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer }
+  /* 5개를 flex-wrap 으로 흘리면 폭이 제각각이고 마지막 하나만 아래 줄에 남는다.
+     2열 격자로 고정한다 — 판정 4개가 q w / e r 자판 배열과 그대로 겹쳐 눈이 덜 헤맨다.
+     '미확인'(해제)은 성격이 달라 맨 위에 한 줄로 뺀다. */
+  .audit-btns { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:10px 12px 0; border-top:1px solid var(--line) }
+  .ab { display:flex; align-items:center; justify-content:center; gap:2px; min-width:0; padding:7px 8px;
+        font-size:11.5px; border-radius:0; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer }
+  .ab[data-audit=""] { grid-column:1 / -1 }
   .ab:hover { border-color:var(--accent); color:var(--fg) } .ab.on { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:700 }
+  /* ---- 일괄 판정 확인 창 ---- */
+  .modal-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:60;
+              align-items:center; justify-content:center }
+  .modal-ov.on { display:flex }
+  .modal { width:min(460px,92vw); background:var(--bg); border:1px solid var(--line); box-shadow:0 12px 40px rgba(0,0,0,.5) }
+  .modal h4 { margin:0; padding:12px 14px; border-bottom:1px solid var(--line); font-size:13px }
+  .modal .body { padding:12px 14px }
+  .modal .body p { margin:0 0 10px; font-size:12px }
+  .modal textarea { width:100%; min-height:90px; resize:vertical; font-size:12px }
+  .modal .foot { display:flex; gap:8px; justify-content:flex-end; padding:0 14px 14px }
+  .modal .foot button { padding:6px 14px; font-size:12px; cursor:pointer; border:1px solid var(--line); background:transparent; color:var(--fg) }
+  .modal .foot .primary { background:var(--accent); border-color:var(--accent); color:var(--on-accent); font-weight:700 }
   /* ---- 감사자 의견 메모 ---- */
   .note-box { padding:10px 12px 12px }
   .note-box label { display:block; font-size:11px; color:var(--muted); margin-bottom:5px; font-weight:600 }
@@ -401,6 +418,21 @@
   <input id="pal-in" placeholder="이동 — 규칙·파일·CWE 검색   (↑↓ 이동 · Enter 열기 · Esc 닫기)" autocomplete="off">
   <div id="pal-list"></div>
 </div></div>
+<div class="modal-ov" id="bulk-ov">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
+    <h4 id="bulk-title">일괄 판정</h4>
+    <div class="body">
+      <p id="bulk-msg"></p>
+      <label class="muted" style="font-size:11.5px">감사자 의견 (선택 — 적으면 대상 전체에 같은 내용으로 저장됩니다)</label>
+      <textarea id="bulk-note" placeholder="이 묶음을 이렇게 판정한 근거를 적으세요 (평문)"></textarea>
+    </div>
+    <div class="foot">
+      <button id="bulk-cancel">취소</button>
+      <button id="bulk-ok" class="primary">확인</button>
+    </div>
+  </div>
+</div>
+
 <div id="ctxm"></div>
 
 {{ findings|json_script:"data-findings" }}
@@ -478,16 +510,15 @@
   }
 
   const AUDIT_LABEL = { '': '미확인', confirmed: '취약 확정', false_positive: '오탐', fixed: '조치완료', deferred: '보류' };
-  // 판정 단축키. 100건을 연속으로 넘길 때 손이 목록(j/k)과 판정 사이를 오가지 않게 한다.
-  // 숫자열과 qwer 를 같이 받는다 — 왼손만으로도, 숫자만으로도 되게.
-  const AUDIT_KEYS = { confirmed: '1', false_positive: '2', fixed: '3', deferred: '4' };
-  const AUDIT_QWER = { confirmed: 'q', false_positive: 'w', fixed: 'e', deferred: 'r' };
+  // 판정 단축키. 목록 이동이 j/k 라 손이 그 근처에 머문다 — 왼손만으로 끝나게 qwer 를 쓴다.
+  // 버튼 배치(2열)가 자판 배열과 그대로 겹친다: 위 q w / 아래 e r.
+  const AUDIT_KEYS = { confirmed: 'q', false_positive: 'w', fixed: 'e', deferred: 'r' };
   // 체크로 고른 이슈. 비어 있으면 예전처럼 "지금 보이는 전부"가 대상이다 —
   // 같은 sink 에서 수십 건이 함께 나오면 그쪽이 여전히 빠르다.
   // issueHtml 이 읽으므로 렌더보다 먼저 선언되어야 한다.
   const CHECKED = new Set();
   const KEY_AUDIT = {};
-  for (const k of Object.keys(AUDIT_KEYS)) { KEY_AUDIT[AUDIT_KEYS[k]] = k; KEY_AUDIT[AUDIT_QWER[k]] = k; }
+  for (const k of Object.keys(AUDIT_KEYS)) KEY_AUDIT[AUDIT_KEYS[k]] = k;
   const SEV_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
   const SEV_ICON  = { critical: '<i class="sd sd-critical"></i>', high: '<i class="sd sd-high"></i>', medium: '<i class="sd sd-medium"></i>', low: '<i class="sd sd-low"></i>', info: '<i class="sd sd-info"></i>' };
   const CAT_LABEL = { flow: '데이터 흐름', secret: '비밀정보', pii: '개인정보', config: '설정', infra: '인프라', hygiene: '코드 정리', dependency: '오픈소스 컴포넌트' };
@@ -499,6 +530,10 @@
              group: 'severity', sev: '', cat: '', fnew: '', audit: 'all', std: '', item: '', hideAudited: false, sort: 'severity', asc: true,
              flowq: '', flowScope: 'all', flowMode: 'has' };
   try { Object.assign(ws, JSON.parse(localStorage.getItem(WS_KEY) || '{}')); } catch (e) {}
+  // 저장된 폭도 현재 허용 범위로 맞춘다. 예전에 좁게 줄여 둔 값이 그대로 살아 있으면
+  // 이슈 목록의 파일 경로와 흐름 필터가 잘려 매번 다시 끌어야 한다.
+  const LEFT_MIN = 280, LEFT_MAX = 600;
+  ws.leftW = Math.max(LEFT_MIN, Math.min(LEFT_MAX, ws.leftW || 320));
   const saveWS = () => { try { localStorage.setItem(WS_KEY, JSON.stringify(ws)); } catch (e) {} };
   function applyWS() {
     const wrap = el('wrap'), wb = el('wb');
@@ -530,7 +565,7 @@
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
     });
   }
-  drag(el('g-left'),  e => { ws.leftW  = Math.max(200, Math.min(600, e.clientX - el('wb').getBoundingClientRect().left)); applyWS(); });
+  drag(el('g-left'),  e => { ws.leftW  = Math.max(LEFT_MIN, Math.min(LEFT_MAX, e.clientX - el('wb').getBoundingClientRect().left)); applyWS(); });
   drag(el('g-right'), e => { ws.rightW = Math.max(260, Math.min(700, el('wb').getBoundingClientRect().right - e.clientX)); applyWS(); });
   drag(el('g-bottom'),e => { ws.bottomH = Math.max(120, Math.min(600, el('wb').getBoundingClientRect().bottom - e.clientY)); applyWS(); });
   el('tgl-left').onclick = () => { ws.left = !ws.left; applyWS(); saveWS(); };
@@ -823,7 +858,7 @@
     for (const [k, label] of Object.entries(AUDIT_LABEL)) {
       const key = AUDIT_KEYS[k];
       html += `<button class="ab${(f.audit || '') === k ? ' on' : ''}" data-audit="${k}"`
-        + `${key ? ` title="단축키 ${key} 또는 ${AUDIT_QWER[k]}"` : ''}>${label}`
+        + `${key ? ` title="단축키 ${key.toUpperCase()}"` : ''}>${label}`
         + `${key ? `<span class="kb">${key}</span>` : ''}</button>`;
     }
     html += '</div>';
@@ -901,24 +936,51 @@
     if (!items.length) { alert(CHECKED.size ? '선택한 이슈가 목록에 없습니다.' : '보이는 이슈가 없습니다.'); return; }
     const label = raw === 'none' ? '감사 해제' : AUDIT_LABEL[status];
     const what = CHECKED.size ? '선택한 ' : '지금 보이는 ';
-    if (!confirm(what + items.length + '건을 모두 "' + label + '" 으로 바꿀까요?')) return;
-    const body = new URLSearchParams();
-    body.append('status', status);
-    items.forEach(f => body.append('index', f.id));
-    fetch(`/scan/${SCAN_PK}/audit-bulk/`, {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
-      body,
-    }).then(r => r.json()).then(d => {
-      if (!d.ok) { alert('실패: ' + (d.error || '')); return; }
-      items.forEach(f => { const before = f.audit || ''; f.audit = status; applyAuditDelta(f, before, status); });
-      CHECKED.clear();
-      sel.value = '';
-      renderTree();
-      const cur = FINDINGS.find(x => x.id === sel_id());
-      if (cur) renderDetail(cur);
-      syncBulkHint();
+    // 같은 근거로 한꺼번에 내리는 판정이라 의견도 같이 받는다. 발주처 검수에서 묻는 것은
+    // "왜 오탐인가"이지 "몇 건인가"가 아니다.
+    openBulkModal(what + items.length + '건을 모두 "' + label + '" 으로 바꿉니다.', note => {
+      const body = new URLSearchParams();
+      body.append('status', status);
+      if (note) body.append('note', note);
+      items.forEach(f => body.append('index', f.id));
+      fetch(`/scan/${SCAN_PK}/audit-bulk/`, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF },
+        body,
+      }).then(r => r.json()).then(d => {
+        if (!d.ok) { alert('실패: ' + (d.error || '')); return; }
+        items.forEach(f => {
+          const before = f.audit || '';
+          f.audit = status;
+          if (note) f.audit_note = note;
+          applyAuditDelta(f, before, status);
+        });
+        CHECKED.clear();
+        sel.value = '';
+        renderTree();
+        const cur = FINDINGS.find(x => x.id === sel_id());
+        if (cur) renderDetail(cur);
+        syncBulkHint();
+      });
     });
   }
+
+  // 일괄 판정 확인 창. 취소하면 아무것도 보내지 않는다.
+  let BULK_OK = null;
+  function openBulkModal(msg, onOk) {
+    BULK_OK = onOk;
+    el('bulk-msg').textContent = msg;
+    el('bulk-note').value = '';
+    el('bulk-ov').classList.add('on');
+    setTimeout(() => el('bulk-note').focus(), 0);
+  }
+  function closeBulkModal() { BULK_OK = null; el('bulk-ov').classList.remove('on'); }
+  el('bulk-cancel').onclick = closeBulkModal;
+  el('bulk-ov').onclick = e => { if (e.target === el('bulk-ov')) closeBulkModal(); };
+  el('bulk-ok').onclick = () => {
+    const fn = BULK_OK, note = el('bulk-note').value.trim();
+    closeBulkModal();
+    if (fn) fn(note);
+  };
   function sel_id() { return typeof sel === 'undefined' ? null : sel; }
 
   // 판정 후 다음 이슈로 — 100건을 연속 처리할 때 클릭 수가 절반이 된다.
@@ -1106,6 +1168,11 @@
     const inField = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'pal-in';
     // Ctrl+P / Ctrl+Shift+F — 커맨드 팔레트(전역 이동). 팔레트 입력은 자체 keydown 이 처리.
     if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'p' || (e.shiftKey && e.key.toLowerCase() === 'f'))) { e.preventDefault(); openPalette(); return; }
+    // 일괄 판정 확인 창이 떠 있으면 Esc 로 닫고, 판정 단축키는 뒤로 넘기지 않는다.
+    if (el('bulk-ov').classList.contains('on')) {
+      if (e.key === 'Escape') { e.preventDefault(); closeBulkModal(); }
+      return;
+    }
     if (el('palette').classList.contains('on')) return;
     if (e.key === 'Escape') { if (inField) { e.target.blur(); return; } ws.bottom = !ws.bottom; applyWS(); saveWS(); return; }
     if (inField) { if (e.key === 'Enter' && e.target.id === 'q') { const v = visible(); if (v.length) select(v[0].id); } return; }

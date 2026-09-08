@@ -1544,10 +1544,16 @@ def set_audit_bulk(request, pk: int):
     idxs = {i for i in idxs if 0 <= i < scan.finding_count}
     if not idxs:
         return JsonResponse({"ok": False, "error": "대상 없음"}, status=400)
+    # 같은 근거로 한꺼번에 내리는 판정이라 의견도 같이 남길 수 있어야 한다.
+    # 발주처 검수에서 묻는 것은 "왜 오탐인가"이지 "몇 건인가"가 아니다.
+    note = (request.POST.get("note", "") or "").strip()[:4000]
     from .models import AuditEvent
     a = scan.audit
+    notes = scan.audit_notes if note else None
     events = []
     for i in idxs:
+        if note:
+            notes[str(i)] = note
         before = a.get(str(i), "")
         if before == status:
             continue
@@ -1557,9 +1563,13 @@ def set_audit_bulk(request, pk: int):
         else:
             a.pop(str(i), None)
     scan.audit_json = json.dumps(a)
-    scan.save(update_fields=["audit_json"])
+    fields = ["audit_json"]
+    if note:
+        scan.audit_notes_json = json.dumps(notes)
+        fields.append("audit_notes_json")
+    scan.save(update_fields=fields)
     AuditEvent.objects.bulk_create(events, batch_size=500)
-    return JsonResponse({"ok": True, "count": len(idxs), "status": status})
+    return JsonResponse({"ok": True, "count": len(idxs), "status": status, "note": note})
 
 
 @require_POST
