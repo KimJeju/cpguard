@@ -1,4 +1,4 @@
-"""OWASP Benchmark(Java) 기반 탐지 성능 평가.
+"""OWASP Benchmark 기반 탐지 성능 평가 (Java · Python).
 
 OWASP Benchmark v1.2 는 2,740 개의 Java 테스트케이스에 대해 "이 파일에 해당 취약점이
 실제로 존재하는가"를 라벨링한 정답지(expectedresults-1.2.csv)를 함께 제공한다.
@@ -10,8 +10,12 @@ weakrand·crypto·hash·securecookie 는 "위험한 API 를 썼는가"를 보는
 trustbound 는 세션 속성 신뢰 경계 문제라 CPGuard 의 taint 규칙 대상이 아니다. 대상 밖
 유형을 정답 없이 집계하면 수치가 왜곡되므로 별도로 표시하고 지표에서 제외한다.
 
+코퍼스는 두 가지를 지원한다. 정답지 파일 이름으로 자동 판별한다.
+  - OWASP Benchmark v1.2 (Java)   expectedresults-1.2.csv
+  - OWASP Benchmark for Python    expectedresults-0.1.csv
+
 사용:
-    python bench/owasp_benchmark.py <BenchmarkJava 경로> [--json out.json] [--limit N]
+    python bench/owasp_benchmark.py <코퍼스 경로> [--json out.json] [--limit N]
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ import csv
 import json
 import sys
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -28,20 +33,69 @@ from cpguard.scanner import scan_file  # noqa: E402
 from cpguard.taint.spec import load_rules  # noqa: E402
 
 # Benchmark 카테고리 → CPGuard 규칙. 값이 None 이면 taint 분석 대상이 아니라는 뜻.
-CATEGORY_RULE = {
+#
+# 대상 밖 유형(weakrand·crypto·hash·securecookie·trustbound 등)은 "위험한 API 를 썼는가"를
+# 보는 설정 점검 항목이라 taint 규칙이 없다. 정답 없이 집계하면 수치가 왜곡되므로 제외한다.
+JAVA_CATEGORY_RULE = {
     "sqli": "java.sqli",
     "cmdi": "java.command-injection",
     "pathtraver": "java.path-traversal",
     "xss": "java.xss",
     "ldapi": "java.ldap-injection",
     "xpathi": "java.xpath-injection",
-    # 아래는 데이터 흐름이 아니라 API 사용/설정 점검 항목 → 지표에서 제외
     "weakrand": None,
     "crypto": None,
     "hash": None,
     "trustbound": None,
     "securecookie": None,
 }
+
+PYTHON_CATEGORY_RULE = {
+    "sqli": "py.sqli",
+    "cmdi": "py.command-injection",
+    "pathtraver": "py.path-traversal",
+    "xss": "py.xss",
+    "codeinj": "py.code-injection",
+    # 아래는 py 규칙이 없거나 데이터 흐름 대상이 아니다 → 지표에서 제외
+    "weakrand": None,
+    "hash": None,
+    "securecookie": None,
+    "trustbound": None,
+    "xpathi": None,
+    "ldapi": None,
+    "xxe": None,
+    "deserialization": None,
+    "redirect": None,
+}
+
+
+@dataclass
+class Corpus:
+    """코퍼스 하나의 생김새 — 정답지 위치, 테스트 파일 위치, 카테고리 매핑."""
+    name: str
+    answers: str                 # 루트 기준 정답지 CSV 경로
+    testdir: str                 # 루트 기준 테스트코드 디렉터리
+    glob: str
+    category_rule: dict
+
+
+CORPORA = (
+    Corpus("OWASP Benchmark v1.2 (Java)", "expectedresults-1.2.csv",
+           "src/main/java/org/owasp/benchmark/testcode", "BenchmarkTest*.java",
+           JAVA_CATEGORY_RULE),
+    Corpus("OWASP Benchmark for Python v0.1", "expectedresults-0.1.csv",
+           "testcode", "BenchmarkTest*.py", PYTHON_CATEGORY_RULE),
+)
+
+
+def detect_corpus(root: Path) -> Corpus:
+    for c in CORPORA:
+        if (root / c.answers).is_file():
+            return c
+    raise SystemExit(
+        f"OWASP Benchmark 코퍼스가 아닙니다(정답지를 찾을 수 없음): {root}\n"
+        "  기대: " + " 또는 ".join(c.answers for c in CORPORA))
+
 
 _RULES = None
 
@@ -51,19 +105,19 @@ def _init() -> None:
     _RULES = load_rules()
 
 
-def _scan_one(path_str: str) -> tuple[str, list[str]]:
+def _scan_one(path_str: str) -> tuple[str, tuple[list[str], int, int]]:
+    """(파일이름, (탐지 규칙들, 탐지 수, 불확실 수))."""
     path = Path(path_str)
     try:
-        hits = sorted({f.rule_id for f in scan_file(path, _RULES)})
+        found = scan_file(path, _RULES)
     except Exception as e:
-        hits = [f"<error:{type(e).__name__}>"]
-    return path.stem, hits
+        return path.stem, ([f"<error:{type(e).__name__}>"], 0, 0)
+    return path.stem, (sorted({f.rule_id for f in found}), len(found),
+                       sum(1 for f in found if f.uncertain))
 
 
-def load_expected(root: Path) -> dict[str, tuple[str, bool]]:
-    csv_path = root / "expectedresults-1.2.csv"
-    if not csv_path.is_file():
-        raise SystemExit(f"Benchmark 경로가 아닙니다(expectedresults-1.2.csv 없음): {root}")
+def load_expected(root: Path, corpus: Corpus) -> dict[str, tuple[str, bool]]:
+    csv_path = root / corpus.answers
     expected = {}
     with csv_path.open(encoding="utf-8") as fh:
         for row in csv.reader(fh):
@@ -86,9 +140,11 @@ def metrics(c: dict[str, int]) -> dict:
             "benchmark_score": recall - fpr}
 
 def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -> dict:
-    expected = load_expected(root)
-    src = root / "src" / "main" / "java" / "org" / "owasp" / "benchmark" / "testcode"
-    files = sorted(p for p in src.glob("BenchmarkTest*.java") if p.stem in expected)
+    corpus = detect_corpus(root)
+    category_rule = corpus.category_rule
+    expected = load_expected(root, corpus)
+    src = root.joinpath(*corpus.testdir.split("/"))
+    files = sorted(p for p in src.glob(corpus.glob) if p.stem in expected)
     if limit:
         files = files[:limit]
 
@@ -97,12 +153,14 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
 
     # 카테고리별 혼동행렬
     cats: dict[str, dict[str, int]] = {}
-    errors = 0
-    for name, hits in results.items():
+    errors = found_total = uncertain_total = 0
+    for name, (hits, n_found, n_uncertain) in results.items():
+        found_total += n_found
+        uncertain_total += n_uncertain
         category, real = expected[name]
         if any(h.startswith("<error:") for h in hits):
             errors += 1
-        rule = CATEGORY_RULE.get(category)
+        rule = category_rule.get(category)
         c = cats.setdefault(category, {"TP": 0, "FN": 0, "FP": 0, "TN": 0, "total": 0})
         c["total"] += 1
         if rule is None:
@@ -114,8 +172,8 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
             c["FP" if hit else "TN"] += 1
 
 
-    scored = {k: metrics(v) for k, v in sorted(cats.items()) if CATEGORY_RULE.get(k)}
-    excluded = {k: v["total"] for k, v in sorted(cats.items()) if not CATEGORY_RULE.get(k)}
+    scored = {k: metrics(v) for k, v in sorted(cats.items()) if category_rule.get(k)}
+    excluded = {k: v["total"] for k, v in sorted(cats.items()) if not category_rule.get(k)}
 
     agg = {"TP": 0, "FN": 0, "FP": 0, "TN": 0, "total": 0}
     for v in scored.values():
@@ -124,12 +182,16 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None) -
     overall = metrics(agg)
 
     return {
-        "benchmark": "OWASP Benchmark v1.2 (Java)",
+        "benchmark": corpus.name,
         "files_scanned": len(results),
         "parse_errors": errors,
         "per_category": scored,
         "excluded_categories": excluded,
         "overall": overall,
+        # 진단원이 "이건 라이브러리 안에서 정제됐을 수도 있다"고 다시 봐야 하는 비율.
+        # 오탐률과 별개로 검토 비용을 직접 나타낸다.
+        "uncertain": {"findings": found_total, "uncertain": uncertain_total,
+                      "ratio": (uncertain_total / found_total) if found_total else 0.0},
     }
 
 
@@ -161,6 +223,11 @@ def render(r: dict) -> str:
     if ex:
         out.append("지표 제외 (데이터 흐름 분석 대상이 아닌 설정·API 사용 점검 항목):")
         out.append("  " + ", ".join(f"{k}({v})" for k, v in ex.items()))
+    u = r.get("uncertain")
+    if u and u["findings"]:
+        out.append("")
+        out.append(f"불확실 표시: 탐지 {u['findings']}건 중 {u['uncertain']}건 "
+                   f"({u['ratio']:.1%}) — 진단원이 다시 봐야 하는 양")
     out.append("")
     out.append("점수 = 재현율 - 오탐률 (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000)")
     return "\n".join(out)
@@ -168,7 +235,7 @@ def render(r: dict) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="OWASP Benchmark 기반 CPGuard 탐지 성능 평가")
-    ap.add_argument("root", help="BenchmarkJava 저장소 경로")
+    ap.add_argument("root", help="Benchmark 코퍼스 경로 (Java 또는 Python)")
     ap.add_argument("--json", help="결과를 JSON 으로 저장")
     ap.add_argument("--limit", type=int, help="앞에서 N개만 (빠른 확인용)")
     ap.add_argument("--workers", type=int, help="병렬 프로세스 수")

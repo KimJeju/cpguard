@@ -1,0 +1,45 @@
+# 자바 표준 라이브러리·상용 라이브러리 함수 요약.
+#
+# OWASP Benchmark 를 돌려 '불확실' 표시를 만든 호출을 실제로 뽑아 채운 목록이다.
+# 추측으로 넣지 않는다 — 코퍼스에서 나온 것만 넣고, 넣은 뒤 다시 측정한다.
+#
+# propagate 는 오탐/미탐을 바꾸지 않는다(과대근사와 결과가 같다). 바뀌는 것은 진단원이
+# 확인해야 하는 '불확실' 항목 수다. 그래서 확신할 수 있는 것만 적는다.
+
+id: java.stdlib
+languages: [java, kotlin]
+
+propagate:
+  name:
+    # 디코딩·인코딩은 payload 를 그대로 옮긴다. 정제가 아니다 —
+    # URLEncoder.encode 를 정제로 인정할지는 규칙(sanitizers)이 따로 정한다.
+    - java.net.URLDecoder.decode
+    - URLDecoder.decode
+    - org.apache.commons.codec.binary.Base64.encodeBase64
+    - org.apache.commons.codec.binary.Base64.decodeBase64
+    - Base64.encodeBase64
+    - Base64.decodeBase64
+    - java.util.Base64.getDecoder
+    - java.util.Arrays.copyOf
+    - java.util.Arrays.copyOfRange
+    - Arrays.copyOf
+    - Arrays.copyOfRange
+    - java.nio.file.Paths.get
+    - Paths.get
+    # 생성자 — 인자를 그대로 감싸는 래퍼다
+    - String
+    - java.lang.String
+    - StringBuilder
+    - StringBuffer
+    - java.io.File
+    - java.io.FileInputStream
+    - java.io.FileOutputStream
+    - java.io.FileReader
+    - java.io.FileWriter
+    - File
+    - FileInputStream
+    - FileOutputStream
+    - java.net.URI
+    - java.net.URL
+    - URI
+    - URL
