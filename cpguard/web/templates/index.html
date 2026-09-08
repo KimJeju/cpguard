@@ -215,7 +215,8 @@
         <td>{% if s.finding_count %}<b>{{ s.finding_count }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
         <td>{% for sev, n in s.open_severity_counts.items %}<span class="badge {{ sev }}">{{ sev|upper }} {{ n }}</span> {% empty %}<span class="muted">—</span>{% endfor %}</td>
         <td style="text-align:right">
-          <form method="post" action="{% url 'delete' s.pk %}" style="display:inline">{% csrf_token %}<button class="btn ghost" type="submit">삭제</button></form>
+          <button class="btn ghost js-del" type="button"
+                  data-url="{% url 'delete' s.pk %}" data-name="{{ s.name }}">삭제</button>
         </td>
       </tr>
       {% endfor %}
@@ -241,6 +242,23 @@
       if (all) all.onchange = function () { picks.forEach(function (p) { p.checked = all.checked; }); sync(); };
       // 되돌릴 수 없는 삭제라 반드시 묻는다. 공용 확인 창은 비동기이므로 일단 제출을
       // 막고, 확인을 받은 뒤에 다시 제출한다(form.submit 은 onsubmit 을 타지 않는다).
+      // 행별 삭제 — 되돌릴 수 없으니 무엇을 지우는지 이름을 보여주고 묻는다.
+      // 제출은 그때 만든 form 으로 한다(중첩 form 을 다시 만들지 않기 위해).
+      var CSRF = (form.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+      document.querySelectorAll('.js-del').forEach(function (b) {
+        b.onclick = function () {
+          cgConfirm('"' + b.dataset.name + '" 스캔을 삭제할까요? 되돌릴 수 없습니다.', '스캔 삭제')
+            .then(function (yes) {
+              if (!yes) return;
+              var f = document.createElement('form');
+              f.method = 'post'; f.action = b.dataset.url;
+              var t = document.createElement('input');
+              t.type = 'hidden'; t.name = 'csrfmiddlewaretoken'; t.value = CSRF;
+              f.appendChild(t); document.body.appendChild(f); f.submit();
+            });
+        };
+      });
+
       form.onsubmit = function (e) {
         var n = picks.filter(function (p) { return p.checked; }).length;
         e.preventDefault();
