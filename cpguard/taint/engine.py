@@ -588,8 +588,13 @@ def compute_summaries(registry: dict[str, FuncInfo], rule: Rule) -> dict[str, Su
     summaries: dict[str, Summary] = {name: Summary() for name in registry}
     for _ in range(MAX_SUMMARY_ITERATIONS):
         changed = False
+        # 한 함수가 여러 이름(맨 이름 + 모듈 경로)으로 등록돼 있다. 이름마다 다시
+        # 계산하면 그 배수만큼 느려지므로 함수 하나당 한 번만 계산해 공유한다.
+        done: dict[int, Summary] = {}
         for name, info in registry.items():
-            new = _summarize(info, rule, summaries)
+            new = done.get(id(info))
+            if new is None:
+                new = done[id(info)] = _summarize(info, rule, summaries)
             if new != summaries[name]:
                 summaries[name] = new
                 changed = True
