@@ -28,11 +28,13 @@ def _normalizer_version() -> str:
     상수를 손으로 올리는 방식은 잊기 쉽고, 잊으면 옛 IR 이 그대로 재사용돼
     "고쳤는데 결과가 안 바뀐다"는 조용한 오류가 난다."""
     h = hashlib.sha1()
-    for name in ("normalize.py", "normalize_cfam.py", "constfold.py"):
-        try:
-            h.update((Path(__file__).parent / "parse" / name).read_bytes())
-        except OSError:
-            return "dev"
+    # 언어별 정규화기를 손으로 나열하면 새로 추가한 것이 빠진다 — 디렉터리를 그대로 훑는다.
+    try:
+        for f in sorted((Path(__file__).parent / "parse").glob("normalize*.py")):
+            h.update(f.read_bytes())
+        h.update((Path(__file__).parent / "parse" / "constfold.py").read_bytes())
+    except OSError:
+        return "dev"
     return h.hexdigest()[:12]
 
 
