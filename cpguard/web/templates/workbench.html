@@ -1164,6 +1164,12 @@
   }
 
   // ---------- 키보드 (Ghidra/VS Code 식) ----------
+  // 단축키는 e.key 가 아니라 e.code(물리 키 위치)로 읽는다. 한글 입력 상태에서 q 를
+  // 누르면 e.key 는 'ㅂ' 으로 오고(조합 중에는 'Process' 로도 온다), 그러면 영문으로
+  // 바꾸기 전까지 단축키가 통째로 먹지 않는다. 진단원은 의견을 한글로 적으므로 입력기가
+  // 켜져 있는 게 기본 상태다. e.code 는 입력기·자판 배열과 무관하게 같은 자리를 가리킨다.
+  const physKey = e => (e.code && /^Key[A-Z]$/.test(e.code))
+    ? e.code.slice(3).toLowerCase() : String(e.key || '').toLowerCase();
   document.addEventListener('keydown', e => {
     const inField = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'pal-in';
     // Ctrl+P / Ctrl+Shift+F — 커맨드 팔레트(전역 이동). 팔레트 입력은 자체 keydown 이 처리.
@@ -1180,17 +1186,18 @@
     // 임베드 배열(visible())과 순서·내용이 다르다 — 그걸 타면 엉뚱한 이슈로 튄다.
     const items = LARGE ? LG.rows.map(r => ({ id: r.idx })) : visible(); if (!items.length) return;
     const i = items.findIndex(x => x.id === sel);
-    if (e.key === 'j' || e.key === 'ArrowDown') {
+    const pk = physKey(e);
+    if (pk === 'j' || e.key === 'ArrowDown') {
       e.preventDefault(); select(items[Math.min(i + 1, items.length - 1)].id);
       if (LARGE && i + 1 >= items.length - 3) renderLargeMore();     // 끝 근처면 다음 페이지 미리 로드
     }
-    else if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); select(items[Math.max(i - 1, 0)].id); }
-    else if (sel !== null && (e.key === 'n' || e.key === 'p')) { const f = FINDINGS.find(x => x.id === sel); gotoStep(f, e.key === 'n' ? Math.min(curStep + 1, f.steps.length - 1) : Math.max(curStep - 1, 0)); }
+    else if (pk === 'k' || e.key === 'ArrowUp') { e.preventDefault(); select(items[Math.max(i - 1, 0)].id); }
+    else if (sel !== null && (pk === 'n' || pk === 'p')) { const f = FINDINGS.find(x => x.id === sel); gotoStep(f, pk === 'n' ? Math.min(curStep + 1, f.steps.length - 1) : Math.max(curStep - 1, 0)); }
     else if (e.key === 'Enter' && sel !== null) { askAI('explain'); }
-    // 1/2/3/4 · q/w/e/r — 판정. '판정 후 다음 이슈로' 를 켜 두면 그대로 다음 건으로 넘어간다.
-    else if (sel !== null && !e.ctrlKey && !e.metaKey && !e.altKey && KEY_AUDIT[e.key.toLowerCase()]) {
+    // q/w/e/r — 판정. '판정 후 다음 이슈로' 를 켜 두면 그대로 다음 건으로 넘어간다.
+    else if (sel !== null && !e.ctrlKey && !e.metaKey && !e.altKey && KEY_AUDIT[pk]) {
       const f = FINDINGS.find(x => x.id === sel);
-      if (f) { e.preventDefault(); setAudit(f, KEY_AUDIT[e.key.toLowerCase()], el('gonext') && el('gonext').checked); }
+      if (f) { e.preventDefault(); setAudit(f, KEY_AUDIT[pk], el('gonext') && el('gonext').checked); }
     }
   });
 
