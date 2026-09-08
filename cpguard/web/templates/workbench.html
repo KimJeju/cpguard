@@ -908,16 +908,31 @@
     const items = visible();
     return CHECKED.size ? items.filter(f => CHECKED.has(f.id)) : items;
   }
-  function bindPicks() {
-    el('tree').querySelectorAll('.pick').forEach(n => {
-      n.onclick = e => e.stopPropagation();          // 체크가 이슈 선택을 건드리지 않게
-      n.onchange = () => {
-        const id = Number(n.dataset.id);
-        n.checked ? CHECKED.add(id) : CHECKED.delete(id);
-        syncBulkHint();
-      };
-    });
+  // 판정 하나 때문에 목록 전체를 다시 그리면 스크롤이 맨 위로 튀고(innerHTML 교체),
+  // 2,600건 규모에서는 연속 판정 때 키 입력이 눈에 띄게 밀린다. 바뀐 행만 갈아 끼운다.
+  function updateIssueRow(f) {
+    // 감사 완료 숨기기가 켜져 있으면 판정한 행은 목록에서 빠져야 한다 — 그때만 전체 갱신.
+    if (ws.hideAudited && f.audit) { renderTree(); return; }
+    const node = el('tree').querySelector(`.issue[data-id="${f.id}"]`);
+    if (!node) { renderTree(); return; }          // 표·파일 보기는 통째로
+    const tmp = document.createElement('div');
+    tmp.innerHTML = issueHtml(f);
+    const fresh = tmp.firstElementChild;
+    node.replaceWith(fresh);
+    fresh.onclick = () => select(f.id);
+    fresh.oncontextmenu = e => openCtx(e, f);
+    bindPick(fresh.querySelector('.pick'));
   }
+  function bindPick(n) {
+    if (!n) return;
+    n.onclick = e => e.stopPropagation();          // 체크가 이슈 선택을 건드리지 않게
+    n.onchange = () => {
+      const id = Number(n.dataset.id);
+      n.checked ? CHECKED.add(id) : CHECKED.delete(id);
+      syncBulkHint();
+    };
+  }
+  function bindPicks() { el('tree').querySelectorAll('.pick').forEach(bindPick); }
   function syncBulkHint() {
     var hint = el('bulkhint'), go = el('bulkgo');
     if (!hint || !go) return;
@@ -991,16 +1006,24 @@
     if (nxt) select(nxt.id);
   }
 
+  // 화면을 먼저 바꾸고 서버로 보낸다. 응답을 기다렸다 반영하면 연속으로 누를 때
+  // 응답 순서가 엇갈려 조치대상 숫자가 어긋나고, 누른 직후 아무 반응이 없어 눌렸는지
+  // 알 수 없다. 실패하면 되돌린다.
   function setAudit(f, status, goNext) {
+    const before = f.audit || '';
+    const revert = () => {
+      f.audit = before;
+      applyAuditDelta(f, status, before);
+      updateIssueRow(f);
+      if (sel === f.id) renderDetail(f);
+    };
+    f.audit = status;
+    applyAuditDelta(f, before, status);
+    updateIssueRow(f);
+    if (goNext) nextAfter(f); else renderDetail(f);
     fetch(`/scan/${SCAN_PK}/audit/`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': CSRF }, body: new URLSearchParams({ index: f.id, status }) })
-      .then(r => r.json()).then(d => {
-        if (!d.ok) return;
-        const before = f.audit || '';
-        f.audit = status;
-        applyAuditDelta(f, before, status);
-        renderTree();
-        if (goNext) nextAfter(f); else renderDetail(f);
-      });
+      .then(r => r.json()).then(d => { if (!d.ok) { revert(); alert('판정 저장 실패: ' + (d.error || '')); } })
+      .catch(() => { revert(); alert('판정 저장 실패 — 연결을 확인하세요.'); });
   }
 
   // ---------- 하단: 흐름 시각화 / AI / 로그 ----------
@@ -1151,6 +1174,13 @@
     sel = id; curStep = 0;
     if (LARGE) {
       // 대량 모드: 목록을 다시 그리지 않고(스크롤 유지) 선택 행만 강조 + 화면에 보이게
+      el('tree').querySelectorAll('.issue').forEach(n => {
+        const on = Number(n.dataset.id) === id; n.classList.toggle('sel', on);
+        if (on) n.scrollIntoView({ block: 'nearest' });
+      });
+    } else if (ws.view === 'tree' && el('tree').querySelector('.issue')) {
+      // 목록 내용이 그대로인데 통째로 다시 그리면 스크롤이 맨 위로 튄다. j/k 로 훑을 때
+      // 방금 판정한 줄이 화면 밖으로 사라져 "반영이 안 된다"고 보인다. 강조만 옮긴다.
       el('tree').querySelectorAll('.issue').forEach(n => {
         const on = Number(n.dataset.id) === id; n.classList.toggle('sel', on);
         if (on) n.scrollIntoView({ block: 'nearest' });
