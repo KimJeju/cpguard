@@ -171,6 +171,26 @@
   .mi-sep{height:1px;background:var(--line);margin:5px 6px}
 </style>
 <style>
+/* ---- 공용 확인·알림 창 ----
+   브라우저 기본 alert·confirm 은 창 맨 위에 붙고 모양을 손댈 수 없어 나머지 UI 와
+   따로 논다. 파괴적인 동작(삭제·중단)을 묻는 자리라 어느 화면에서 눌렀는지가
+   한눈에 보여야 한다. 검토 화면이 쓰던 모양을 여기로 올려 모든 화면이 같이 쓴다. */
+.dlg-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; z-index:80;
+          align-items:center; justify-content:center }
+.dlg-ov.on { display:flex }
+.dlg { width:min(400px,92vw); background:var(--bg,#fff); border:1px solid var(--line);
+       border-top:2px solid var(--accent); box-shadow:0 12px 40px rgba(0,0,0,.5) }
+.dlg.err { border-top-color:var(--crit,#b00020) }
+.dlg h4 { margin:0; padding:12px 14px; border-bottom:1px solid var(--line); font-size:13px }
+.dlg .body { padding:12px 14px }
+.dlg .body p { margin:0; font-size:12.5px; white-space:pre-wrap; word-break:break-word }
+.dlg .foot { display:flex; gap:8px; justify-content:flex-end; padding:0 14px 14px }
+.dlg .foot button { padding:6px 14px; font-size:12px; cursor:pointer; border:1px solid var(--line);
+                    background:transparent; color:var(--fg); font-family:inherit }
+.dlg .foot .primary { background:var(--accent); border-color:var(--accent);
+                      color:var(--on-accent,#fff); font-weight:700 }
+</style>
+<style>
 #runbar { position:sticky; top:0; z-index:40; }
 #runbar a { display:flex; align-items:center; gap:8px; padding:7px 14px; text-decoration:none;
   background:var(--accent-soft, #1e3a5f); color:var(--ink, #e6edf3); font-size:12.5px;
@@ -688,6 +708,56 @@
       location.reload();     // KO=원본이므로 reload 로 확실히 원복/적용
     });
   })();
+</script>
+<div class="dlg-ov" id="cg-dlg-ov">
+  <div class="dlg" id="cg-dlg" role="alertdialog" aria-modal="true" aria-labelledby="cg-dlg-title">
+    <h4 id="cg-dlg-title">알림</h4>
+    <div class="body"><p id="cg-dlg-text"></p></div>
+    <div class="foot">
+      <button id="cg-dlg-cancel" hidden>취소</button>
+      <button id="cg-dlg-ok" class="primary">확인</button>
+    </div>
+  </div>
+</div>
+<script>
+// cgNotify(글) — 알리기만. cgConfirm(글, 제목).then(예/아니오) — 물어보기.
+// 기본 alert/confirm 과 달리 화면 가운데에 나머지 UI 와 같은 모양으로 뜬다.
+window.cgDialog = (function () {
+  var ov, box, title, text, ok, cancel, resolver = null;
+  function init() {
+    if (ov) return;
+    ov = document.getElementById('cg-dlg-ov'); box = document.getElementById('cg-dlg');
+    title = document.getElementById('cg-dlg-title'); text = document.getElementById('cg-dlg-text');
+    ok = document.getElementById('cg-dlg-ok'); cancel = document.getElementById('cg-dlg-cancel');
+    ok.addEventListener('click', function () { done(true); });
+    cancel.addEventListener('click', function () { done(false); });
+    ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });
+    document.addEventListener('keydown', function (e) {
+      if (!ov.classList.contains('on')) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); }
+    }, true);   // 캡처 단계 — 화면별 단축키로 새지 않게
+  }
+  function done(v) {
+    ov.classList.remove('on');
+    var r = resolver; resolver = null;
+    if (r) r(v);
+  }
+  function open(msg, ttl, opts) {
+    init();
+    opts = opts || {};
+    title.textContent = ttl || '알림';
+    text.textContent = msg;
+    box.classList.toggle('err', !!opts.err);
+    cancel.hidden = !opts.ask;
+    ov.classList.add('on');
+    setTimeout(function () { (opts.ask ? cancel : ok).focus(); }, 0);
+    return new Promise(function (res) { resolver = res; });
+  }
+  return { open: open };
+})();
+window.cgNotify = function (msg, ttl, err) { return cgDialog.open(msg, ttl, { err: !!err }); };
+window.cgConfirm = function (msg, ttl) { return cgDialog.open(msg, ttl || '확인', { ask: true }); };
 </script>
 </body>
 </html>

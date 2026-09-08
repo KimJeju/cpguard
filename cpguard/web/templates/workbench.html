@@ -137,11 +137,6 @@
   .modal-ov.on { display:flex }
   .modal { width:min(460px,92vw); background:var(--bg); border:1px solid var(--line);
            border-top:2px solid var(--accent); box-shadow:0 12px 40px rgba(0,0,0,.5) }
-  /* 알림창은 확인 창보다 위에 뜬다 — 일괄 판정 실패 같은 건 그 위에 겹칠 수 있다. */
-  #msg-ov { z-index:70 }
-  #msg-ov .modal { width:min(380px,92vw) }
-  #msg-ov .modal.err { border-top-color:var(--crit) }
-  #msg-ov .body p { white-space:pre-wrap; word-break:break-word }
   .modal h4 { margin:0; padding:12px 14px; border-bottom:1px solid var(--line); font-size:13px }
   .modal .body { padding:12px 14px }
   .modal .body p { margin:0 0 10px; font-size:12px }
@@ -424,14 +419,6 @@
   <input id="pal-in" placeholder="이동 — 규칙·파일·CWE 검색   (↑↓ 이동 · Enter 열기 · Esc 닫기)" autocomplete="off">
   <div id="pal-list"></div>
 </div></div>
-<div class="modal-ov" id="msg-ov">
-  <div class="modal" id="msg-box" role="alertdialog" aria-modal="true" aria-labelledby="msg-title">
-    <h4 id="msg-title">알림</h4>
-    <div class="body"><p id="msg-text"></p></div>
-    <div class="foot"><button id="msg-ok" class="primary">확인</button></div>
-  </div>
-</div>
-
 <div class="modal-ov" id="bulk-ov">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
     <h4 id="bulk-title">일괄 판정</h4>
@@ -527,6 +514,13 @@
   // 판정 단축키. 목록 이동이 j/k 라 손이 그 근처에 머문다 — 왼손만으로 끝나게 qwer 를 쓴다.
   // 버튼 배치(2열)가 자판 배열과 그대로 겹친다: 위 q w / 아래 e r.
   const AUDIT_KEYS = { confirmed: 'q', false_positive: 'w', fixed: 'e', deferred: 'r' };
+  // 조사 '로/으로' — 앞 글자에 받침이 없거나 받침이 ㄹ 이면 '로'. 안 맞추면
+  // "보류 으로 바꿉니다" 처럼 읽힌다.
+  const ro = w => {
+    const c = String(w || '').slice(-1).charCodeAt(0) - 0xAC00;
+    return (c >= 0 && c <= 11171 && ![0, 8].includes(c % 28)) ? '으로' : '로';
+  };
+
   // 체크로 고른 이슈. 비어 있으면 예전처럼 "지금 보이는 전부"가 대상이다 —
   // 같은 sink 에서 수십 건이 함께 나오면 그쪽이 여전히 빠르다.
   // issueHtml 이 읽으므로 렌더보다 먼저 선언되어야 한다.
@@ -967,7 +961,7 @@
     const what = CHECKED.size ? '선택한 ' : '지금 보이는 ';
     // 같은 근거로 한꺼번에 내리는 판정이라 의견도 같이 받는다. 발주처 검수에서 묻는 것은
     // "왜 오탐인가"이지 "몇 건인가"가 아니다.
-    openBulkModal(what + items.length + '건을 모두 "' + label + '" 으로 바꿉니다.', note => {
+    openBulkModal(what + items.length + '건을 모두 "' + label + '"' + ro(label) + ' 바꿉니다.', note => {
       const body = new URLSearchParams();
       body.append('status', status);
       if (note) body.append('note', note);
@@ -993,18 +987,8 @@
     });
   }
 
-  // 브라우저 기본 alert 은 창 맨 위에 붙고 모양을 손댈 수 없다. 화면 가운데에
-  // 나머지 UI 와 같은 모양으로 띄운다.
-  function notify(text, title, isErr) {
-    el('msg-title').textContent = title || '알림';
-    el('msg-text').textContent = text;
-    el('msg-box').classList.toggle('err', !!isErr);
-    el('msg-ov').classList.add('on');
-    setTimeout(() => el('msg-ok').focus(), 0);
-  }
-  function closeNotify() { el('msg-ov').classList.remove('on'); }
-  el('msg-ok').onclick = closeNotify;
-  el('msg-ov').onclick = e => { if (e.target === el('msg-ov')) closeNotify(); };
+  // 알림창은 base.html 의 공용 것을 쓴다(cgNotify). Esc·Enter 닫기도 거기서 처리한다.
+  const notify = (text, title, isErr) => cgNotify(text, title, isErr);
 
   // 일괄 판정 확인 창. 취소하면 아무것도 보내지 않는다.
   let BULK_OK = null;
@@ -1231,11 +1215,8 @@
     const inField = ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'pal-in';
     // Ctrl+P / Ctrl+Shift+F — 커맨드 팔레트(전역 이동). 팔레트 입력은 자체 keydown 이 처리.
     if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'p' || (e.shiftKey && e.key.toLowerCase() === 'f'))) { e.preventDefault(); openPalette(); return; }
-    // 알림창이 떠 있으면 Esc·Enter 로 닫는다. 그 아래 단축키로 새지 않게 여기서 끊는다.
-    if (el('msg-ov').classList.contains('on')) {
-      if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeNotify(); }
-      return;
-    }
+    // 공용 알림·확인 창이 떠 있으면 그쪽이 먼저다(그 창은 캡처 단계에서 키를 가져간다).
+    if (el('cg-dlg-ov') && el('cg-dlg-ov').classList.contains('on')) return;
     // 일괄 판정 확인 창이 떠 있으면 Esc 로 닫고, 판정 단축키는 뒤로 넘기지 않는다.
     if (el('bulk-ov').classList.contains('on')) {
       if (e.key === 'Escape') { e.preventDefault(); closeBulkModal(); }

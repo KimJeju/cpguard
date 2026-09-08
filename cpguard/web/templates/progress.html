@@ -85,10 +85,13 @@
   var b = document.getElementById('stop');
   if (!b) return;
   b.onclick = function () {
-    if (!confirm('이 진단을 중단할까요? 지금까지의 결과는 저장되지 않습니다.')) return;
-    b.disabled = true; b.textContent = '중단 중…';
-    var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-    fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+    cgConfirm('이 진단을 중단할까요? 지금까지의 결과는 저장되지 않습니다.', '진단 중단')
+      .then(function (yes) {
+        if (!yes) return;
+        b.disabled = true; b.textContent = '중단 중…';
+        var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+      });
   };
 })();
 (function () {

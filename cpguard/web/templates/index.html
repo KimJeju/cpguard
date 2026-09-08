@@ -239,9 +239,14 @@
       }
       picks.forEach(function (p) { p.onchange = sync; });
       if (all) all.onchange = function () { picks.forEach(function (p) { p.checked = all.checked; }); sync(); };
-      form.onsubmit = function () {
+      // 되돌릴 수 없는 삭제라 반드시 묻는다. 공용 확인 창은 비동기이므로 일단 제출을
+      // 막고, 확인을 받은 뒤에 다시 제출한다(form.submit 은 onsubmit 을 타지 않는다).
+      form.onsubmit = function (e) {
         var n = picks.filter(function (p) { return p.checked; }).length;
-        return confirm('선택한 ' + n + '건을 삭제할까요? 되돌릴 수 없습니다.');
+        e.preventDefault();
+        cgConfirm('선택한 ' + n + '건을 삭제할까요? 되돌릴 수 없습니다.', '스캔 삭제')
+          .then(function (yes) { if (yes) form.submit(); });
+        return false;
       };
       sync();
     })();

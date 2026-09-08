@@ -83,10 +83,13 @@
 
   var stop = document.getElementById('bstop');
   if (stop) stop.onclick = function () {
-    if (!confirm('배치 진단을 중단할까요? 진행 중인 항목은 멈추고 대기 항목은 시작하지 않습니다.')) return;
-    stop.disabled = true; stop.textContent = '중단 중…';
-    var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
-    fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+    cgConfirm('배치 진단을 중단할까요? 진행 중인 항목은 멈추고 대기 항목은 시작하지 않습니다.', '배치 중단')
+      .then(function (yes) {
+        if (!yes) return;
+        stop.disabled = true; stop.textContent = '중단 중…';
+        var csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+        fetch(location.pathname + 'cancel', { method: 'POST', headers: { 'X-CSRFToken': csrf } });
+      });
   };
 
   function poll() {
