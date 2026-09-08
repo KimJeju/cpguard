@@ -359,7 +359,9 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
 # 필드 민감도가 없어 컨테이너 전체가 오염되는 과대근사다(안전한 키를 다시 꺼내 써도
 # 오염으로 본다). 보안 도구에서는 놓치는 쪽보다 이쪽이 낫다.
 _MUTATORS = ("add", "addAll", "addFirst", "addLast", "put", "putAll", "putIfAbsent",
-             "append", "insert", "push", "offer", "offerLast", "write", "concat")
+             "append", "insert", "push", "offer", "offerLast", "write", "concat",
+             # ConfigParser.set(섹션, 키, 값) · List.set(i, x) · AtomicReference.set(x)
+             "set")
 
 
 # 키가 리터럴인 맵 접근은 키 단위로 구분한다. map.put("a", 오염) 뒤에 map.get("b") 를
@@ -467,6 +469,20 @@ def _run_nested(node: ir.Node, ctx: Ctx) -> None:
 
 # ---------- 문 실행 ----------
 
+def _precise_target(node: ir.Node) -> bool:
+    """대입 대상이 그 경로 하나만 가리키는지.
+
+    a[i] 는 인덱스를 특정할 수 없어 path_of 가 베이스 'a' 로 뭉갠다. 그 자리에 안전한
+    값을 넣었다고 'a' 전체의 오염을 지우면, 다른 슬롯에 들어 있던 오염까지 사라진다
+    (실측: m["b"]=오염 다음 줄의 m["c"]="안전" 하나로 미탐이 났다).
+    """
+    while isinstance(node, ir.Member):
+        if node.computed:
+            return False
+        node = node.obj
+    return True
+
+
 def _merge(a: dict[str, Trace], b: dict[str, Trace]) -> dict[str, Trace]:
     """두 분기의 오염 상태를 합친다.
 
@@ -496,9 +512,11 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
                 env = dict(env)
                 if tr:
                     env[p] = tr + [Step("propagation", s.loc, _snippet(s.loc, ctx.src))]
-                elif s.operator == "=":
+                elif s.operator == "=" and _precise_target(s.target):
                     env.pop(p, None)
                 # x += 안전값 은 앞서 담긴 오염을 지우지 않는다 — 덧붙일 뿐이다.
+                # m["c"] = 안전값 도 마찬가지다 — 경로가 m 으로 뭉개져 있어서
+                # 지우면 m["b"] 에 담긴 오염까지 같이 사라진다.
 
         elif isinstance(s, ir.Return):
             _check_sinks(s.value, env, ctx)

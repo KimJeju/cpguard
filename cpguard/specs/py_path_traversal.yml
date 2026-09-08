@@ -7,6 +7,10 @@ languages: [python]
 sources:
   - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
 sinks:
-  - {pattern: call, callee: [open, send_file, os.remove, os.unlink, shutil.copy, shutil.rmtree]}
+  - {pattern: call, callee: [open, send_file, os.remove, os.unlink, shutil.copy, shutil.rmtree,
+                             os.path.exists]}
+  # os.path.exists 는 읽기·쓰기가 아니라 존재 여부 오라클이다. 사용자 경로를 그대로
+  # 넘기면 파일 존재를 확인해 주는 정보노출이 되므로 CWE-22 범위에 든다.
+  # 점 경로 전체로만 적는다 — 맨 이름 exists 로 적으면 파일과 무관한 exists 까지 걸린다.
 sanitizers:
   - {callee: [os.path.basename, basename, secure_filename, safe_join]}
