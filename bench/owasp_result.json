@@ -1,79 +1,80 @@
 {
   "benchmark": "OWASP Benchmark v1.2 (Java)",
+  "scan_mode": "project",
   "files_scanned": 2740,
   "parse_errors": 0,
   "per_category": {
     "cmdi": {
       "TP": 90,
       "FN": 36,
-      "FP": 37,
-      "TN": 88,
+      "FP": 31,
+      "TN": 94,
       "total": 251,
       "recall": 0.7142857142857143,
-      "precision": 0.7086614173228346,
-      "f1": 0.7114624505928855,
-      "false_positive_rate": 0.296,
-      "benchmark_score": 0.4182857142857143
+      "precision": 0.743801652892562,
+      "f1": 0.728744939271255,
+      "false_positive_rate": 0.248,
+      "benchmark_score": 0.4662857142857143
     },
     "ldapi": {
-      "TP": 19,
-      "FN": 8,
-      "FP": 8,
-      "TN": 24,
+      "TP": 21,
+      "FN": 6,
+      "FP": 10,
+      "TN": 22,
       "total": 59,
-      "recall": 0.7037037037037037,
-      "precision": 0.7037037037037037,
-      "f1": 0.7037037037037037,
-      "false_positive_rate": 0.25,
-      "benchmark_score": 0.4537037037037037
+      "recall": 0.7777777777777778,
+      "precision": 0.6774193548387096,
+      "f1": 0.7241379310344828,
+      "false_positive_rate": 0.3125,
+      "benchmark_score": 0.4652777777777778
     },
     "pathtraver": {
-      "TP": 85,
-      "FN": 48,
-      "FP": 36,
-      "TN": 99,
+      "TP": 87,
+      "FN": 46,
+      "FP": 47,
+      "TN": 88,
       "total": 268,
-      "recall": 0.6390977443609023,
-      "precision": 0.7024793388429752,
-      "f1": 0.6692913385826771,
-      "false_positive_rate": 0.26666666666666666,
-      "benchmark_score": 0.3724310776942356
+      "recall": 0.6541353383458647,
+      "precision": 0.6492537313432836,
+      "f1": 0.6516853932584269,
+      "false_positive_rate": 0.34814814814814815,
+      "benchmark_score": 0.30598719019771653
     },
     "sqli": {
-      "TP": 161,
-      "FN": 111,
-      "FP": 57,
-      "TN": 175,
+      "TP": 163,
+      "FN": 109,
+      "FP": 69,
+      "TN": 163,
       "total": 504,
-      "recall": 0.5919117647058824,
-      "precision": 0.7385321100917431,
-      "f1": 0.6571428571428571,
-      "false_positive_rate": 0.24568965517241378,
-      "benchmark_score": 0.34622210953346855
+      "recall": 0.5992647058823529,
+      "precision": 0.7025862068965517,
+      "f1": 0.6468253968253969,
+      "false_positive_rate": 0.2974137931034483,
+      "benchmark_score": 0.30185091277890463
     },
     "xpathi": {
       "TP": 11,
       "FN": 4,
-      "FP": 7,
-      "TN": 13,
+      "FP": 1,
+      "TN": 19,
       "total": 35,
       "recall": 0.7333333333333333,
-      "precision": 0.6111111111111112,
-      "f1": 0.6666666666666666,
-      "false_positive_rate": 0.35,
-      "benchmark_score": 0.3833333333333333
+      "precision": 0.9166666666666666,
+      "f1": 0.8148148148148148,
+      "false_positive_rate": 0.05,
+      "benchmark_score": 0.6833333333333332
     },
     "xss": {
-      "TP": 167,
-      "FN": 79,
-      "FP": 50,
-      "TN": 159,
+      "TP": 168,
+      "FN": 78,
+      "FP": 48,
+      "TN": 161,
       "total": 455,
-      "recall": 0.6788617886178862,
-      "precision": 0.7695852534562212,
-      "f1": 0.7213822894168467,
-      "false_positive_rate": 0.23923444976076555,
-      "benchmark_score": 0.4396273388571206
+      "recall": 0.6829268292682927,
+      "precision": 0.7777777777777778,
+      "f1": 0.7272727272727273,
+      "false_positive_rate": 0.22966507177033493,
+      "benchmark_score": 0.45326175749795783
     }
   },
   "excluded_categories": {
@@ -84,20 +85,20 @@
     "weakrand": 493
   },
   "overall": {
-    "TP": 533,
-    "FN": 286,
-    "FP": 195,
-    "TN": 558,
+    "TP": 540,
+    "FN": 279,
+    "FP": 206,
+    "TN": 547,
     "total": 1572,
-    "recall": 0.6507936507936508,
-    "precision": 0.7321428571428571,
-    "f1": 0.6890756302521008,
-    "false_positive_rate": 0.2589641434262948,
-    "benchmark_score": 0.391829507367356
+    "recall": 0.6593406593406593,
+    "precision": 0.7238605898123325,
+    "f1": 0.6900958466453675,
+    "false_positive_rate": 0.2735723771580345,
+    "benchmark_score": 0.3857682821826248
   },
   "uncertain": {
-    "findings": 1687,
-    "uncertain": 476,
-    "ratio": 0.2821576763485477
+    "findings": 1698,
+    "uncertain": 61,
+    "ratio": 0.035924617196702
   }
 }
