@@ -49,6 +49,11 @@ def _named_functions(stmts: list[ir.Node]):
                 yield s.target.name, s.value
 
 
+def file_scoped(file: str, name: str) -> str:
+    """같은 파일 안에서만 통하는 키. 전역 이름과 섞이지 않게 구분자를 넣는다."""
+    return f"{file}::{name}"
+
+
 def _module_qualified(name: str, file: str, depth: int = 3) -> list[str]:
     """helpers/utils.py 의 f 를 'utils.f', 'helpers.utils.f' 로도 부를 수 있게 한다.
 
@@ -77,6 +82,7 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
         for name, fn in _named_functions(module.body):
             info = FuncInfo(name=name, fn=fn, src=src, file=file)
             registry[name] = info
+            registry[file_scoped(file, name)] = info
             for alias in _module_qualified(name, file):
                 registry[alias] = info
     return registry

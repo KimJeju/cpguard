@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .. import ir
-from ..cpg.callgraph import FuncInfo, collect_functions
+from ..cpg.callgraph import FuncInfo, collect_functions, file_scoped
 from ..report.finding import Finding, Step
 from .spec import Rule, SinkPattern
 from .summary import BLOCK, PROPAGATE, LibraryModel, Summary, load_library_model
@@ -58,6 +58,7 @@ class Ctx:
     rule: Rule
     src: bytes
     out: list[Finding]
+    file: str = ""                                    # 같은 파일 안 정의를 찾을 때 쓴다
     summaries: dict[str, Summary] = field(default_factory=dict)
     return_traces: list[Trace] = field(default_factory=list)  # 요약 계산용: 오염된 리턴들
     # 지금 분석 중인 함수가 요청 핸들러라서 리턴값이 곧 응답 본문인지(= 리턴이 sink).
@@ -142,6 +143,33 @@ def _user_function(path: str | None, ctx: Ctx) -> Summary | None:
     return ctx.summaries.get(path)
 
 
+def _local_function(cp: str | None, callee: ir.Node, ctx: Ctx) -> Summary | None:
+    """수신자가 식이라 점 경로가 안 나오는 호출을 같은 파일 안에서만 찾는다.
+
+    new Test().doSomething(x) 는 수신자가 Call 이라 'Test.doSomething' 같은 경로가
+    만들어지지 않는다. 그러면 정의를 못 찾아 과대근사로 통과시키는데, 자바에서
+    정제 코드를 같은 파일의 내부 클래스에 두는 형태가 흔해 그대로 오탐이 된다
+    (실측: OWASP 자바 코퍼스의 안전한 xss 변형 45건 중 19건이 이 모양이다).
+
+    이름만 보고 프로젝트 전체에서 찾으면 다른 파일의 동명 메서드로 잘못 이어진다
+    (같은 코퍼스에 doSomething 정의가 880개 있다). 같은 파일로 범위를 좁히면
+    그 위험 없이 이 형태만 정확히 해석된다.
+    """
+    # 수신자가 식인 호출에만 쓴다 — new Test().doSomething(x) 처럼 그 자리에서 만든
+    # 객체의 메서드. 이때는 타입이 코드에 그대로 적혀 있어 같은 파일 안에서 찾는 것이
+    # 안전하다.
+    #
+    # 수신자가 변수인 호출(thing.doSomething(x))에는 절대 쓰지 않는다. 변수의 타입을
+    # 모르는 채 이름만 보고 이으면 엉뚱한 함수에 연결된다 — 실측에서 helpers 의
+    # ThingInterface.doSomething 호출이 같은 파일 내부 클래스의 doSomething(마침 분석
+    # 중인 자기 자신)으로 이어져 오염이 통째로 사라졌다(취약 13건이 미탐이 됐다).
+    if not ctx.file or not isinstance(callee, ir.Member) or not callee.prop:
+        return None
+    if not isinstance(callee.obj, ir.Call):
+        return None
+    return ctx.summaries.get(file_scoped(ctx.file, callee.prop))
+
+
 # ---------- 오염 판정 ----------
 
 def _env_lookup(path: str, env: dict[str, Trace]) -> Trace | None:
@@ -188,7 +216,7 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                     return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
 
         step = Step("propagation", node.loc, _snippet(node.loc, ctx.src))
-        summ = _user_function(cp, ctx)
+        summ = _user_function(cp, ctx) or _local_function(cp, node.callee, ctx)
 
         if summ is not None:
             # 함수가 자기 안에서 오염을 만들어 리턴하면, 인자와 무관하게 결과가 오염이다.
@@ -293,11 +321,9 @@ def _emit(ctx: Ctx, steps: list[Step]) -> None:
 def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
     for call in _iter_calls(node):
         cp = path_of(call.callee)
-        if not cp:
-            continue
 
         # (a) 직접 sink 호출
-        sink = _sink_for(cp, ctx.rule)
+        sink = _sink_for(cp, ctx.rule) if cp else None
         if sink is not None:
             # arg 미지정 = 모든 인자가 대상. arg 를 지정했는데 그 자리가 없는 호출은
             # 규칙이 말하는 sink 가 아니다 — 예전엔 이 경우도 전부 검사로 떨어져서
@@ -315,7 +341,7 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
                     break
 
         # (b) 프로시저 간: 요약이 "이 파라미터는 내부에서 sink 에 닿는다"고 말하는 경우
-        summ = _user_function(cp, ctx)
+        summ = _user_function(cp, ctx) or _local_function(cp, call.callee, ctx)
         if summ is not None and summ.sink_paths:
             for i, arg in enumerate(call.args):
                 if i not in summ.sink_paths:
@@ -510,7 +536,7 @@ def _run_loop(node: ir.Loop, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace
     다만 고정점 반복 중에 매번 보고하면 같은 취약점이 여러 번 나오므로,
     수렴시키는 동안에는 결과를 버리는 문맥으로 돌리고 마지막에 한 번만 실제로 보고한다.
     """
-    quiet = Ctx(rule=ctx.rule, src=ctx.src, out=[], summaries=ctx.summaries)
+    quiet = Ctx(rule=ctx.rule, src=ctx.src, out=[], summaries=ctx.summaries, file=ctx.file)
     cur = dict(env)
     for _ in range(MAX_LOOP_ITERATIONS):
         nxt = _merge(cur, _run(node.body, dict(cur), quiet))
@@ -557,7 +583,7 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
     result = Summary()
 
     # (1) 인자 무관 오염 리턴
-    base = Ctx(rule=rule, src=info.src, out=[], summaries=summaries)
+    base = Ctx(rule=rule, src=info.src, out=[], summaries=summaries, file=info.file)
     _run(info.fn.body, {}, base)
     if base.return_traces:
         result.source_trace = base.return_traces[0]
@@ -565,7 +591,8 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
     # (2) 파라미터별 전파
     for i, p in enumerate(info.fn.params):
         collected: list[Finding] = []
-        ctx = Ctx(rule=rule, src=info.src, out=collected, summaries=summaries)
+        ctx = Ctx(rule=rule, src=info.src, out=collected, summaries=summaries,
+                  file=info.file)
         env = {p.name: [Step("param", p.loc, f"{info.name}({p.name})")]}
         _run(info.fn.body, env, ctx)
 
@@ -586,17 +613,20 @@ def compute_summaries(registry: dict[str, FuncInfo], rule: Rule) -> dict[str, Su
     재귀·상호재귀도 별도 처리 없이 자연히 다뤄진다(반복 상한으로 종료 보장).
     """
     summaries: dict[str, Summary] = {name: Summary() for name in registry}
+    # 한 함수가 여러 이름(맨 이름 + 모듈 경로)으로 등록돼 있다. 이름 단위로 돌면
+    # 계산도 비교도 별칭 수만큼 반복된다(실측: 자바 코퍼스 3분 -> 14분, 결과는 동일).
+    # 함수 단위로 한 번 계산하고 그 함수의 이름들에 같은 요약을 나눠 준다.
+    by_function: dict[int, tuple[FuncInfo, list[str]]] = {}
+    for name, info in registry.items():
+        by_function.setdefault(id(info), (info, []))[1].append(name)
+
     for _ in range(MAX_SUMMARY_ITERATIONS):
         changed = False
-        # 한 함수가 여러 이름(맨 이름 + 모듈 경로)으로 등록돼 있다. 이름마다 다시
-        # 계산하면 그 배수만큼 느려지므로 함수 하나당 한 번만 계산해 공유한다.
-        done: dict[int, Summary] = {}
-        for name, info in registry.items():
-            new = done.get(id(info))
-            if new is None:
-                new = done[id(info)] = _summarize(info, rule, summaries)
-            if new != summaries[name]:
-                summaries[name] = new
+        for info, names in by_function.values():
+            new = _summarize(info, rule, summaries)
+            if new != summaries[names[0]]:
+                for n in names:
+                    summaries[n] = new
                 changed = True
         if not changed:
             break
@@ -621,5 +651,6 @@ def analyze(module: ir.Module, src: bytes, rules: list[Rule],
         summaries = (summaries_by_rule or {}).get(rule.id)
         if summaries is None:
             summaries = compute_summaries(registry, rule)
-        _run(module.body, {}, Ctx(rule=rule, src=src, out=out, summaries=summaries))
+        _run(module.body, {}, Ctx(rule=rule, src=src, out=out, summaries=summaries,
+                                  file=module.loc.file))
     return out
