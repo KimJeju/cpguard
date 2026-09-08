@@ -94,5 +94,10 @@
     "f1": 0.6890756302521008,
     "false_positive_rate": 0.2589641434262948,
     "benchmark_score": 0.391829507367356
+  },
+  "uncertain": {
+    "findings": 1687,
+    "uncertain": 476,
+    "ratio": 0.2821576763485477
   }
 }

@@ -8,5 +8,7 @@ sources:
   - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
 sinks:
   - {pattern: call, callee: [HttpResponse, render_template_string, make_response, mark_safe]}
+  # Flask·FastAPI 계열은 핸들러의 리턴값이 그대로 응답 본문이 된다 — 호출 형태의 sink 가 없다.
+  - {pattern: return, decorator: [route, get, post, put, patch, delete, errorhandler]}
 sanitizers:
   - {callee: [escape, html.escape, bleach.clean, conditional_escape]}

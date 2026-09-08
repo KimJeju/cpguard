@@ -58,6 +58,11 @@ def _body_of(node: TSNode, file: str) -> list[ir.Node]:
 
 # ---------- 문 ----------
 
+def _decorator_path(node: TSNode) -> str:
+    """@app.route('/x', methods=['GET']) -> 'app.route'. 인자는 버리고 경로만 본다."""
+    return text_of(node).lstrip("@").split("(")[0].strip()
+
+
 def _stmt(node: TSNode, file: str):
     t = node.type
 
@@ -69,7 +74,13 @@ def _stmt(node: TSNode, file: str):
 
     if t == "decorated_definition":
         inner = child_by_field(node, "definition")
-        return _stmt(inner, file) if inner is not None else None
+        if inner is None:
+            return None
+        out = _stmt(inner, file)
+        if isinstance(out, ir.Function):
+            out.decorators = [_decorator_path(c) for c in node.named_children
+                              if c.type == "decorator"]
+        return out
 
     if t == "function_definition":
         return _function(node, file)
@@ -96,6 +107,22 @@ def _stmt(node: TSNode, file: str):
             if c.type in ("except_clause", "else_clause", "finally_clause"):
                 out.extend(_block(c.named_children, file))
         return out
+
+    if t == "match_statement":
+        # match/case 를 통째로 접으면 분기 안의 대입이 사라져 오염이 끊긴다.
+        # if/elif 사슬로 펴서 분기 합류(_merge)를 그대로 쓴다 — 어느 분기든 오염되면 오염.
+        body = child_by_field(node, "body")
+        clauses = [c for c in body.named_children
+                   if c.type == "case_clause"] if body is not None else []
+        subj = next((c for c in node.named_children if c is not body), None)
+        test = _expr(subj, file) if subj is not None else _opaque(node, file)
+        chain: ir.Node | None = None
+        for c in reversed(clauses):
+            chain = ir.If(
+                loc=loc_of(c, file), test=test,
+                then=_block([b for b in c.named_children if b.type == "block"], file),
+                orelse=[chain] if chain is not None else [])
+        return chain
 
     if t == "block":
         return _block(node.named_children, file)
@@ -223,6 +250,13 @@ def _expr(node: TSNode, file: str) -> ir.Node:
             body=[ir.Return(loc=loc_of(node, file), value=_expr(body, file))]
             if body is not None else [],
         )
+
+    # 보간이 있는 f-string 은 리터럴이 아니다 — 안에 담긴 값의 오염이 밖으로 흐른다.
+    if t == "string":
+        interps = [c for c in node.named_children if c.type == "interpolation"]
+        if interps:
+            return ir.Opaque(loc=loc_of(node, file), kind=t,
+                             children=[_expr(c, file) for c in interps])
 
     if t in _LITERALS:
         return ir.Literal(loc=loc_of(node, file), value=None, raw=text_of(node))

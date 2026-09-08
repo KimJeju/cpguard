@@ -60,6 +60,8 @@ class Ctx:
     out: list[Finding]
     summaries: dict[str, Summary] = field(default_factory=dict)
     return_traces: list[Trace] = field(default_factory=list)  # 요약 계산용: 오염된 리턴들
+    # 지금 분석 중인 함수가 요청 핸들러라서 리턴값이 곧 응답 본문인지(= 리턴이 sink).
+    return_is_sink: bool = False
 
 
 # ---------- 경로/스니펫 유틸 ----------
@@ -109,6 +111,13 @@ def _callee_matches(path: str, candidates: list[str]) -> bool:
         if path == c or path.endswith("." + c):
             return True
     return False
+
+
+def _returns_are_sink(fn: ir.Function, rule: Rule) -> bool:
+    """이 함수의 리턴값 자체가 sink 인지(웹 핸들러 등록 데코레이터가 붙었는지)."""
+    return any(s.kind == "return" and any(_callee_matches(d, s.decorator)
+                                          for d in fn.decorators)
+               for s in rule.sinks)
 
 
 def _sink_for(path: str, rule: Rule) -> SinkPattern | None:
@@ -168,7 +177,7 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
             return None  # 정제 통과 -> 오염 끊김
 
         # map.get("키") — 넣을 때 키 단위로 기록했으므로 읽을 때도 그 슬롯만 본다.
-        if cp and "." in cp and node.args:
+        if cp and "." in cp and node.args and not _matches_source(cp, ctx.rule):
             recv, _, meth = cp.rpartition(".")
             if meth in _MAP_GET:
                 key = _literal_key(node.args[0], ctx)
@@ -461,8 +470,9 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
                 env = dict(env)
                 if tr:
                     env[p] = tr + [Step("propagation", s.loc, _snippet(s.loc, ctx.src))]
-                else:
+                elif s.operator == "=":
                     env.pop(p, None)
+                # x += 안전값 은 앞서 담긴 오염을 지우지 않는다 — 덧붙일 뿐이다.
 
         elif isinstance(s, ir.Return):
             _check_sinks(s.value, env, ctx)
@@ -470,6 +480,8 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
             rt = _taint(s.value, env, ctx)
             if rt:
                 ctx.return_traces.append(rt)  # 요약 계산용: 리턴값이 오염됨
+                if ctx.return_is_sink:
+                    _emit(ctx, rt + [Step("sink", s.loc, _snippet(s.loc, ctx.src))])
 
         elif isinstance(s, ir.If):
             _check_sinks(s.test, env, ctx)
@@ -524,7 +536,12 @@ def _annotated_env(fn: ir.Function, ctx: Ctx) -> dict[str, Trace]:
 
 def _run_function(fn: ir.Function, ctx: Ctx) -> None:
     """함수 본문을 분석한다(일반 파라미터 오염은 요약이 담당)."""
-    _run(fn.body, _annotated_env(fn, ctx), ctx)
+    prev = ctx.return_is_sink
+    ctx.return_is_sink = _returns_are_sink(fn, ctx.rule)
+    try:
+        _run(fn.body, _annotated_env(fn, ctx), ctx)
+    finally:
+        ctx.return_is_sink = prev
 
 
 # ---------- 요약 계산 ----------

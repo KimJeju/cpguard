@@ -141,6 +141,9 @@ class Function(Node):
     name: Optional[str]
     params: list[Param] = field(default_factory=list)
     body: list[Node] = field(default_factory=list)
+    # 함수에 붙은 데코레이터 경로(@app.route -> 'app.route'). 프레임워크가 이 함수를
+    # 요청 핸들러로 등록한다는 표시이고, 그때는 리턴값이 곧 응답 본문이다.
+    decorators: list[str] = field(default_factory=list)
 
 
 @dataclass

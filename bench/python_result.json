@@ -1,0 +1,95 @@
+{
+  "benchmark": "OWASP Benchmark for Python v0.1",
+  "files_scanned": 1230,
+  "parse_errors": 0,
+  "per_category": {
+    "cmdi": {
+      "TP": 7,
+      "FN": 6,
+      "FP": 0,
+      "TN": 7,
+      "total": 20,
+      "recall": 0.5384615384615384,
+      "precision": 1.0,
+      "f1": 0.7000000000000001,
+      "false_positive_rate": 0.0,
+      "benchmark_score": 0.5384615384615384
+    },
+    "codeinj": {
+      "TP": 11,
+      "FN": 9,
+      "FP": 16,
+      "TN": 17,
+      "total": 53,
+      "recall": 0.55,
+      "precision": 0.4074074074074074,
+      "f1": 0.46808510638297873,
+      "false_positive_rate": 0.48484848484848486,
+      "benchmark_score": 0.06515151515151518
+    },
+    "pathtraver": {
+      "TP": 15,
+      "FN": 50,
+      "FP": 18,
+      "TN": 85,
+      "total": 168,
+      "recall": 0.23076923076923078,
+      "precision": 0.45454545454545453,
+      "f1": 0.30612244897959184,
+      "false_positive_rate": 0.17475728155339806,
+      "benchmark_score": 0.05601194921583272
+    },
+    "sqli": {
+      "TP": 1,
+      "FN": 4,
+      "FP": 5,
+      "TN": 6,
+      "total": 16,
+      "recall": 0.2,
+      "precision": 0.16666666666666666,
+      "f1": 0.1818181818181818,
+      "false_positive_rate": 0.45454545454545453,
+      "benchmark_score": -0.2545454545454545
+    },
+    "xss": {
+      "TP": 13,
+      "FN": 18,
+      "FP": 11,
+      "TN": 47,
+      "total": 89,
+      "recall": 0.41935483870967744,
+      "precision": 0.5416666666666666,
+      "f1": 0.4727272727272728,
+      "false_positive_rate": 0.1896551724137931,
+      "benchmark_score": 0.22969966629588434
+    }
+  },
+  "excluded_categories": {
+    "deserialization": 54,
+    "hash": 151,
+    "ldapi": 29,
+    "redirect": 34,
+    "securecookie": 39,
+    "trustbound": 37,
+    "weakrand": 326,
+    "xpathi": 186,
+    "xxe": 28
+  },
+  "overall": {
+    "TP": 47,
+    "FN": 87,
+    "FP": 50,
+    "TN": 162,
+    "total": 346,
+    "recall": 0.35074626865671643,
+    "precision": 0.4845360824742268,
+    "f1": 0.4069264069264069,
+    "false_positive_rate": 0.2358490566037736,
+    "benchmark_score": 0.11489721205294284
+  },
+  "uncertain": {
+    "findings": 756,
+    "uncertain": 593,
+    "ratio": 0.7843915343915344
+  }
+}
