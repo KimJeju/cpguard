@@ -100,7 +100,10 @@ def _stmt(node: TSNode, file: str):
     if t in ("while_statement", "for_statement"):
         return _loop(node, file)
 
-    if t in ("with_statement", "try_statement", "async_statement"):
+    if t == "with_statement":
+        return _with(node, file)
+
+    if t in ("try_statement", "async_statement"):
         # 블록 구조는 흐름만 이어주면 되므로 본문을 펼친다
         out: list[ir.Node] = _body_of(node, file)
         for c in node.named_children:
@@ -183,9 +186,51 @@ def _if(node: TSNode, file: str) -> ir.If:
 
 def _loop(node: TSNode, file: str) -> ir.Loop:
     cond = child_by_field(node, "condition") or child_by_field(node, "right")
+    body = _body_of(node, file)
+    # for x in 오염: — 반복 변수가 대상의 오염을 이어받아야 한다. 지금까지는 반복
+    # 변수가 어디서도 묶이지 않아 `for name in request.form.keys(): open(name)` 같은
+    # 흔한 형태가 통째로 미탐이었다. 원소 하나하나를 구분하지 않는 과대근사이고,
+    # 컨테이너를 통째로 오염으로 보는 기존 모델과 같은 기준이다.
+    tgt = child_by_field(node, "left")
+    if tgt is not None and cond is not None:
+        body.insert(0, ir.Assign(loc=loc_of(tgt, file), target=_expr(tgt, file),
+                                 value=_expr(cond, file)))
     return ir.Loop(loc=loc_of(node, file),
                    test=_expr(cond, file) if cond is not None else None,
-                   body=_body_of(node, file))
+                   body=body)
+
+
+def _with(node: TSNode, file: str) -> list[ir.Node]:
+    """with 문 — 컨텍스트 식을 문으로 살리고 as 이름에 그 값을 잇는다.
+
+    `with open(사용자경로) as fd:` 는 파이썬에서 파일을 여는 표준 형태인데, 본문만
+    펼치면 open(...) 호출 자체가 사라져 sink 검사를 아예 못 한다.
+    """
+    out: list[ir.Node] = []
+    for clause in node.named_children:
+        if clause.type != "with_clause":
+            continue
+        for item in clause.named_children:
+            if item.type != "with_item":
+                continue
+            kids = [c for c in item.named_children if c.type != "comment"]
+            if not kids:
+                continue
+            inner = kids[0]
+            if inner.type == "as_pattern":
+                parts = [c for c in inner.named_children if c.type != "comment"]
+                val = _expr(parts[0], file)
+                alias = next((c for c in parts[1:] if c.type == "as_pattern_target"), None)
+                name = next((c for c in alias.named_children), None) if alias is not None else None
+                if name is not None:
+                    out.append(ir.Assign(loc=loc_of(inner, file),
+                                         target=_expr(name, file), value=val))
+                else:
+                    out.append(val)
+            else:
+                out.append(_expr(inner, file))
+    out.extend(_body_of(node, file))
+    return out
 
 
 # ---------- 표현식 ----------
