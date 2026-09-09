@@ -7,6 +7,9 @@ languages: [javascript, typescript]
 sources:
   - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
   - {pattern: member, object: location, property: [hash, search, href]}
+  # NestJS 계열은 요청 값을 파라미터로 주입한다. 이 표시를 못 보면
+  # 컨트롤러 진입점이 통째로 사라진다(호출자가 없어 요약으로는 안 잡힌다).
+  - {pattern: annotation, name: [Query, Body, Param, Headers, Req, Request, Session, UploadedFile, UploadedFiles]}
 sinks:
   - {pattern: call, callee: [res.send, res.write, res.end, document.write, element.insertAdjacentHTML], arg: 0}
 sanitizers:

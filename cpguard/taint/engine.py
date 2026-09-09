@@ -129,6 +129,9 @@ def _snippet(loc: ir.Loc, src: bytes) -> str:
 #: 형태는 파이썬·자바 웹 코드에서 표준에 가깝다 — 이 한 겹을 벗겨 소스를 본다.
 _SELF_PREFIX = ("self", "this", "cls", "$this")
 
+#: 수신자를 가리키는 이름들. 언어마다 다르고 정규화기가 원문 그대로 두므로 전부 본다.
+_RECEIVERS = ("this", "self", "$this")
+
 
 def _matches_source(path: str, rule: Rule) -> bool:
     segs = path.split(".")
@@ -379,6 +382,16 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                 tr = _taint(a, env, ctx)
                 if tr and (i + shift) in summ.returns_tainted:
                     return tr + [step]
+            # obj.getData() — 객체가 오염이면 게터의 리턴도 오염이다.
+            if summ.self_returns and isinstance(node.callee, ir.Member):
+                if rt := _taint(node.callee.obj, env, ctx):
+                    return rt + [step]
+            # new Svc(오염) — 인자가 필드로 들어가면 만들어진 객체 자체가 오염이다.
+            if summ.is_ctor and summ.taints_self:
+                csh = 1 if summ.implicit_self else 0
+                for i, a in enumerate(node.args):
+                    if (i + csh) in summ.taints_self and (tr := _taint(a, env, ctx)):
+                        return tr + [step]
             return None  # 인자가 오염돼도 리턴으로 흐르지 않으면 오염 아님(정밀도)
 
         # 분석 대상 밖 함수. 표준 라이브러리처럼 동작이 선언된 것은 그대로 쓴다.
@@ -553,6 +566,14 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
         # (b) 프로시저 간: 요약이 "이 파라미터는 내부에서 sink 에 닿는다"고 말하는 경우
         summ = (_user_function(cp, ctx) or _local_function(cp, call.callee, ctx)
                 or _unique_function(cp, call.callee, len(call.args), ctx))
+        if summ is not None and summ.self_sink_paths and isinstance(call.callee, ir.Member):
+            # svc.run() — 인자가 없어도 객체 안의 필드가 sink 로 간다.
+            rt = _taint(call.callee.obj, env, ctx)
+            if rt:
+                enter = Step("call", call.loc, _snippet(call.loc, ctx.src))
+                for inner in summ.self_sink_paths:
+                    _emit(ctx, rt + [enter] + inner)
+
         if summ is not None and summ.sink_paths:
             shift = _self_shift(summ, call.callee)
             for i, arg in enumerate(call.args):
@@ -617,6 +638,20 @@ def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str
                     env[target] = tr + [Step("propagation", call.loc, _snippet(call.loc, ctx.src))]
             continue
 
+        if meth not in _MUTATORS and recv not in env:
+            # 사용자 정의 세터도 컨테이너 변경과 같다 — 요약이 "이 인자는 필드로
+            # 들어간다"고 말하면 수신자를 오염으로 본다.
+            summ = _user_function(cp, ctx) or _unique_function(cp, call.callee,
+                                                               len(call.args), ctx)
+            if summ is not None and summ.taints_self:
+                sh = _self_shift(summ, call.callee)
+                for i, a in enumerate(call.args):
+                    if (i + sh) in summ.taints_self and (tr := _taint(a, env, ctx)):
+                        env = dict(env)
+                        env[recv] = tr + [Step("propagation", call.loc,
+                                               _snippet(call.loc, ctx.src))]
+                        break
+            continue
         if meth not in _MUTATORS or recv in env:
             continue
         for a in call.args:
@@ -726,7 +761,11 @@ def _run_nested(node: ir.Node, ctx: Ctx, env: dict[str, Trace] | None = None) ->
 #: 콜백에 원소를 넘겨주는 메서드. 수신자가 오염이면 콜백의 첫 인자도 오염이다.
 _ITER_METHODS = frozenset({
     "forEach", "map", "filter", "flatMap", "find", "findIndex", "some", "every",
-    "then", "catch", "finally", "reduce", "sort", "each", "eachSeries", "eachLimit"})
+    "then", "catch", "finally", "reduce", "sort", "each", "eachSeries", "eachLimit",
+    # 코틀린 스코프 함수 — 수신자를 그대로 람다에 넘긴다.
+    "let", "also", "apply", "run", "takeIf", "takeUnless", "onEach", "mapNotNull",
+    # 스위프트
+    "compactMap", "flatMap", "first", "contains"})
 
 
 def _callback_seed(fn: ir.Function, node: ir.Node, env: dict[str, Trace] | None,
@@ -915,6 +954,7 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
     result = Summary()
     result.implicit_self = bool(info.fn.params) and info.fn.params[0].name in ("self", "cls")
     result.arity = len(info.fn.params)
+    result.is_ctor = bool(info.fn.is_ctor)
 
     # (1) 인자 무관 오염 리턴
     base = Ctx(rule=rule, src=info.src, out=[], summaries=summaries, file=info.file)
@@ -928,7 +968,7 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
         ctx = Ctx(rule=rule, src=info.src, out=collected, summaries=summaries,
                   file=info.file)
         env = {p.name: [Step("param", p.loc, f"{info.name}({p.name})")]}
-        _run(info.fn.body, env, ctx)
+        out_env = _run(info.fn.body, env, ctx)
 
         if any(tr and tr[0].kind == "param" for tr in ctx.return_traces):
             result.returns_tainted.add(i)
@@ -937,7 +977,61 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
         if paths:
             result.sink_paths[i] = paths
 
+        # this.cmd = cmd — 이 파라미터가 객체 안에 남는다. 생성자·세터가 이 모양이다.
+        if any(tr and tr[0].kind == "param" and _is_field(k)
+               for k, tr in out_env.items()):
+            result.taints_self.add(i)
+
+    # (3) 수신자가 오염일 때. 호출부에서 obj.m() 의 인자는 비어 있으므로 파라미터
+    #     전파로는 절대 안 잡힌다 — 객체를 통째로 오염으로 두고 한 번 더 돌린다.
+    #     수신자를 언급조차 않는 함수(대부분이 그렇다)는 결과가 뻔하므로 건너뛴다 —
+    #     이 검사가 없으면 함수마다 실행이 한 번씩 더 늘어 요약 계산이 배로 느려진다.
+    if not _mentions_receiver(info):
+        return result
+    collected = []
+    ctx = Ctx(rule=rule, src=info.src, out=collected, summaries=summaries, file=info.file)
+    step = Step("param", info.fn.loc, f"{info.name}(this)")
+    _run(info.fn.body, {r: [step] for r in _RECEIVERS}, ctx)
+    result.self_returns = any(tr and tr[0].kind == "param" for tr in ctx.return_traces)
+    result.self_sink_paths = [f.steps for f in collected
+                              if f.steps and f.steps[0].kind == "param"]
     return result
+
+
+def _mentions_receiver(info: FuncInfo) -> bool:
+    """함수가 this/self 를 한 번이라도 쓰는가.
+
+    안 쓰는 함수(대부분이 그렇다)는 수신자를 오염시켜 돌려 봐야 결과가 같다. 이
+    검사가 없으면 함수마다 실행이 한 번 더 늘어 요약 계산이 배로 느려진다. IR 을
+    보는 이유는 코틀린·스위프트가 필드를 `this.` 없이 쓰기 때문이다 — 원문에는
+    이름만 있고, `this.` 는 정규화기가 붙인다.
+    """
+    cached = getattr(info, "_uses_receiver", None)
+    if cached is None:
+        cached = _walk_uses_receiver(info.fn.body)
+        info._uses_receiver = cached
+    return cached
+
+
+def _walk_uses_receiver(nodes) -> bool:
+    stack = list(nodes)
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Ident):
+            if n.name in _RECEIVERS:
+                return True
+            continue
+        for attr in ("target", "value", "obj", "callee", "test", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("body", "then", "orelse", "args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return False
+
+
+def _is_field(path: str) -> bool:
+    """this.cmd / self.cmd / $this->cmd 처럼 객체 안에 남는 경로인가."""
+    return any(path.startswith(r + ".") for r in _RECEIVERS)
 
 
 def compute_summaries(registry: dict[str, FuncInfo], rule: Rule) -> dict[str, Summary]:

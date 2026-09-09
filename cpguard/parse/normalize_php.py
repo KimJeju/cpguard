@@ -75,7 +75,16 @@ def _stmt(node: TSNode, file: str):
              "namespace_definition"):
         # 선언 자체는 taint 대상이 아니고, 안의 메서드만 꺼내 분석한다
         body = child_by_field(node, "body")
-        return _block(body.named_children, file) if body is not None else None
+        if body is None:
+            return None
+        stmts = _block(body.named_children, file)
+        cls = child_by_field(node, "name")
+        if cls is not None:
+            # `new Sanitize($x)` 는 __construct 를 부른다 — 클래스 이름으로 등록한다.
+            for s in stmts:
+                if isinstance(s, ir.Function) and s.name == "__construct":
+                    s.name, s.is_ctor = text_of(cls), True
+        return stmts
 
     if t == "compound_statement":
         return _block(node.named_children, file)
@@ -275,6 +284,11 @@ def _expr(node: TSNode, file: str) -> ir.Node:
              "nullsafe_member_call_expression", "scoped_call_expression",
              "object_creation_expression"):
         fn_node = child_by_field(node, "function")
+        if fn_node is None and t == "object_creation_expression":
+            # new Sanitize($x) — 필드가 없고 클래스 이름이 첫 자식이다. Opaque 로 두면
+            # 생성자 정의를 찾을 수 없어 필드로 들어간 오염이 끊긴다.
+            fn_node = next((c for c in node.named_children
+                            if c.type not in ("arguments", "comment")), None)
         if fn_node is None:
             # 메서드 호출: object + name 을 멤버 접근으로 합성
             obj_node = child_by_field(node, "object") or child_by_field(node, "scope")
@@ -288,8 +302,10 @@ def _expr(node: TSNode, file: str) -> ir.Node:
                 callee = ir.Opaque(loc=loc_of(node, file), kind=t, children=[])
         else:
             callee = _expr(fn_node, file)
-        return ir.Call(loc=loc_of(node, file), callee=callee,
-                       args=_args(child_by_field(node, "arguments"), file))
+        # object_creation_expression 은 arguments 가 필드가 아니라 그냥 자식이다.
+        arg_node = child_by_field(node, "arguments") or next(
+            (c for c in node.named_children if c.type == "arguments"), None)
+        return ir.Call(loc=loc_of(node, file), callee=callee, args=_args(arg_node, file))
 
     if t in _AS_CALL:
         # echo / include / 백틱 등을 호출로 정규화해 위험 지점 판정을 통일한다

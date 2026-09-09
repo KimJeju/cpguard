@@ -64,10 +64,29 @@ class Spec:
     # 만들어 상수 전파가 죽은 가지를 지울 수 있다. 없으면 분기 합집합으로만 다룬다.
     case_label: str = ""
     # 상수 전파가 분기 조건을 접으려면 연산자를 알아야 한다 → 이 세 가지는 Opaque 로 접지 않는다.
+    #: 문자열 리터럴 안의 `$이름` 보간을 노출하지 않는 문법(Kotlin). 조각을 직접 읽는다.
+    dollar_interp: str = ""
+    #: 클래스 주 생성자에서 필드가 되는 파라미터 노드(Kotlin 의 class_parameter).
+    ctor_property: tuple[str, ...] = field(default_factory=tuple)
+    #: `if let x = e` / `guard let x = e` 처럼 조건 자리에서 이름을 묶는 문법(Swift).
+    binds_in_cond: tuple[str, ...] = field(default_factory=tuple)
+    #: 대입 좌변을 한 겹 감싸는 노드(Swift 의 directly_assignable_expression).
+    unwrap_assign: tuple[str, ...] = field(default_factory=tuple)
+    #: 인자 컨테이너 밖에 오는 후행 람다(Kotlin 의 annotated_lambda).
+    trailing_lambda: tuple[str, ...] = field(default_factory=tuple)
+    #: 파라미터를 안 적은 람다가 쓰는 암묵 이름(Kotlin 의 it). 없으면 빈 문자열.
+    implicit_lambda_param: str = ""
     binary: tuple[str, ...] = ("binary_expression",)
     unary: tuple[str, ...] = ("unary_expression",)
     ternary: tuple[str, ...] = ("ternary_expression", "conditional_expression")
 
+
+#: 호출이 곰 객체 생성인 노드. 자바·C#은 생성자 이름이 이미 클래스명이라
+#: 이름을 바꿀 필요는 없고, "이 호출의 결과가 그 객체"라는 표시만 달면 된다.
+#: 수신자를 가리키는 단독 노드(자바·C#의 this, 스위프트의 self).
+_RECEIVER_NODES = ("this", "self", "self_expression", "this_expression")
+
+_CTOR_NODES = ("constructor_declaration", "constructor_invocation", "init_declaration")
 
 _ID = ("identifier",)
 _LIT_COMMON = ("string", "string_literal", "number", "number_literal", "integer", "float",
@@ -180,8 +199,12 @@ LANG: dict[str, Spec] = {
                "class_body", "variable_declaration", "value_argument"),
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("string_literal", "character_literal"),
         descend=("class_declaration", "object_declaration", "companion_object"),
-        splice=("try_expression", "catch_block", "finally_block", "when_expression", "when_entry",),
+        splice=("try_expression", "catch_block", "finally_block", "when_entry",),
         branches={"when_expression": ("when_entry",)},
+        dollar_interp="string_literal",
+        ctor_property=("class_parameter",),
+        trailing_lambda=("annotated_lambda", "lambda_literal"),
+        implicit_lambda_param="it",
     ),
     "swift": Spec(
         call="call_expression", call_fn=None, call_args=None, args_types=("call_suffix", "value_arguments"),
@@ -190,7 +213,8 @@ LANG: dict[str, Spec] = {
         assign=("assignment",), assign_left="target", assign_right="result",
         decl=("property_declaration",), decl_name="name", decl_value="value",
         func=("function_declaration", "lambda_literal", "init_declaration"),
-        func_name="name", func_params=None, params_types=(),
+        func_name="name", func_params=None,
+        params_types=("lambda_function_type_parameters",),
         param_name="name", func_body="body",
         ret=("control_transfer_statement",),
         if_="if_statement", if_cond=None, if_then=None, if_else=None,
@@ -198,8 +222,10 @@ LANG: dict[str, Spec] = {
         block=("function_body", "statements", "source_file", "class_body", "pattern"),
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("line_string_literal", "multi_line_string_literal"),
         descend=("class_declaration", "protocol_declaration"),
-        splice=("do_statement", "catch_block", "switch_statement", "switch_entry",),
+        splice=("do_statement", "catch_block", "switch_entry",),
         branches={"switch_statement": ("switch_entry",)},
+        binds_in_cond=("if_statement", "guard_statement"),
+        unwrap_assign=("directly_assignable_expression",),
         binary=("additive_expression", "multiplicative_expression", "comparison_expression",
                 "equality_expression", "conjunction_expression", "disjunction_expression"),
         unary=("prefix_expression",),
@@ -241,6 +267,8 @@ class _Worker:
     def __init__(self, spec: Spec, file: str):
         self.s = spec
         self.file = file
+        #: 지금 보고 있는 클래스의 필드 이름. 코틀린·스위프트는 this 없이 쓴다.
+        self.fields: frozenset = frozenset()
 
     # ---------- 유틸 ----------
 
@@ -341,9 +369,7 @@ class _Worker:
             return [self.expr(k) if t in s.wrap else self._stmt_or_expr(k) for k in kids]
 
         if t in s.descend:
-            # 클래스/구조체: 본문만 꺼내 메서드를 분석
-            body = child_by_field(node, "body")
-            return self.block(self._named(body)) if body is not None else self.block(self._named(node))
+            return self._class(node)
 
         if t in s.func:
             return self.function(node)
@@ -352,6 +378,13 @@ class _Worker:
             kids = self._named(node)
             # Swift control_transfer_statement 는 break/continue 도 포함 — 값 있으면 return 취급
             return ir.Return(loc=loc_of(node, self.file), value=self.expr(kids[0]) if kids else None)
+
+        if t in s.binds_in_cond and (bind := self._bind_in_cond(node)) is not None:
+            # 묶기만 하고 나머지는 평소대로 — if 는 분기로, guard 는 else 본문만.
+            if t == self.s.if_:
+                return [bind, self._if(node)]
+            return [bind] + self.block(
+                [c for c in self._named(node) if c.type in self.s.block])
 
         if t == s.if_:
             return self._if(node)
@@ -447,6 +480,46 @@ class _Worker:
                            then=body, orelse=chain)]
         return chain
 
+    def _dollar_string(self, node: TSNode) -> ir.Node:
+        """`"ls $p"` — 이 문법은 보간을 named child 로 노출하지 않는다.
+
+        조각이 string_content('$') + string_content('p') 로 쪼개져 와서 그냥 두면
+        p 가 식별자로 살아나지 않아 문자열 템플릿이 통째로 미탐이다. `${p}` 형태는
+        interpolation 노드로 오므로 평소대로 자식을 훑는다.
+        """
+        out: list[ir.Node] = []
+        kids = self._named(node)
+        dollar = False
+        for c in kids:
+            txt = text_of(c)
+            if c.type == "string_content" and txt == "$":
+                dollar = True
+                continue
+            if dollar:
+                dollar = False
+                if txt.isidentifier():
+                    out.append(self.expr(c) if c.type in self.s.idents else
+                               ir.Ident(loc=loc_of(c, self.file), name=txt))
+                    continue
+            if c.type != "string_content":
+                out.append(self.expr(c))
+        if not out:
+            return ir.Literal(loc=loc_of(node, self.file), value=None, raw=text_of(node))
+        return ir.Opaque(loc=loc_of(node, self.file), kind="string_template",
+                         children=out)
+
+    def _descendants(self, node: TSNode, types: tuple[str, ...], depth: int = 2):
+        """가까운 후손 중 주어진 타입인 노드들. 컨테이너가 한 겹 더 감싸인 문법용."""
+        if not types:
+            return
+        stack = [(c, 1) for c in self._named(node)]
+        while stack:
+            n, d = stack.pop()
+            if n.type in types:
+                yield n
+            elif d < depth:
+                stack.extend((c, d + 1) for c in self._named(n))
+
     def _stmt_or_expr(self, node: TSNode):
         r = self.stmt(node)
         return r if r is not None else self._opaque(node)
@@ -476,21 +549,115 @@ class _Worker:
                 if tgt is not None:
                     params.append(ir.Param(loc=loc_of(tgt, self.file), name=text_of(tgt),
                                            annotations=self._annotations(p)))
-        # Swift 는 parameter 가 함수 노드의 직계 자식(컨테이너 없음)
-        if not params and not s.params_types:
+        # Swift 는 parameter 가 함수 노드의 직계 자식(컨테이너 없음)이고, 클로저는
+        # 파라미터 컨테이너가 한 겹 더 안쪽(lambda_function_type)에 있다.
+        if not params:
             for p in self._named(node):
                 if p.type == "parameter":
                     tgt = self._fld(p, "name") or self._first_ident(p)
                     if tgt is not None:
                         params.append(ir.Param(loc=loc_of(tgt, self.file), name=text_of(tgt)))
+        if not params:
+            for cont in self._descendants(node, s.params_types, depth=3):
+                for q in self._named(cont):
+                    tgt = q if q.type in s.idents else self._first_ident(q)
+                    if tgt is not None:
+                        params.append(ir.Param(loc=loc_of(tgt, self.file), name=text_of(tgt)))
+        if not params and s.implicit_lambda_param and node.type in s.trailing_lambda:
+            # `list.forEach { exec(it) }` — 이름을 안 적으면 it 이 원소다.
+            params.append(ir.Param(loc=loc_of(node, self.file),
+                                   name=s.implicit_lambda_param))
         bnode = self._fld(node, s.func_body) if s.func_body else None
         if bnode is None:
             bnode = next((c for c in reversed(self._named(node)) if c.type in s.block), None)
+        if bnode is not None:
+            body = self._body(bnode)
+        else:
+            # 코틀린 람다는 본문 컨테이너 없이 문이 바로 자식으로 온다. 컨테이너만
+            # 찾으면 몸통이 빈 함수가 되어 콜백 안의 위험 코드가 통째로 사라진다.
+            skip = s.params_types + ("type_annotation", "user_type", "modifiers",
+                                     "lambda_function_type", "comment")
+            body = self.block([c for c in self._named(node)
+                               if c.type not in skip
+                               and (name_node is None or c.start_byte != name_node.start_byte)])
         return ir.Function(loc=loc_of(node, self.file),
                            name=text_of(name_node) if name_node is not None else None,
-                           params=params, body=self._body(bnode))
+                           params=params, body=body,
+                           is_ctor=node.type in _CTOR_NODES)
 
     # ---------- 분기/반복 ----------
+
+    def _class(self, node: TSNode):
+        """클래스 본문만 꺼내되, 필드 이름을 알고 들어간다.
+
+        코틀린·스위프트는 필드를 `this.` 없이 쓴다. 필드 이름을 모르면 생성자가 채운
+        값과 메서드가 읽는 이름이 이어지지 않아 서비스 클래스 형태가 통째로 미탐이다.
+        코틀린의 주 생성자 프로퍼티(`class Svc(val cmd: String)`)는 선언과 대입이
+        한 줄에 있으므로 생성자 함수를 만들어 준다.
+        """
+        s = self.s
+        body = next((c for c in self._named(node) if c.type in s.block), None)
+        ctor_params = list(self._descendants(node, s.ctor_property, depth=3))
+        prev, self.fields = self.fields, self._field_names(body, ctor_params)
+        try:
+            stmts = self.block(self._named(body)) if body is not None else []
+            if ctor_params:
+                stmts.insert(0, self._primary_ctor(node, ctor_params))
+        finally:
+            self.fields = prev
+        return stmts
+
+    def _field_names(self, body: TSNode | None, ctor_params: list) -> frozenset:
+        names = set()
+        for c in ctor_params:
+            tgt = self._first_ident(c)
+            if tgt is not None:
+                names.add(text_of(tgt))
+        for c in (self._named(body) if body is not None else []):
+            if c.type in self.s.decl:
+                tgt = self._unwrap(self._fld(c, self.s.decl_name)) if self.s.decl_name else None
+                tgt = tgt or self._first_ident(c)
+                if tgt is not None:
+                    names.add(text_of(tgt))
+        return frozenset(names)
+
+    def _primary_ctor(self, node: TSNode, ctor_params: list) -> ir.Function:
+        """`class Svc(val cmd: String)` → 클래스 이름의 생성자 + this.cmd = cmd."""
+        name = self._fld(node, "name") or self._first_ident(node)
+        params: list[ir.Param] = []
+        body: list[ir.Node] = []
+        for c in ctor_params:
+            tgt = self._first_ident(c)
+            if tgt is None:
+                continue
+            who = text_of(tgt)
+            params.append(ir.Param(loc=loc_of(tgt, self.file), name=who))
+            body.append(ir.Assign(
+                loc=loc_of(c, self.file), operator="=",
+                target=ir.Member(loc=loc_of(c, self.file), prop=who,
+                                 obj=ir.Ident(loc=loc_of(c, self.file), name="this")),
+                value=ir.Ident(loc=loc_of(tgt, self.file), name=who)))
+        return ir.Function(loc=loc_of(node, self.file),
+                           name=text_of(name) if name is not None else None,
+                           params=params, body=body, is_ctor=True)
+
+    def _bind_in_cond(self, node: TSNode) -> ir.Node | None:
+        """`if let q = req.query` / `guard let g = ...` 의 q·g 를 값에 묶는다.
+
+        조건 자리에서 이름이 생기는 문법이라 그냥 두면 본문의 q 가 어디에도 묶이지
+        않아 통째로 미탐이다. 옵셔널 해제는 값을 바꾸지 않으므로 그대로 잇는다.
+        """
+        name = child_by_field(node, "bound_identifier")
+        if name is None:
+            return None
+        skip = self.s.block + ("value_binding_pattern", "else", "comment", "pattern")
+        val = next((c for c in self._named(node)
+                    if c.type not in skip and c.start_byte != name.start_byte), None)
+        if val is None:
+            return None
+        return ir.Assign(loc=loc_of(node, self.file), operator="declare",
+                         target=ir.Ident(loc=loc_of(name, self.file), name=text_of(name)),
+                         value=self.expr(val))
 
     def _if(self, node: TSNode) -> ir.If:
         s = self.s
@@ -511,6 +678,32 @@ class _Worker:
 
     def _loop(self, node: TSNode) -> ir.Loop:
         cond = child_by_field(node, "condition")
+        # Swift/Kotlin 의 for-in: 반복 변수와 대상이 필드 이름이 다르거나(item/collection)
+        # 아예 없다(코틀린은 순서로만 구분). 여기서 표준 필드 이름으로 맞춰 준다.
+        if node.type == "for_statement" and child_by_field(node, "value") is None:
+            item = child_by_field(node, "item") or child_by_field(node, "bound_identifier")
+            coll = child_by_field(node, "collection")
+            if item is None or coll is None:
+                # 본문 컨테이너만 빼고 앞의 둘이 반복 변수와 대상이다. block 집합으로
+                # 거르면 안 된다 — 코틀린은 변수 선언 노드도 그 집합에 들어 있다.
+                body_node = child_by_field(node, "body")
+                kids = [c for c in self._named(node)
+                        if (body_node is None or c.start_byte != body_node.start_byte)
+                        and c.type not in ("block", "statements", "control_structure_body",
+                                           "function_body", "comment")]
+                if len(kids) >= 2:
+                    item, coll = kids[0], kids[1]
+            if item is not None and coll is not None:
+                tgt = self._first_ident(item) if item.type not in self.s.idents else item
+                if tgt is not None:
+                    body_node = child_by_field(node, "body") or next(
+                        (c for c in reversed(self._named(node)) if c.type in self.s.block), None)
+                    stmts = self._body(body_node)
+                    stmts = [ir.Assign(
+                        loc=loc_of(node, self.file), operator="declare",
+                        target=ir.Ident(loc=loc_of(tgt, self.file), name=text_of(tgt)),
+                        value=self.expr(coll))] + stmts
+                    return ir.Loop(loc=loc_of(node, self.file), test=None, body=stmts)
         body = child_by_field(node, "body")
         if body is None:
             body = next((c for c in reversed(self._named(node)) if c.type in self.s.block), None)
@@ -572,8 +765,27 @@ class _Worker:
         t = node.type
         kids = self._named(node)
 
-        if t in s.idents:
+        if t in _RECEIVER_NODES:
+            # this / self — Opaque 로 접으면 this.cmd 의 경로가 아예 만들어지지 않아
+            # 필드에 담긴 오염을 추적할 수 없다(생성자→필드→메서드 흐름이 통째로 미탐).
             return ir.Ident(loc=loc_of(node, self.file), name=text_of(node))
+
+        if t == s.dollar_interp:
+            return self._dollar_string(node)
+
+        if t in s.idents:
+            if text_of(node) in ("true", "false", "null", "nil", "None"):
+                # 코틀린은 true/false 를 identifier 로 준다. 리터럴로 두지 않으면
+                # 상수 전파가 `if (false)` 의 죽은 가지를 지우지 못한다.
+                return ir.Literal(loc=loc_of(node, self.file), value=None,
+                                  raw=text_of(node))
+            name = text_of(node)
+            if name in self.fields:
+                # 코틀린·스위프트는 필드를 this 없이 그냥 이름으로 쓴다. 그대로 두면
+                # 생성자가 채운 필드와 메서드가 읽는 이름이 이어지지 않는다.
+                return ir.Member(loc=loc_of(node, self.file), prop=name,
+                                 obj=ir.Ident(loc=loc_of(node, self.file), name="this"))
+            return ir.Ident(loc=loc_of(node, self.file), name=name)
 
         if t in s.literals and not kids:
             return ir.Literal(loc=loc_of(node, self.file), value=None, raw=text_of(node))
@@ -621,6 +833,15 @@ class _Worker:
                         args.append(self.expr(v) if v is not None else self._opaque(a))
                     else:
                         args.append(self.expr(a))
+            # a.forEach { v -> ... } — 코틀린의 후행 람다는 인자 컨테이너 밖에 있다.
+            # 인자로 세지 않으면 콜백 본문이 호출과 이어지지 않아 통째로 미탐이다.
+            for c in kids:
+                if c.type not in s.trailing_lambda:
+                    continue
+                # annotated_lambda 는 lambda_literal 을 한 겹 감싼 껍데기다. 껍데기를
+                # 그대로 함수로 만들면 본문 컨테이너를 못 찾아 몸통이 빈 함수가 된다.
+                inner = next((q for q in self._named(c) if q.type in s.func), c)
+                args.append(self.expr(inner))
             return ir.Call(loc=loc_of(node, self.file), callee=callee, args=args)
 
         if t in s.new_expr:
@@ -650,6 +871,11 @@ class _Worker:
             left = self._fld(node, s.assign_left) if s.assign_left else (kids[0] if kids else None)
             right = self._fld(node, s.assign_right) if s.assign_right else (kids[-1] if len(kids) > 1 else None)
             # Go: expression_list 래퍼 → 첫 원소끼리 짝짓는다(다중 할당은 과대근사)
+            if left is not None and left.type in s.unwrap_assign:
+                # Swift 의 directly_assignable_expression — 벗기지 않으면 좌변 경로가
+                # 만들어지지 않아 대입 자체가 사라진다.
+                kids_l = self._named(left)
+                left = kids_l[0] if kids_l else left
             if left is not None and left.type == "expression_list":
                 lk = self._named(left)
                 left = lk[0] if lk else left

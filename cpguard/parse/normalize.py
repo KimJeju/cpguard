@@ -116,11 +116,30 @@ def _stmt(node: TSNode, file: str):
              "method_definition"):
         return _function(node, file)
 
-    if t in ("class_declaration", "class"):
+    if t in ("export_statement", "ambient_declaration"):
+        # export function f(){} — 감싸는 노드를 접으면 안의 선언이 통째로 사라진다.
+        return _block(node.named_children, file)
+
+    if t in ("internal_module", "module"):
+        # namespace N { ... } — 이름공간은 흐름 대상이 아니고 안의 선언만 분석한다.
+        body = child_by_field(node, "body")
+        return _block(body.named_children, file) if body is not None else None
+
+    if t in ("class_declaration", "class", "abstract_class_declaration"):
         # 클래스 선언 자체는 흐름 대상이 아니고 안의 메서드만 분석한다. 접지 않으면
         # 메서드가 통째로 사라져 호출부에서 정의를 찾지 못한다.
         body = child_by_field(node, "body")
-        return _block(body.named_children, file) if body is not None else None
+        if body is None:
+            return None
+        stmts = _block(body.named_children, file)
+        cls = child_by_field(node, "name")
+        if cls is not None:
+            # `constructor` 라는 이름으로는 `new Svc(x)` 가 정의를 못 찾는다.
+            # 클래스 이름으로 바꿔 달고 생성자 표시를 남긴다.
+            for s in stmts:
+                if isinstance(s, ir.Function) and s.name == "constructor":
+                    s.name, s.is_ctor = text_of(cls), True
+        return stmts
 
     if t == "return_statement":
         return _return(node, file)
@@ -220,8 +239,7 @@ def _function(node: TSNode, file: str) -> ir.Function:
     params_node = child_by_field(node, "parameters")
     if params_node is not None:
         for p in params_node.named_children:
-            # identifier 가 보통이지만 기본값·rest·패턴 파라미터도 이름 텍스트로 받아둔다
-            params.append(ir.Param(loc=loc_of(p, file), name=text_of(p)))
+            params.append(_param(p, file))
     else:
         # 화살표 단일 파라미터: x => ...  (parameters 필드 없이 identifier 하나)
         single = child_by_field(node, "parameter")
@@ -233,11 +251,65 @@ def _function(node: TSNode, file: str) -> ir.Function:
         body: list[ir.Node] = []
     elif body_node.type == "statement_block":
         body = _block(body_node.named_children, file)
+        # TS 의 `constructor(private readonly cmd: string) {}` 는 본문이 비어 있어도
+        # this.cmd = cmd 를 수행한다. 펴 두지 않으면 필드로 들어간 오염이 사라진다.
+        if name == "constructor" and params_node is not None:
+            for p in params_node.named_children:
+                if p.type in _PARAM_WRAPPERS and any(
+                        c.type in ("accessibility_modifier", "override_modifier")
+                        or text_of(c) == "readonly" for c in p.children):
+                    who = _param(p, file).name
+                    body.insert(0, ir.Assign(
+                        loc=loc_of(p, file), operator="=",
+                        target=ir.Member(loc=loc_of(p, file), prop=who,
+                                         obj=ir.Ident(loc=loc_of(p, file), name="this")),
+                        value=ir.Ident(loc=loc_of(p, file), name=who)))
     else:
         # 화살표 축약 본문: x => x + 1  →  암묵적 return 으로 펼친다
         body = [ir.Return(loc=loc_of(body_node, file), value=_expr(body_node, file))]
 
-    return ir.Function(loc=loc_of(node, file), name=name, params=params, body=body)
+    return ir.Function(loc=loc_of(node, file), name=name, params=params, body=body,
+                       decorators=_decorators(node))
+
+
+#: 타입 표기·접근제어자를 감싼 파라미터 노드(TS). 안의 pattern 이 진짜 이름이다.
+_PARAM_WRAPPERS = ("required_parameter", "optional_parameter")
+
+
+def _param(node: TSNode, file: str) -> ir.Param:
+    """파라미터 하나 → ir.Param.
+
+    TS 는 `v: string` 이 required_parameter 로 감싸여 온다. 노드 텍스트를 그대로
+    이름으로 쓰면 'v: string' 이 되어 인자 전파(요약)가 영영 안 걸린다 — 타입을 쓴
+    코드가 통째로 미탐이었다. pattern 필드가 진짜 이름이다.
+    """
+    name_node = node
+    if node.type in _PARAM_WRAPPERS:
+        name_node = child_by_field(node, "pattern") or node
+    elif node.type == "assignment_pattern":       # (v = 1)
+        name_node = child_by_field(node, "left") or node
+    elif node.type == "rest_pattern":             # (...rest)
+        kids = node.named_children
+        name_node = kids[0] if kids else node
+    return ir.Param(loc=loc_of(name_node, file), name=text_of(name_node),
+                    annotations=_decorators(node))
+
+
+def _decorators(node: TSNode) -> list[str]:
+    """@Query('n') → 'Query'. NestJS 계열은 요청 값을 파라미터로 주입하므로,
+    이 표시를 못 보면 컨트롤러 진입점이 통째로 사라진다."""
+    out: list[str] = []
+    for c in node.named_children:
+        if c.type != "decorator":
+            continue
+        inner = c.named_children[0] if c.named_children else None
+        if inner is None:
+            continue
+        if inner.type == "call_expression":
+            inner = child_by_field(inner, "function") or inner
+        name = text_of(inner)
+        out.append(name.rpartition(".")[2])
+    return out
 
 
 def _return(node: TSNode, file: str) -> ir.Return:
@@ -348,6 +420,11 @@ def _branch(node: TSNode | None, file: str) -> list[ir.Node]:
 def _expr(node: TSNode, file: str) -> ir.Node:
     """표현식 레벨 디스패치."""
     t = node.type
+
+    if t in ("this", "super"):
+        # Opaque 로 접으면 this.cmd 의 경로가 만들어지지 않아 필드에 담긴 오염을
+        # 추적할 수 없다(생성자 → 필드 → 메서드 흐름이 통째로 미탐).
+        return ir.Ident(loc=loc_of(node, file), name=text_of(node))
 
     if t in ("identifier", "property_identifier", "shorthand_property_identifier",
              "shorthand_property_identifier_pattern"):

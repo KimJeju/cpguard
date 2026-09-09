@@ -100,7 +100,15 @@ def _stmt(node: TSNode, file: str):
 
     if t == "class_definition":
         # 클래스 자체는 오염 대상이 아니고, 안의 메서드만 꺼내 분석한다
-        return _body_of(node, file)
+        stmts = _body_of(node, file)
+        cls = child_by_field(node, "name")
+        if cls is not None:
+            # `Svc(x)` 는 __init__ 을 부른다. 그 이름으로는 정의를 찾을 수 없으므로
+            # 클래스 이름으로 바꿔 달고 생성자 표시를 남긴다.
+            for s in stmts:
+                if isinstance(s, ir.Function) and s.name == "__init__":
+                    s.name, s.is_ctor = text_of(cls), True
+        return stmts
 
     if t == "return_statement":
         kids = [c for c in node.named_children if c.type != "comment"]

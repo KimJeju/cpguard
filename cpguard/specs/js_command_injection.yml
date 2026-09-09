@@ -7,6 +7,9 @@ languages: [javascript, typescript]
 sources:
   - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
   - {pattern: name, name: [process.argv]}
+  # NestJS 계열은 요청 값을 파라미터로 주입한다. 이 표시를 못 보면
+  # 컨트롤러 진입점이 통째로 사라진다(호출자가 없어 요약으로는 안 잡힌다).
+  - {pattern: annotation, name: [Query, Body, Param, Headers, Req, Request, Session, UploadedFile, UploadedFiles]}
 sinks:
   - {pattern: call, callee: [child_process.exec, child_process.execSync, child_process.spawn, exec, execSync], arg: 0}
 sanitizers:

@@ -150,6 +150,9 @@ class Function(Node):
     # 함수에 붙은 데코레이터 경로(@app.route -> 'app.route'). 프레임워크가 이 함수를
     # 요청 핸들러로 등록한다는 표시이고, 그때는 리턴값이 곧 응답 본문이다.
     decorators: list[str] = field(default_factory=list)
+    # 이 함수의 호출이 곰 객체 생성인가(생성자). 언어마다 이름이 달라
+    # (constructor / __init__ / __construct / 클래스명) 정규화기가 표시한다.
+    is_ctor: bool = False
 
 
 @dataclass

@@ -46,13 +46,25 @@ class Summary:
     implicit_self: bool = False
     #: 파라미터 개수. 수신자를 모르는 호출을 이름만으로 이을 때 인자 수가 맞는지 본다.
     arity: int = -1
+    # ---- 수신자(this/self) 민감도 ----
+    # 객체가 오염이면 이 메서드 안에서 위험 지점에 닿는가. 서비스 클래스가 생성자로
+    # 받은 값을 필드에 넣고 메서드에서 쓰는 형태(가장 흔한 OOP 형태)를 잇는 데 쓴다.
+    # 필드를 구분하지 않는 객체 단위 근사다 — 컨테이너를 통째로 보는 모델과 같은 기준.
+    self_sink_paths: list[list[Step]] = field(default_factory=list)
+    #: 객체가 오염이면 리턴값도 오염인가(게터).
+    self_returns: bool = False
+    #: 이 파라미터가 객체의 필드로 들어가는가(세터·생성자).
+    taints_self: set[int] = field(default_factory=set)
+    #: 이 함수의 호출이 곧 객체 생성인가(생성자). 그렇다면 리턴값이 그 객체다.
+    is_ctor: bool = False
 
     @property
     def returns_source(self) -> bool:
         return bool(self.source_trace)
 
     def is_empty(self) -> bool:
-        return not self.returns_tainted and not self.sink_paths and not self.source_trace
+        return not (self.returns_tainted or self.sink_paths or self.source_trace
+                    or self.self_sink_paths or self.self_returns or self.taints_self)
 
 
 @dataclass
