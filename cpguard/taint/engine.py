@@ -134,6 +134,10 @@ _RECEIVERS = ("this", "self", "$this")
 
 
 def _matches_source(path: str, rule: Rule) -> bool:
+    if "::" in path:
+        # std::getenv 는 getenv 다. 이름공간을 붙여 쓰는 것은 C++ 의 기본 스타일이라
+        # 규칙에 두 형태를 다 적게 하면 목록이 두 배가 되고 하나는 반드시 빠진다.
+        path = path.rpartition("::")[2]
     segs = path.split(".")
     if len(segs) > 1 and segs[0] in _SELF_PREFIX:
         segs = segs[1:]
@@ -152,8 +156,8 @@ def _matches_source(path: str, rule: Rule) -> bool:
 
 def _callee_matches(path: str, candidates: list[str]) -> bool:
     for c in candidates:
-        if path == c or path.endswith("." + c):
-            return True
+        if path == c or path.endswith("." + c) or path.endswith("::" + c):
+            return True                      # std::system 은 system 이다
     return False
 
 
@@ -619,8 +623,47 @@ def _literal_key(node: ir.Node, ctx: Ctx) -> str | None:
     return inner
 
 
+def _out_params(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
+    """인자에 결과를 써 주는 호출을 반영한다. C 계열의 표준 형태다.
+
+      outparam  fgets(buf, ...)              그 자체가 입력이다 → buf 가 오염
+      outcopy   snprintf(cmd, n, "%s", x)    x 의 오염을 cmd 로 옮긴다
+
+    리턴값만 보면 C 코드가 통째로 미탐이다. 어떤 호출의 몇 번째 인자가 출력인지는
+    규칙이 선언한다 — 언어마다 API 가 다르기 때문이다.
+    """
+    pats = [s for s in ctx.rule.sources if s.kind in ("outparam", "outcopy")]
+    if not pats:
+        return env
+    for call in _iter_calls(node):
+        cp = path_of(call.callee)
+        if not cp:
+            continue
+        base = cp.rpartition(".")[2]
+        for s in pats:
+            if base not in s.name and cp not in s.name:
+                continue
+            if s.arg >= len(call.args):
+                continue
+            p = path_of(call.args[s.arg])
+            if not p or p in env:
+                continue
+            if s.kind == "outparam":          # 그 자체가 입력이다(fgets)
+                tr = [Step("source", call.loc, _snippet(call.loc, ctx.src))]
+            else:                             # 다른 인자를 그 자리로 옮긴다(snprintf)
+                tr = next((t for i, a in enumerate(call.args) if i != s.arg
+                           and (t := _taint(a, env, ctx))), None)
+                if tr:
+                    tr = tr + [Step("propagation", call.loc, _snippet(call.loc, ctx.src))]
+            if tr:
+                env = dict(env)
+                env[p] = tr
+    return env
+
+
 def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
     """coll.add(오염) / sb.append(오염) / map.put(키, 오염) → 수신자 경로를 오염시킨다."""
+    env = _out_params(node, env, ctx)
     for call in _iter_calls(node):
         cp = path_of(call.callee)
         if not cp or "." not in cp:

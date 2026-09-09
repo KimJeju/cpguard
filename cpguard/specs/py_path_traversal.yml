@@ -19,3 +19,9 @@ validators:
   # 경로 조작은 '..' 를 걸러내는 것이 표준 방어다. 조건에서 이 표시가 오염 경로에
   # 걸리고 거부하고 돌아가면 검증된 것으로 본다.
   - {token: '..'}
+  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
+  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
+  - {token: 'startswith'}
+  - {token: 'endswith'}
+  - {token: 'isdigit'}
+  - {token: 'isalnum'}

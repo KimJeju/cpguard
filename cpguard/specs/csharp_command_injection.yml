@@ -204,6 +204,11 @@ sources:
   - FromRoute
   - FromForm
   - FromHeader
+- pattern: member
+  object: process
+  property:
+  - StandardOutput
+  - StandardError
 sinks:
 - pattern: call
   callee:
@@ -245,3 +250,12 @@ sanitizers:
   - WebUtility.UrlEncode
   - SecurityElement.Escape
   - Html.Encode
+validators:
+  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
+  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
+  - {token: 'Contains'}
+  - {token: 'IsMatch'}
+  - {token: 'StartsWith'}
+  - {token: 'EndsWith'}
+  - {token: 'TryParse'}
+  - {token: 'Equals'}

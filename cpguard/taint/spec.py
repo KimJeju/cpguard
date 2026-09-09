@@ -33,10 +33,12 @@ class SourcePattern:
     member: req.query.* 같은 접근, name: process.argv 같은 호출/이름,
     annotation: @RequestParam 처럼 프레임워크가 요청 값을 파라미터에 주입하는 형태.
     """
-    kind: str                                   # 'member' | 'name' | 'annotation'
+    kind: str                                   # 'member' | 'name' | 'annotation' | 'outparam'
     object: str | None = None                   # member 의 루트 (예: req)
     property: list[str] = field(default_factory=list)   # member 의 2번째 세그먼트 후보
     name: list[str] = field(default_factory=list)       # name/annotation 패턴의 이름 후보
+    # outparam: 결과를 리턴이 아니라 이 자리의 인자에 써 주는 호출(fgets(buf, ...)).
+    arg: int = 0
 
 
 @dataclass
@@ -94,6 +96,7 @@ def rule_from_dict(d: dict) -> Rule:
             object=s.get("object"),
             property=_as_list(s.get("property")),
             name=_as_list(s.get("name")),
+            arg=s.get("arg", 0),
         ))
     sinks = [SinkPattern(callee=_as_list(s.get("callee")), arg=s.get("arg"),
                          kind=s.get("pattern", "call"),

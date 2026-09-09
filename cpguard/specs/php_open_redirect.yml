@@ -1,22 +1,70 @@
 id: php.open-redirect
-message: "사용자 입력이 리다이렉트 위치로 흘러 들어갑니다 (오픈 리다이렉트)."
+message: 사용자 입력이 리다이렉트 위치로 흘러 들어갑니다 (오픈 리다이렉트).
 severity: medium
 cwe: CWE-601
-owasp: "A01:2021-Broken Access Control"
-languages: [php]
+owasp: A01:2021-Broken Access Control
+languages:
+- php
 sources:
-  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER", "$_SESSION", "$_ENV"]}
-  # 프로세스 밖에서 들어온 값. 명령 출력과 파일 내용은 이 프로그램이 만든 값이 아니다.
-  - {pattern: name, name: [shell_exec, exec, system, passthru, popen, proc_open,
-                           fgets, fread, file_get_contents, fgetss, stream_get_contents,
-                           readline, getenv]}
+- pattern: name
+  name:
+  - $_GET
+  - $_POST
+  - $_REQUEST
+  - $_COOKIE
+  - $_FILES
+  - $_SERVER
+  - $_SESSION
+  - $_ENV
+- pattern: name
+  name:
+  - shell_exec
+  - exec
+  - system
+  - passthru
+  - popen
+  - proc_open
+  - fgets
+  - fread
+  - file_get_contents
+  - fgetss
+  - stream_get_contents
+  - readline
+  - getenv
+- pattern: outparam
+  arg: 1
+  name:
+  - exec
 sinks:
-  - {pattern: call, callee: [header]}
-  # pecl_http 의 리다이렉트 함수. Location 헤더를 직접 쓰는 것과 같다.
-  - {pattern: call, callee: [http_redirect]}
+- pattern: call
+  callee:
+  - header
+- pattern: call
+  callee:
+  - http_redirect
 sanitizers:
-  # 숫자 변환 · 인코딩
-  # 화이트리스트·형식 검사 가드
-  - {callee: [in_array, parse_url, intval, settype, urlencode, number_format, array_search, array_key_exists, preg_match, ctype_digit, ctype_alnum]}
-  # filter_var 는 두 번째 인자로 갈린다 — 숫자 필터만 주입을 막는다.
-  - {callee: [filter_var], requires: [FILTER_VALIDATE_INT, FILTER_VALIDATE_FLOAT, FILTER_VALIDATE_BOOLEAN, FILTER_SANITIZE_NUMBER_INT, FILTER_SANITIZE_NUMBER_FLOAT]}
+- callee:
+  - in_array
+  - parse_url
+  - intval
+  - settype
+  - urlencode
+  - number_format
+  - array_search
+  - array_key_exists
+  - preg_match
+  - ctype_digit
+  - ctype_alnum
+- callee:
+  - filter_var
+  requires:
+  - FILTER_VALIDATE_INT
+  - FILTER_VALIDATE_FLOAT
+  - FILTER_VALIDATE_BOOLEAN
+  - FILTER_SANITIZE_NUMBER_INT
+  - FILTER_SANITIZE_NUMBER_FLOAT
+validators:
+- token: in_array
+- token: preg_match
+- token: strcmp
+- token: array_key_exists

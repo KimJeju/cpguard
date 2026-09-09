@@ -15,3 +15,10 @@ sinks:
   - {pattern: call, callee: [extra]}
 sanitizers:
   - {callee: [int, escape_string, quote]}
+validators:
+  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
+  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
+  - {token: 'startswith'}
+  - {token: 'endswith'}
+  - {token: 'isdigit'}
+  - {token: 'isalnum'}

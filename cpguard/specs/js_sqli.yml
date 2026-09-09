@@ -1,20 +1,125 @@
 id: js.sqli
-message: "사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입)."
+message: 사용자 입력이 SQL 질의문으로 흘러 들어갑니다 (SQL 주입).
 severity: critical
 cwe: CWE-89
-owasp: "A03:2021-Injection"
-languages: [javascript, typescript]
+owasp: A03:2021-Injection
+languages:
+- javascript
+- typescript
 sources:
-  - {pattern: member, object: req, property: [query, body, params, headers, cookies]}
-  # NestJS 계열은 요청 값을 파라미터로 주입한다. 이 표시를 못 보면
-  # 컨트롤러 진입점이 통째로 사라진다(호출자가 없어 요약으로는 안 잡힌다).
-  - {pattern: annotation, name: [Query, Body, Param, Headers, Req, Request, Session, UploadedFile, UploadedFiles]}
+- pattern: member
+  object: req
+  property:
+  - query
+  - body
+  - params
+  - headers
+  - cookies
+- pattern: annotation
+  name:
+  - Query
+  - Body
+  - Param
+  - Headers
+  - Req
+  - Request
+  - Session
+  - UploadedFile
+  - UploadedFiles
+- pattern: member
+  object: ctx
+  property:
+  - request
+  - query
+  - querystring
+  - params
+  - headers
+  - header
+  - body
+  - cookies
+  - req
+  - originalUrl
+  - url
+  - host
+  - href
+  - search
+- pattern: member
+  object: ctx.request
+  property:
+  - body
+  - query
+  - querystring
+  - params
+  - headers
+  - header
+  - files
+  - url
+  - originalUrl
+  - host
+  - href
+  - search
+  - rawBody
+- pattern: member
+  object: request
+  property:
+  - query
+  - body
+  - params
+  - headers
+  - payload
+  - cookies
+  - raw
+  - url
+  - path
 sinks:
-  - {pattern: call, callee: [db.query, connection.query, pool.query, sequelize.query, knex.raw], arg: 0}
+- pattern: call
+  callee:
+  - db.query
+  - connection.query
+  - pool.query
+  - sequelize.query
+  - knex.raw
+  arg: 0
 sanitizers:
-  # SQL 이스케이프·식별자 인용
-  - {callee: [escapeSql, mysql.escape, mysql.escapeId, escape, escapeId, pool.escape, connection.escape, sequelize.escape, validator.escape]}
-  # 수치 변환 — 숫자로 바뀐 값은 payload 를 담지 못한다
-  - {callee: [parseInt, parseFloat, Number, Number.parseInt, Number.parseFloat, BigInt, Math.floor, Math.round, Math.abs, toFixed]}
-  # 형식 검사 가드 — if (/^[0-9]+$/.test(x)) { ... } 를 인정한다
-  - {callee: [test, validator.isInt, validator.isNumeric, validator.isAlphanumeric, validator.isUUID, isNaN, Number.isInteger, Number.isFinite]}
+- callee:
+  - escapeSql
+  - mysql.escape
+  - mysql.escapeId
+  - escape
+  - escapeId
+  - pool.escape
+  - connection.escape
+  - sequelize.escape
+  - validator.escape
+- callee:
+  - parseInt
+  - parseFloat
+  - Number
+  - Number.parseInt
+  - Number.parseFloat
+  - BigInt
+  - Math.floor
+  - Math.round
+  - Math.abs
+  - toFixed
+- callee:
+  - test
+  - validator.isInt
+  - validator.isNumeric
+  - validator.isAlphanumeric
+  - validator.isUUID
+  - isNaN
+  - Number.isInteger
+  - Number.isFinite
+validators:
+  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
+  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
+  - {token: 'includes'}
+  - {token: 'indexOf'}
+  - {token: 'hasOwnProperty'}
+  - {token: 'Object.keys'}
+  - {token: 'test'}
+  - {token: 'startsWith'}
+  - {token: 'endsWith'}
+  - {token: 'safeParse'}
+  - {token: 'new Set'}

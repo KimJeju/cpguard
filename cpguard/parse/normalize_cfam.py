@@ -76,6 +76,10 @@ class Spec:
     trailing_lambda: tuple[str, ...] = field(default_factory=tuple)
     #: 파라미터를 안 적은 람다가 쓰는 암묵 이름(Kotlin 의 it). 없으면 빈 문자열.
     implicit_lambda_param: str = ""
+    #: if_ 말고도 조건문으로 다룰 노드(루비의 unless). 없으면 Opaque 로 접혀
+    #: 가드가 통째로 사라진다 — `unless 허용목록.include?(x) then 거부; return` 이
+    #: 안 보이면 그 뒤의 값이 계속 오염으로 남는다.
+    if_alt: tuple[str, ...] = ()
     binary: tuple[str, ...] = ("binary_expression",)
     unary: tuple[str, ...] = ("unary_expression",)
     ternary: tuple[str, ...] = ("ternary_expression", "conditional_expression")
@@ -241,6 +245,7 @@ LANG: dict[str, Spec] = {
         param_name=None, func_body="body",
         ret=("return",),
         if_="if", if_cond="condition", if_then="consequence", if_else="alternative",
+        if_alt=("unless",),
         loops=("while", "until", "for"),
         block=("program", "body_statement", "then", "else", "begin", "do"),
         idents=_ID + ("constant", "instance_variable", "global_variable", "class_variable"),
@@ -248,6 +253,9 @@ LANG: dict[str, Spec] = {
         descend=("class", "module"),
         splice=("begin", "rescue", "ensure", "case", "when", "then",),
         branches={"case": ("when", "else")},
+        # `post "/x" do ... end` — 루비의 블록도 인자 컨테이너 밖에 온다. 인자로 세지
+        # 않으면 시나트라 라우트 본문이 통째로 분석에서 빠진다.
+        trailing_lambda=("do_block", "block"),
         binary=("binary",),
         unary=("unary",),
         ternary=("conditional",),
@@ -386,7 +394,9 @@ class _Worker:
             return [bind] + self.block(
                 [c for c in self._named(node) if c.type in self.s.block])
 
-        if t == s.if_:
+        if t == s.if_ or t in s.if_alt:
+            # unless 는 조건이 뒤집혀 있지만, "거부하고 돌아간다"를 알아보는 데는
+            # 가지를 바꾸지 않는 쪽이 맞다 — 본문이 곧 거부 경로다.
             return self._if(node)
 
         if t in s.loops:

@@ -37,6 +37,75 @@ sources:
   - getopt
 - pattern: member
   object: argv
+- pattern: member
+  object: req
+  property:
+  - get_param_value
+  - get_header_value
+  - body
+  - path_params
+  - target
+  - path
+  - params
+  - headers
+  - get_file_value
+- pattern: member
+  object: request
+  property:
+  - get_param_value
+  - get_header_value
+  - body
+  - path_params
+  - target
+  - path
+  - params
+  - headers
+- pattern: outparam
+  arg: 0
+  name:
+  - fgets
+  - fread
+  - gets
+  - gets_s
+  - getline
+  - fgetws
+  - readlink
+  - getcwd
+- pattern: outparam
+  arg: 1
+  name:
+  - read
+  - recv
+  - recvfrom
+  - scanf
+  - wscanf
+- pattern: outparam
+  arg: 2
+  name:
+  - sscanf
+  - fscanf
+  - swscanf
+- pattern: outcopy
+  arg: 0
+  name:
+  - strcpy
+  - strncpy
+  - strcat
+  - strncat
+  - sprintf
+  - snprintf
+  - vsprintf
+  - vsnprintf
+  - memcpy
+  - memmove
+  - strlcpy
+  - strlcat
+  - wcscpy
+  - wcscat
+  - swprintf
+  - sprintf_s
+  - strcpy_s
+  - strcat_s
 sinks:
 - pattern: call
   callee:
@@ -46,10 +115,6 @@ sinks:
   - execl
   - execlp
   - execle
-  - execv
-  - execvp
-  - execvpe
-  - execve
   - ShellExecute
   - ShellExecuteA
   - ShellExecuteW
@@ -62,10 +127,17 @@ sinks:
   - _spawnlp
   - _spawnv
   - _spawnvp
-  - posix_spawn
-  - posix_spawnp
   - std::system
   - _wsystem
+- pattern: call
+  callee:
+  - execv
+  - execvp
+  - execvpe
+  - execve
+  - posix_spawn
+  - posix_spawnp
+  arg: 0
 sanitizers:
 - callee:
   - strtol

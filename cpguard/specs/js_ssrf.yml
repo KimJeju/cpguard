@@ -1,20 +1,121 @@
 id: js.ssrf
-message: "사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF)."
+message: 사용자 입력이 외부 요청 URL로 흘러 들어갑니다 (SSRF).
 severity: high
 cwe: CWE-918
-owasp: "A10:2021-Server-Side Request Forgery"
-languages: [javascript, typescript]
+owasp: A10:2021-Server-Side Request Forgery
+languages:
+- javascript
+- typescript
 sources:
-  - {pattern: member, object: req, property: [query, body, params, headers]}
-  # NestJS 계열은 요청 값을 파라미터로 주입한다. 이 표시를 못 보면
-  # 컨트롤러 진입점이 통째로 사라진다(호출자가 없어 요약으로는 안 잡힌다).
-  - {pattern: annotation, name: [Query, Body, Param, Headers, Req, Request, Session, UploadedFile, UploadedFiles]}
+- pattern: member
+  object: req
+  property:
+  - query
+  - body
+  - params
+  - headers
+- pattern: annotation
+  name:
+  - Query
+  - Body
+  - Param
+  - Headers
+  - Req
+  - Request
+  - Session
+  - UploadedFile
+  - UploadedFiles
+- pattern: member
+  object: ctx
+  property:
+  - request
+  - query
+  - querystring
+  - params
+  - headers
+  - header
+  - body
+  - cookies
+  - req
+  - originalUrl
+  - url
+  - host
+  - href
+  - search
+- pattern: member
+  object: ctx.request
+  property:
+  - body
+  - query
+  - querystring
+  - params
+  - headers
+  - header
+  - files
+  - url
+  - originalUrl
+  - host
+  - href
+  - search
+  - rawBody
+- pattern: member
+  object: request
+  property:
+  - query
+  - body
+  - params
+  - headers
+  - payload
+  - cookies
+  - raw
+  - url
+  - path
 sinks:
-  - {pattern: call, callee: [http.get, https.get, http.request, https.request, fetch, axios.get, axios.post, request], arg: 0}
+- pattern: call
+  callee:
+  - http.get
+  - https.get
+  - http.request
+  - https.request
+  - fetch
+  - axios.get
+  - axios.post
+  - request
+  arg: 0
 sanitizers:
-  # 허용 목록 검사
-  - {callee: [isAllowedUrl, validateUrl, validator.isURL]}
-  # 수치 변환 — 숫자로 바뀐 값은 payload 를 담지 못한다
-  - {callee: [parseInt, parseFloat, Number, Number.parseInt, Number.parseFloat, BigInt, Math.floor, Math.round, Math.abs, toFixed]}
-  # 형식 검사 가드 — if (/^[0-9]+$/.test(x)) { ... } 를 인정한다
-  - {callee: [test, validator.isInt, validator.isNumeric, validator.isAlphanumeric, validator.isUUID, isNaN, Number.isInteger, Number.isFinite]}
+- callee:
+  - isAllowedUrl
+  - validateUrl
+  - validator.isURL
+- callee:
+  - parseInt
+  - parseFloat
+  - Number
+  - Number.parseInt
+  - Number.parseFloat
+  - BigInt
+  - Math.floor
+  - Math.round
+  - Math.abs
+  - toFixed
+- callee:
+  - test
+  - validator.isInt
+  - validator.isNumeric
+  - validator.isAlphanumeric
+  - validator.isUUID
+  - isNaN
+  - Number.isInteger
+  - Number.isFinite
+validators:
+  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
+  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
+  - {token: 'includes'}
+  - {token: 'indexOf'}
+  - {token: 'hasOwnProperty'}
+  - {token: 'Object.keys'}
+  - {token: 'test'}
+  - {token: 'startsWith'}
+  - {token: 'endsWith'}
+  - {token: 'safeParse'}
+  - {token: 'new Set'}

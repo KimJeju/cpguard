@@ -1,20 +1,75 @@
 id: php.xss
-message: "사용자 입력이 정제 없이 출력됩니다 (XSS)."
+message: 사용자 입력이 정제 없이 출력됩니다 (XSS).
 severity: high
 cwe: CWE-79
-owasp: "A03:2021-Injection"
-languages: [php]
+owasp: A03:2021-Injection
+languages:
+- php
 sources:
-  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER", "$_SESSION", "$_ENV"]}
-  # 프로세스 밖에서 들어온 값. 명령 출력과 파일 내용은 이 프로그램이 만든 값이 아니다.
-  - {pattern: name, name: [shell_exec, exec, system, passthru, popen, proc_open,
-                           fgets, fread, file_get_contents, fgetss, stream_get_contents,
-                           readline, getenv]}
+- pattern: name
+  name:
+  - $_GET
+  - $_POST
+  - $_REQUEST
+  - $_COOKIE
+  - $_FILES
+  - $_SERVER
+  - $_SESSION
+  - $_ENV
+- pattern: name
+  name:
+  - shell_exec
+  - exec
+  - system
+  - passthru
+  - popen
+  - proc_open
+  - fgets
+  - fread
+  - file_get_contents
+  - fgetss
+  - stream_get_contents
+  - readline
+  - getenv
+- pattern: outparam
+  arg: 1
+  name:
+  - exec
 sinks:
-  - {pattern: call, callee: [echo, print, printf, vprintf, print_r]}
+- pattern: call
+  callee:
+  - echo
+  - print
+  - printf
+  - vprintf
+  - print_r
 sanitizers:
-  # 숫자 변환 계열
-  # 화이트리스트·형식 검사 가드
-  - {callee: [htmlspecialchars, htmlentities, strip_tags, intval, urlencode, settype, number_format, floatval, in_array, array_search, array_key_exists, preg_match, ctype_digit, ctype_alpha, ctype_alnum]}
-  # filter_var 는 두 번째 인자로 갈린다 — 숫자 필터만 주입을 막는다.
-  - {callee: [filter_var], requires: [FILTER_VALIDATE_INT, FILTER_VALIDATE_FLOAT, FILTER_VALIDATE_BOOLEAN, FILTER_SANITIZE_NUMBER_INT, FILTER_SANITIZE_NUMBER_FLOAT]}
+- callee:
+  - htmlspecialchars
+  - htmlentities
+  - strip_tags
+  - intval
+  - urlencode
+  - settype
+  - number_format
+  - floatval
+  - in_array
+  - array_search
+  - array_key_exists
+  - preg_match
+  - ctype_digit
+  - ctype_alpha
+  - ctype_alnum
+- callee:
+  - filter_var
+  requires:
+  - FILTER_VALIDATE_INT
+  - FILTER_VALIDATE_FLOAT
+  - FILTER_VALIDATE_BOOLEAN
+  - FILTER_SANITIZE_NUMBER_INT
+  - FILTER_SANITIZE_NUMBER_FLOAT
+validators:
+- token: in_array
+- token: preg_match
+- token: strcmp
+- token: array_key_exists
