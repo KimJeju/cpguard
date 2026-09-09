@@ -19,26 +19,26 @@
     "codeinj": {
       "TP": 14,
       "FN": 6,
-      "FP": 20,
-      "TN": 13,
+      "FP": 18,
+      "TN": 15,
       "total": 53,
       "recall": 0.7,
-      "precision": 0.4117647058823529,
-      "f1": 0.5185185185185185,
-      "false_positive_rate": 0.6060606060606061,
-      "benchmark_score": 0.09393939393939388
+      "precision": 0.4375,
+      "f1": 0.5384615384615384,
+      "false_positive_rate": 0.5454545454545454,
+      "benchmark_score": 0.15454545454545454
     },
     "pathtraver": {
       "TP": 41,
       "FN": 24,
-      "FP": 36,
-      "TN": 67,
+      "FP": 28,
+      "TN": 75,
       "total": 168,
       "recall": 0.6307692307692307,
-      "precision": 0.5324675324675324,
-      "f1": 0.5774647887323944,
-      "false_positive_rate": 0.34951456310679613,
-      "benchmark_score": 0.2812546676624346
+      "precision": 0.5942028985507246,
+      "f1": 0.6119402985074627,
+      "false_positive_rate": 0.27184466019417475,
+      "benchmark_score": 0.358924570575056
     },
     "sqli": {
       "TP": 3,
@@ -55,14 +55,14 @@
     "xss": {
       "TP": 22,
       "FN": 9,
-      "FP": 18,
-      "TN": 40,
+      "FP": 13,
+      "TN": 45,
       "total": 89,
       "recall": 0.7096774193548387,
-      "precision": 0.55,
-      "f1": 0.619718309859155,
-      "false_positive_rate": 0.3103448275862069,
-      "benchmark_score": 0.39933259176863184
+      "precision": 0.6285714285714286,
+      "f1": 0.6666666666666666,
+      "false_positive_rate": 0.22413793103448276,
+      "benchmark_score": 0.485539488320356
     }
   },
   "excluded_categories": {
@@ -79,18 +79,18 @@
   "overall": {
     "TP": 91,
     "FN": 43,
-    "FP": 82,
-    "TN": 130,
+    "FP": 67,
+    "TN": 145,
     "total": 346,
     "recall": 0.6791044776119403,
-    "precision": 0.5260115606936416,
-    "f1": 0.5928338762214984,
-    "false_positive_rate": 0.3867924528301887,
-    "benchmark_score": 0.29231202478175156
+    "precision": 0.5759493670886076,
+    "f1": 0.6232876712328765,
+    "false_positive_rate": 0.3160377358490566,
+    "benchmark_score": 0.36306674176288367
   },
   "uncertain": {
-    "findings": 1146,
-    "uncertain": 182,
-    "ratio": 0.15881326352530542
+    "findings": 1051,
+    "uncertain": 174,
+    "ratio": 0.16555661274976213
   }
 }

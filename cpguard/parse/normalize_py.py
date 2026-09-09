@@ -306,6 +306,43 @@ def _expr(node: TSNode, file: str) -> ir.Node:
     if t in _LITERALS:
         return ir.Literal(loc=loc_of(node, file), value=None, raw=text_of(node))
 
+    # 상수 전파(constfold)가 죽은 가지를 지우려면 연산자와 조건식이 IR 에 남아 있어야
+    # 한다. Opaque 로 접으면 taint 전파는 같지만 접을 근거가 사라져, `bar = "상수" if
+    # 7*18+num > 200 else param` 같은 실행되지 않는 가지가 그대로 오염으로 남는다.
+    # 자바 정규화기에는 이미 있던 처리라 파이썬만 빠져 있었다.
+    if t in ("binary_operator", "boolean_operator"):
+        left, right = child_by_field(node, "left"), child_by_field(node, "right")
+        op = child_by_field(node, "operator")
+        if left is not None and right is not None:
+            return ir.Binary(loc=loc_of(node, file),
+                             op=text_of(op) if op is not None else "",
+                             children=[_expr(left, file), _expr(right, file)])
+
+    if t == "comparison_operator":
+        kids = [c for c in node.named_children if c.type != "comment"]
+        # a < b < c 처럼 연산자가 여럿이면 어느 쪽인지 못 정하므로 접지 않는다.
+        ops = [c for c in node.children if not c.is_named]
+        if len(kids) == 2 and len(ops) == 1:
+            return ir.Binary(loc=loc_of(node, file), op=text_of(ops[0]),
+                             children=[_expr(kids[0], file), _expr(kids[1], file)])
+
+    if t in ("unary_operator", "not_operator"):
+        arg = child_by_field(node, "argument")
+        op = child_by_field(node, "operator")
+        if arg is not None:
+            return ir.Unary(loc=loc_of(node, file),
+                            op=text_of(op) if op is not None else "not",
+                            children=[_expr(arg, file)])
+
+    if t == "conditional_expression":
+        # 파이썬은 `참값 if 조건 else 거짓값` 순으로 적는다. constfold 는 children 을
+        # [조건, 참, 거짓] 순으로 기대하므로 자리를 바꿔 넣는다.
+        kids = [c for c in node.named_children if c.type != "comment"]
+        if len(kids) == 3:
+            return ir.Ternary(loc=loc_of(node, file),
+                              children=[_expr(kids[1], file), _expr(kids[0], file),
+                                        _expr(kids[2], file)])
+
     if t == "parenthesized_expression":
         kids = [c for c in node.named_children if c.type != "comment"]
         return _expr(kids[0], file) if kids else _opaque(node, file)
