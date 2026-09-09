@@ -510,6 +510,46 @@ def _negated(call: ir.Call, ctx: Ctx) -> bool:
     return src[max(0, i - 3):i + 1].lower().endswith(b"not")
 
 
+def _validated_paths(test: ir.Node, ctx: Ctx) -> set[str]:
+    """조건이 검증한 경로들 — 정제 함수를 부르지 않고 형태만 확인하는 형태.
+
+        if '../' in name:      return 오류      # 거부하고 돌아간다
+        open(base + name)                       # 여기서부터 name 은 검증됐다
+
+    이 형태는 sanitizers(호출 이름)로는 잡히지 않는다. 무엇을 검증으로 인정할지는
+    규칙의 validators 가 선언한다 — 경로 조작은 '..' 포함 검사, 코드 주입은 따옴표
+    형식 검사처럼 유형마다 다르기 때문이다.
+
+    한계는 분명하다. `'../' in name` 은 상대경로만 막고 절대경로(/etc/passwd)는 막지
+    못한다. 그래도 "검사했으니 넘어간다"가 규칙이 선언한 기준이다.
+    """
+    if not ctx.rule.validators:
+        return set()
+    text = _snippet(test.loc, ctx.src)
+    if not any(tok in text for tok in ctx.rule.validators):
+        return set()
+    out: set[str] = set()
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if isinstance(n, (ir.Ident, ir.Member)):
+            if p := path_of(n):
+                out.add(p)
+        for attr in ("callee", "obj", "value", "target"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out
+
+
+def _always_exits(stmts: list[ir.Node]) -> bool:
+    """이 블록이 끝까지 가지 않고 반드시 빠져나가는가(현재는 return 만 본다)."""
+    return any(isinstance(s, ir.Return) for s in stmts)
+
+
 def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
     """검증된 경로와 그 하위 경로를 오염 상태에서 뺀다."""
     if not guarded:
@@ -589,7 +629,12 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
             guarded = _guarded_paths(s.test, ctx)
             then_env = _run(s.then, _drop_guarded(dict(env), guarded), ctx)
             else_env = _run(s.orelse, dict(env), ctx)
-            env = _merge(then_env, else_env)
+            if _always_exits(s.then):
+                # 참 분기가 돌아가 버리면 그 안의 상태는 이어지지 않는다. 그리고 그
+                # 분기가 "형태가 잘못됐으면 거부"였다면, 이어지는 코드에서는 검증된 값이다.
+                env = _drop_guarded(else_env, _validated_paths(s.test, ctx))
+            else:
+                env = _merge(then_env, else_env)
 
         elif isinstance(s, ir.Loop):
             _check_sinks(s.test, env, ctx)

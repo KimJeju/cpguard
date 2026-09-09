@@ -65,6 +65,10 @@ class Rule:
     sources: list[SourcePattern]
     sinks: list[SinkPattern]
     sanitizers: list[str]
+    # 조건문에서 이 표시가 오염 경로에 걸리면 "검증했다"로 본다. 거부하고 돌아가는
+    # 코드(`if '../' in name: return`)는 정제 함수를 부르지 않으므로 sanitizers 로는
+    # 잡히지 않는다. 무엇을 검증으로 인정할지는 규칙마다 다르므로 규칙이 선언한다.
+    validators: list[str] = field(default_factory=list)
 
 
 def _as_list(v) -> list[str]:
@@ -93,6 +97,9 @@ def rule_from_dict(d: dict) -> Rule:
     sanitizers: list[str] = []
     for s in d.get("sanitizers", []):
         sanitizers.extend(_as_list(s.get("callee")))
+    validators: list[str] = []
+    for v in d.get("validators", []):
+        validators.extend(_as_list(v.get("token")) if isinstance(v, dict) else [v])
     return Rule(
         id=d["id"],
         message=d.get("message", d["id"]),
@@ -100,12 +107,12 @@ def rule_from_dict(d: dict) -> Rule:
         cwe=d.get("cwe", ""),
         owasp=d.get("owasp", ""),
         languages=_as_list(d.get("languages")) or ["javascript", "typescript"],
-        sources=sources, sinks=sinks, sanitizers=sanitizers,
+        sources=sources, sinks=sinks, sanitizers=sanitizers, validators=validators,
     )
 
 
 #: 리스트로 이어붙이는 키. 나머지 스칼라 키는 사용자 값이 덮어쓴다.
-_LIST_KEYS = ("sources", "sinks", "sanitizers", "languages", "legacy_ids")
+_LIST_KEYS = ("sources", "sinks", "sanitizers", "validators", "languages", "legacy_ids")
 
 
 def merge_spec(base: dict, over: dict) -> dict:

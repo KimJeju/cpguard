@@ -9,3 +9,8 @@ sources:
 sinks:
   - {pattern: call, callee: [eval, exec, compile, pickle.loads, yaml.load, marshal.loads, dill.loads]}
 sanitizers: []
+
+validators:
+  # 코드 주입은 값의 형태(따옴표로 감싸였는지 등)를 확인해 거부하는 방어가 흔하다.
+  - {token: startswith}
+  - {token: endswith}

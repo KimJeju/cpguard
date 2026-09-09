@@ -1087,7 +1087,7 @@ def index(request):
 
 def _render_markdown(md: str) -> str:
     """가이드용 최소 마크다운 → HTML. 외부 의존성 없이(오프라인) 필요한 문법만 지원:
-    제목·목록(순서/비순서)·코드블록·인라인코드·굵게·링크·인용·구분선."""
+    제목·목록(순서/비순서)·표·코드블록·인라인코드·굵게·링크·인용·구분선."""
     import html
     import re
 
@@ -1095,12 +1095,32 @@ def _render_markdown(md: str) -> str:
     list_tag = None          # 'ul' | 'ol' | None
     in_code = False
     code_buf: list[str] = []
+    table_buf: list[list[str]] = []
 
     def close_list():
         nonlocal list_tag
         if list_tag:
             out.append(f"</{list_tag}>")
             list_tag = None
+
+    def close_table():
+        """모아 둔 표 줄을 <table> 로 낸다. 첫 줄이 머리, 구분줄은 버린다."""
+        nonlocal table_buf
+        if not table_buf:
+            return
+        rows = [r for r in table_buf if not all(set(c) <= set("-: ") for c in r)]
+        table_buf = []
+        if not rows:
+            return
+        head, body = rows[0], rows[1:]
+        cells = "".join(f"<th>{inline(c)}</th>" for c in head)
+        html_rows = [f"<tr>{cells}</tr>"]
+        for r in body:
+            html_rows.append("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>")
+        out.append("<table>" + "".join(html_rows) + "</table>")
+
+    def split_row(ln: str) -> list[str]:
+        return [c.strip() for c in ln.strip().strip("|").split("|")]
 
     def inline(s: str) -> str:
         s = html.escape(s)
@@ -1120,6 +1140,9 @@ def _render_markdown(md: str) -> str:
             continue
         if in_code:
             code_buf.append(ln); continue
+        if ln.lstrip().startswith("|") and ln.rstrip().endswith("|"):
+            close_list(); table_buf.append(split_row(ln)); continue
+        close_table()
         if not ln.strip():
             close_list(); continue
         m = re.match(r"(#{1,4})\s+(.*)", ln)
@@ -1141,9 +1164,15 @@ def _render_markdown(md: str) -> str:
             if list_tag != "ul":
                 close_list(); out.append("<ul>"); list_tag = "ul"
             out.append(f"<li>{inline(m.group(1))}</li>"); continue
+        # 목록 항목의 이어지는 줄(들여쓴 채 계속 쓴 문장). 새 문단으로 끊으면 목록이
+        # 닫혀 번호가 1 로 되돌아간다 — 앞 항목에 이어 붙인다.
+        if list_tag and ln.startswith(("  ", "	")) and out and out[-1].endswith("</li>"):
+            out[-1] = out[-1][:-len("</li>")] + " " + inline(ln.strip()) + "</li>"
+            continue
         close_list()
         out.append(f"<p>{inline(ln)}</p>")
     close_list()
+    close_table()
     if in_code and code_buf:
         out.append("<pre><code>" + html.escape("\n".join(code_buf)) + "</code></pre>")
     return "\n".join(out)

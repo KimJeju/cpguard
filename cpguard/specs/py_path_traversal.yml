@@ -14,3 +14,8 @@ sinks:
   # 점 경로 전체로만 적는다 — 맨 이름 exists 로 적으면 파일과 무관한 exists 까지 걸린다.
 sanitizers:
   - {callee: [os.path.basename, basename, secure_filename, safe_join]}
+
+validators:
+  # 경로 조작은 '..' 를 걸러내는 것이 표준 방어다. 조건에서 이 표시가 오염 경로에
+  # 걸리고 거부하고 돌아가면 검증된 것으로 본다.
+  - {token: '..'}
