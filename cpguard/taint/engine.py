@@ -28,7 +28,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .. import ir
-from ..cpg.callgraph import FuncInfo, collect_functions, file_scoped, unique_name
+from ..cpg.callgraph import (FuncInfo, alt_name, collect_functions, file_scoped,
+                             unique_name)
 from ..report.finding import Finding, Step
 from .spec import Rule, SinkPattern
 from .summary import BLOCK, PROPAGATE, LibraryModel, Summary, load_library_model
@@ -67,6 +68,23 @@ class Ctx:
 
 # ---------- 경로/스니펫 유틸 ----------
 
+def _const_key(node: ir.Node | None) -> str | None:
+    """첨자가 리터럴이면 그 값. 아니면 None.
+
+    문자열 리터럴은 언어에 따라 Literal 이 아니라 조각을 가진 Opaque 로 오므로
+    두 형태를 모두 본다.
+    """
+    if isinstance(node, ir.Literal):
+        raw = (node.raw or "").strip()
+        if len(raw) >= 2 and raw[0] in "\"'" and raw[-1] == raw[0]:
+            return raw[1:-1]
+        return raw or None
+    if isinstance(node, ir.Opaque) and node.kind.endswith("string_literal"):
+        parts = [c.raw or "" for c in node.children if isinstance(c, ir.Literal)]
+        return "".join(parts) if parts else None
+    return None
+
+
 def path_of(node: ir.Node) -> str | None:
     """식별자/멤버 접근을 'req.query.id' 같은 점 경로 문자열로. 그 외는 None."""
     if isinstance(node, ir.Ident):
@@ -75,8 +93,13 @@ def path_of(node: ir.Node) -> str | None:
         base = path_of(node.obj)
         if base is None:
             return None
-        # a[expr] 는 인덱스를 특정할 수 없어 베이스와 동일 취급(과대근사)
-        return base if node.computed else f"{base}.{node.prop}"
+        if node.computed:
+            # a["키"] 는 슬롯을 특정할 수 있다 — map.get("키") 에 이미 있던 키 단위
+            # 정밀도를 첨자 문법에도 준다. d["a"]=오염 뒤 d["b"] 를 읽는 코드가
+            # 오탐이 되지 않는다. 인덱스가 상수가 아니면 예전처럼 베이스로 뭉갠다.
+            key = _const_key(node.index)
+            return f"{base}.{key}" if key is not None else base
+        return f"{base}.{node.prop}"
     if isinstance(node, ir.Call):
         # Runtime.getRuntime().exec(x) / foo().bar() — 호출 결과를 리시버로 쓰는 체인.
         # 호출 대상 경로를 베이스로 이어야 'exec' 같은 sink 접미가 매칭된다.
@@ -224,13 +247,23 @@ def _unique_function(cp: str | None, callee: ir.Node, nargs: int, ctx: Ctx) -> S
 
 # ---------- 오염 판정 ----------
 
-def _env_lookup(path: str, env: dict[str, Trace]) -> Trace | None:
-    """정확 일치 또는 오염된 경로의 하위 경로(x 오염 -> x.y 도 오염)."""
+def _env_lookup(path: str, env: dict[str, Trace], slots: bool = False) -> Trace | None:
+    """정확 일치 또는 오염된 경로의 하위 경로(x 오염 -> x.y 도 오염).
+
+    slots=True 면 반대 방향도 본다 — d["b"] 만 오염된 상태에서 d 를 통째로(또는 상수가
+    아닌 인덱스로) 읽으면 그 슬롯이 딸려 나온다. 슬롯을 상수 키로 특정한 읽기에는
+    쓰지 않는다. 그랬다가는 d["a"] 를 읽어도 d["b"] 의 오염이 나와 키 단위 정밀도가
+    무의미해진다.
+    """
     if path in env:
         return env[path]
     for tp, tr in env.items():
         if path.startswith(tp + "."):
             return tr
+    if slots:
+        for tp, tr in env.items():
+            if tp.startswith(path + "."):
+                return tr
     return None
 
 
@@ -241,13 +274,26 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
 
     if isinstance(node, (ir.Ident, ir.Member)):
         p = path_of(node)
+        # 상수 키로 슬롯을 특정한 읽기(d["a"])는 그 슬롯만 본다. 그 외의 읽기는
+        # 컨테이너를 통째로 보는 것이므로 안에 오염된 슬롯이 있으면 딸려 나온다.
+        const_slot = (isinstance(node, ir.Member) and node.computed
+                      and _const_key(node.index) is not None)
         if p:
             if _matches_source(p, ctx.rule):
                 return [Step("source", node.loc, _snippet(node.loc, ctx.src))]
-            hit = _env_lookup(p, env)
+            hit = _env_lookup(p, env, slots=not const_slot)
             if hit is not None:
                 return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
         if isinstance(node, ir.Member):
+            if node.computed and _const_key(node.index) is not None:
+                # 상수 키로 슬롯을 특정했고 그 슬롯이 깨끗한 것이 확정이다. 베이스로
+                # 되돌아가면 다른 슬롯의 오염이 딸려 나와 키 단위 정밀도가 사라진다.
+                return None
+            if node.computed:
+                # 인덱스를 특정할 수 없는 읽기 — 컨테이너의 어느 슬롯이든 나올 수 있다.
+                base = path_of(node.obj)
+                if base and (hit := _env_lookup(base, env, slots=True)) is not None:
+                    return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
             return _taint(node.obj, env, ctx)
         return None
 
@@ -573,7 +619,7 @@ def _precise_target(node: ir.Node) -> bool:
     (실측: m["b"]=오염 다음 줄의 m["c"]="안전" 하나로 미탐이 났다).
     """
     while isinstance(node, ir.Member):
-        if node.computed:
+        if node.computed and _const_key(node.index) is None:
             return False
         node = node.obj
     return True
@@ -751,6 +797,17 @@ def compute_summaries(registry: dict[str, FuncInfo], rule: Rule) -> dict[str, Su
                 changed = True
         if not changed:
             break
+
+    # 같은 이름의 정의가 여럿이어도 요약이 전부 같으면 수신자를 몰라도 결과는 하나다.
+    # 그때만 유일 이름으로 승격한다 — 서로 다르면 그대로 두어 해석하지 않는다.
+    # (실측: 파이썬 코퍼스의 doSomething 은 정의가 둘인데 둘 다 인자를 그대로 돌려준다.)
+    for name in {k.rsplit("#alt", 1)[0] for k in summaries if "#alt" in k}:
+        if unique_name(name) in summaries:
+            continue
+        found = [summaries[k] for i in range(64)
+                 if (k := alt_name(name, i)) in summaries]
+        if len(found) > 1 and all(f == found[0] for f in found[1:]):
+            summaries[unique_name(name)] = found[0]
     return summaries
 
 

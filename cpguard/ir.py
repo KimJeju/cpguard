@@ -51,6 +51,9 @@ class Member(Node):
     obj: Node
     prop: str
     computed: bool = False
+    # a[i] 의 i. taint 는 인덱스를 구분하지 않지만(과대근사), 상수 전파는 "ABC"[1] 을
+    # 접으려면 인덱스를 알아야 한다. 없으면 None.
+    index: Optional[Node] = None
 
 
 @dataclass

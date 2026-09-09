@@ -7,38 +7,38 @@
     "cmdi": {
       "TP": 13,
       "FN": 0,
-      "FP": 4,
-      "TN": 3,
+      "FP": 2,
+      "TN": 5,
       "total": 20,
       "recall": 1.0,
-      "precision": 0.7647058823529411,
-      "f1": 0.8666666666666666,
-      "false_positive_rate": 0.5714285714285714,
-      "benchmark_score": 0.4285714285714286
+      "precision": 0.8666666666666667,
+      "f1": 0.9285714285714286,
+      "false_positive_rate": 0.2857142857142857,
+      "benchmark_score": 0.7142857142857143
     },
     "codeinj": {
       "TP": 19,
       "FN": 1,
-      "FP": 7,
-      "TN": 26,
+      "FP": 3,
+      "TN": 30,
       "total": 53,
       "recall": 0.95,
-      "precision": 0.7307692307692307,
-      "f1": 0.8260869565217392,
-      "false_positive_rate": 0.21212121212121213,
-      "benchmark_score": 0.7378787878787878
+      "precision": 0.8636363636363636,
+      "f1": 0.9047619047619048,
+      "false_positive_rate": 0.09090909090909091,
+      "benchmark_score": 0.859090909090909
     },
     "pathtraver": {
       "TP": 45,
       "FN": 20,
-      "FP": 17,
-      "TN": 86,
+      "FP": 7,
+      "TN": 96,
       "total": 168,
       "recall": 0.6923076923076923,
-      "precision": 0.7258064516129032,
-      "f1": 0.7086614173228347,
-      "false_positive_rate": 0.1650485436893204,
-      "benchmark_score": 0.5272591486183719
+      "precision": 0.8653846153846154,
+      "f1": 0.7692307692307693,
+      "false_positive_rate": 0.06796116504854369,
+      "benchmark_score": 0.6243465272591486
     },
     "sqli": {
       "TP": 5,
@@ -55,14 +55,14 @@
     "xss": {
       "TP": 28,
       "FN": 3,
-      "FP": 17,
-      "TN": 41,
+      "FP": 10,
+      "TN": 48,
       "total": 89,
       "recall": 0.9032258064516129,
-      "precision": 0.6222222222222222,
-      "f1": 0.7368421052631579,
-      "false_positive_rate": 0.29310344827586204,
-      "benchmark_score": 0.6101223581757509
+      "precision": 0.7368421052631579,
+      "f1": 0.8115942028985507,
+      "false_positive_rate": 0.1724137931034483,
+      "benchmark_score": 0.7308120133481646
     }
   },
   "excluded_categories": {
@@ -79,18 +79,18 @@
   "overall": {
     "TP": 110,
     "FN": 24,
-    "FP": 45,
-    "TN": 167,
+    "FP": 22,
+    "TN": 190,
     "total": 346,
     "recall": 0.8208955223880597,
-    "precision": 0.7096774193548387,
-    "f1": 0.7612456747404844,
-    "false_positive_rate": 0.21226415094339623,
-    "benchmark_score": 0.6086313714446635
+    "precision": 0.8333333333333334,
+    "f1": 0.8270676691729324,
+    "false_positive_rate": 0.10377358490566038,
+    "benchmark_score": 0.7171219374823994
   },
   "uncertain": {
-    "findings": 1226,
-    "uncertain": 204,
-    "ratio": 0.16639477977161501
+    "findings": 1025,
+    "uncertain": 34,
+    "ratio": 0.033170731707317075
   }
 }

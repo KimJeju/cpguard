@@ -24,6 +24,8 @@ propagate:
     - decode
     # '...{0}...'.format(bar) — 인자가 결과 문자열에 그대로 들어간다.
     - format
+    # ''.join([...]) — 원소가 결과 문자열에 그대로 들어간다.
+    - join
   name:
     # URL 디코딩·인코딩은 payload 를 그대로 옮긴다. 정제가 아니다.
     - urllib.parse.unquote_plus
@@ -56,3 +58,20 @@ propagate:
     - make_response
     # 내장 변환
     - str
+    # 파일 객체는 연 경로를 name 으로 들고 있다 — 경로가 응답에 실리는 흐름이 실재한다.
+    - codecs.open
+    - io.open
+    # CompletedProcess 는 실행한 명령을 args 로 들고 있다.
+    - subprocess.run
+    - subprocess.check_output
+
+block:
+  name:
+    # XPath 조회 결과는 문서에서 고른 노드이지 질의문 자체가 아니다. 질의문에 섞인
+    # 사용자 입력이 결과로 되돌아오지 않는다 — XPath 주입 자체는 별도 규칙이 본다.
+    - elementpath.select
+    - xml.etree.ElementTree.find
+    - xml.etree.ElementTree.findall
+  method:
+    - xpath
+    - findall

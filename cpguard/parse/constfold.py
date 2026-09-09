@@ -107,7 +107,42 @@ def _eval(node: ir.Node, consts: dict[str, object]):
         except Exception:
             return _UNK
 
+    if isinstance(node, ir.Member) and node.computed and node.index is not None:
+        # "ABC"[1] — 리터럴 문자열/리스트를 상수 인덱스로 읽는 것은 컴파일 시점에 정해진다.
+        base = _eval(node.obj, consts)
+        idx = _eval(node.index, consts)
+        if base is _UNK or idx is _UNK or not isinstance(idx, int):
+            return _UNK
+        try:
+            return base[idx]
+        except Exception:
+            return _UNK
+
+    if isinstance(node, ir.Call):
+        # "ABC".charAt(1) — 자바에서 같은 자리를 차지하는 형태.
+        callee = node.callee
+        if (isinstance(callee, ir.Member) and callee.prop in ("charAt", "substring")
+                and node.args):
+            base = _eval(callee.obj, consts)
+            args = [_eval(a, consts) for a in node.args]
+            if base is _UNK or any(a is _UNK for a in args) or not isinstance(base, str):
+                return _UNK
+            try:
+                if callee.prop == "charAt":
+                    return base[args[0]]
+                return base[args[0]:args[1]] if len(args) > 1 else base[args[0]:]
+            except Exception:
+                return _UNK
+        return _UNK
+
     if isinstance(node, ir.Opaque):
+        # 자바 등에서 문자열 리터럴은 조각을 자식으로 가진 래퍼로 온다. 조각의 원문이
+        # 곧 값이다(따옴표가 벗겨진 채로 오므로 리터럴 파서로는 숫자로 오인한다).
+        # 파이썬의 보간 f-string 은 kind 가 'string' 이라 여기 걸리지 않는다 — 접으면 안 된다.
+        if node.kind in ("string_literal", "raw_string_literal", "interpreted_string_literal"):
+            if all(isinstance(c, ir.Literal) for c in node.children):
+                return "".join(str(c.raw or "") for c in node.children)
+            return _UNK
         # 괄호처럼 자식 하나만 감싼 래퍼는 그 자식이 값이다. 그 외는 모른다.
         kids = [c for c in node.children if not isinstance(c, ir.Literal) or (c.raw or "").strip()]
         if len(node.children) == 1:

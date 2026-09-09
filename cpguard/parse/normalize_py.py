@@ -58,6 +58,19 @@ def _body_of(node: TSNode, file: str) -> list[ir.Node]:
 
 # ---------- 문 ----------
 
+def _case_test(subj: TSNode | None, labels: list[TSNode], file: str) -> ir.Node:
+    """`대상 == 라벨1 or 대상 == 라벨2 ...` 형태의 조건. 대상이 없으면 접을 수 없는 값."""
+    if subj is None:
+        return ir.Literal(loc=loc_of(labels[0], file), value=None, raw="case")
+    out: ir.Node | None = None
+    for lb in labels:
+        cmp_ = ir.Binary(loc=loc_of(lb, file), op="==",
+                         children=[_expr(subj, file), _expr(lb, file)])
+        out = cmp_ if out is None else ir.Binary(
+            loc=loc_of(lb, file), op="or", children=[out, cmp_])
+    return out
+
+
 def _decorator_path(node: TSNode) -> str:
     """@app.route('/x', methods=['GET']) -> 'app.route'. 인자는 버리고 경로만 본다."""
     return text_of(node).lstrip("@").split("(")[0].strip()
@@ -113,18 +126,28 @@ def _stmt(node: TSNode, file: str):
 
     if t == "match_statement":
         # match/case 를 통째로 접으면 분기 안의 대입이 사라져 오염이 끊긴다.
-        # if/elif 사슬로 펴서 분기 합류(_merge)를 그대로 쓴다 — 어느 분기든 오염되면 오염.
+        # if/elif/else 사슬로 편다. 조건을 `대상 == 라벨` 로 만들어야 상수 전파가
+        # 선택자를 접어 죽은 가지를 지울 수 있다(`match "ABC"[1]:` 같은 형태).
         body = child_by_field(node, "body")
         clauses = [c for c in body.named_children
                    if c.type == "case_clause"] if body is not None else []
-        subj = next((c for c in node.named_children if c is not body), None)
-        test = _expr(subj, file) if subj is not None else _opaque(node, file)
-        chain: ir.Node | None = None
-        for c in reversed(clauses):
-            chain = ir.If(
-                loc=loc_of(c, file), test=test,
-                then=_block([b for b in c.named_children if b.type == "block"], file),
-                orelse=[chain] if chain is not None else [])
+        subj = next((c for c in node.named_children
+                     if body is None or c.start_byte != body.start_byte), None)
+        default: list[ir.Node] = []
+        cases: list[tuple[ir.Node | None, list[ir.Node]]] = []
+        for c in clauses:
+            stmts = _block([b for b in c.named_children if b.type == "block"], file)
+            pat = next((b for b in c.named_children if b.type == "case_pattern"), None)
+            labels = [b for b in (pat.named_children if pat is not None else [])
+                      if b.type != "comment"]
+            # `case _:` 는 라벨이 와일드카드 하나뿐이다 — 나머지 전부를 받는 가지.
+            if pat is None or not labels or text_of(pat).strip() == "_":
+                default = stmts
+                continue
+            cases.append((_case_test(subj, labels, file), stmts))
+        chain: list[ir.Node] = default
+        for test, stmts in reversed(cases):
+            chain = [ir.If(loc=loc_of(node, file), test=test, then=stmts, orelse=chain)]
         return chain
 
     if t == "block":
@@ -252,9 +275,17 @@ def _expr(node: TSNode, file: str) -> ir.Node:
 
     if t == "subscript":
         val = child_by_field(node, "value")
+        # tree-sitter 노드는 접근할 때마다 새 래퍼가 나오므로 `is not` 비교가 통하지
+        # 않는다. 필드 이름으로 집고, 없으면 바이트 범위로 구분한다.
+        idx = child_by_field(node, "subscript")
+        if idx is None:
+            idx = next((c for c in node.named_children
+                        if c.type != "comment"
+                        and (val is None or c.start_byte != val.start_byte)), None)
         return ir.Member(loc=loc_of(node, file),
                          obj=_expr(val, file) if val is not None else _opaque(node, file),
-                         prop="", computed=True)
+                         prop="", computed=True,
+                         index=_expr(idx, file) if idx is not None else None)
 
     if t == "call":
         fn = child_by_field(node, "function")

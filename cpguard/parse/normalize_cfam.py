@@ -60,6 +60,9 @@ class Spec:
     # 그냥 펼치면 분기가 순차 실행처럼 보여, 뒤 분기의 안전한 대입이 앞 분기에서 담긴
     # 오염을 지운다. if 사슬로 감싸 분기 합류(_merge)를 태운다.
     branches: dict = field(default_factory=dict)
+    # 케이스 라벨 노드 타입(java: switch_label). 있으면 분기 조건을 `대상 == 라벨` 로
+    # 만들어 상수 전파가 죽은 가지를 지울 수 있다. 없으면 분기 합집합으로만 다룬다.
+    case_label: str = ""
     # 상수 전파가 분기 조건을 접으려면 연산자를 알아야 한다 → 이 세 가지는 Opaque 로 접지 않는다.
     binary: tuple[str, ...] = ("binary_expression",)
     unary: tuple[str, ...] = ("unary_expression",)
@@ -95,7 +98,8 @@ LANG: dict[str, Spec] = {
                 "resource", "catch_clause", "finally_clause", "synchronized_statement",
                 "switch_expression", "switch_block", "switch_block_statement_group",
                 "labeled_statement"),
-        branches={"switch_block": ("switch_block_statement_group", "switch_rule")},
+        branches={"switch_expression": ("switch_block_statement_group", "switch_rule")},
+        case_label="switch_label",
     ),
     "csharp": Spec(
         call="invocation_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -370,29 +374,78 @@ class _Worker:
 
         return self.expr(node)
 
+    def _case_test(self, subj, values) -> ir.Node:
+        """`대상 == 라벨1 || 대상 == 라벨2 ...`. 대상이나 라벨이 없으면 접을 수 없는 값."""
+        if subj is None or not values:
+            return ir.Literal(loc=loc_of(subj or values[0] if (subj or values) else None,
+                                         self.file) if (subj or values) else
+                              ir.Loc(self.file, 1, 0, 1, 0, 0, 0),
+                              value=None, raw="switch")
+        out = None
+        for v in values:
+            cmp_ = ir.Binary(loc=loc_of(v, self.file), op="==",
+                             children=[self.expr(subj), self.expr(v)])
+            out = cmp_ if out is None else ir.Binary(
+                loc=loc_of(v, self.file), op="||", children=[out, cmp_])
+        return out
+
     def _branches(self, node: TSNode, group_types: tuple[str, ...]):
-        """switch 의 분기들을 if 사슬로 편다.
+        """switch 의 분기들을 if/else 사슬로 편다.
 
         분기는 서로 배타적인데 문 리스트로 그냥 이어 붙이면 마지막 분기가 앞 분기의
         대입을 덮어쓴다. 실측: OWASP 자바 코퍼스의 sqli 미탐 109건 중 17건이
         `case 'A': bar = param; ... default: bar = "safe";` 형태였다.
 
-        조건식은 쓰지 않는다(Literal). 여기서 필요한 것은 분기 합류뿐이고, switch 의
-        대상식을 조건 자리에 넣으면 sink 검사가 그 식을 한 번 더 훑는다.
+        라벨 노드 타입을 아는 언어(case_label)는 조건을 `대상 == 라벨` 로 만든다.
+        그러면 선택자가 상수로 접힐 때 죽은 가지를 지울 수 있다. 모르는 언어는
+        접을 수 없는 조건을 두어 예전처럼 분기 합집합으로만 다룬다(건전한 과대근사).
         """
+        s = self.s
         kids = self._named(node)
         groups = [c for c in kids if c.type in group_types]
+        holder = None
+        if not groups:                       # 자바처럼 그룹이 블록 한 겹 안에 있는 경우
+            for c in kids:
+                inner = [g for g in self._named(c) if g.type in group_types]
+                if inner:
+                    groups, holder = inner, c
+                    break
         if not groups:
             return self.block(kids)
-        rest = [c for c in kids if c.type not in group_types]
-        test = ir.Literal(loc=loc_of(node, self.file), value=None, raw="switch")
-        chain = None
-        for g in reversed(groups):
-            chain = ir.If(loc=loc_of(g, self.file), test=test,
-                          then=self.block(self._named(g)),
-                          orelse=[chain] if chain is not None else [])
-        # 분기 밖에 남은 것(대상식 등)은 그대로 앞에 둔다.
-        return self.block(rest) + [chain]
+        subj = next((c for c in kids
+                     if c.type not in group_types
+                     and (holder is None or c.start_byte != holder.start_byte)), None)
+
+        default: list[ir.Node] = []
+        cases: list[tuple[ir.Node, list[ir.Node]]] = []
+        pending: list[TSNode] = []            # 라벨만 있고 본문이 없는 그룹(fall-through)
+        saw_default = False
+        for g in groups:
+            gk = self._named(g)
+            labels = [c for c in gk if s.case_label and c.type == s.case_label]
+            body = self.block([c for c in gk
+                               if not (s.case_label and c.type == s.case_label)])
+            vals: list[TSNode] = []
+            for lb in labels:
+                lv = self._named(lb)
+                if lv:
+                    vals.extend(lv)
+                else:
+                    saw_default = True        # `default:` 는 라벨에 값이 없다
+            if not body:
+                pending.extend(vals)
+                continue
+            vals, pending = pending + vals, []
+            if saw_default and not vals:
+                default = body
+            else:
+                cases.append((self._case_test(subj, vals), body))
+            saw_default = False
+        chain: list[ir.Node] = default
+        for test, body in reversed(cases):
+            chain = [ir.If(loc=loc_of(node, self.file), test=test,
+                           then=body, orelse=chain)]
+        return chain
 
     def _stmt_or_expr(self, node: TSNode):
         r = self.stmt(node)
@@ -586,9 +639,12 @@ class _Worker:
 
         if t in s.subscript:
             obj = self._fld(node, s.subscript_obj) if s.subscript_obj else (kids[0] if kids else None)
+            idx = next((c for c in kids
+                        if obj is None or c.start_byte != obj.start_byte), None)
             return ir.Member(loc=loc_of(node, self.file),
                              obj=self.expr(obj) if obj is not None else self._opaque(node),
-                             prop="", computed=True)
+                             prop="", computed=True,
+                             index=self.expr(idx) if idx is not None else None)
 
         if t in s.assign:
             left = self._fld(node, s.assign_left) if s.assign_left else (kids[0] if kids else None)

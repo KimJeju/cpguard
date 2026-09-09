@@ -59,6 +59,17 @@ def unique_name(name: str) -> str:
     return f"{name}#unique"
 
 
+#: 같은 이름의 정의를 몇 개까지 따로 들고 있을지. 이름이 흔할수록(자바 코퍼스의
+#: doSomething 은 1802개) 요약을 다 계산하는 비용이 커지고, 그렇게 흔한 이름은 어차피
+#: 서로 다를 가능성이 높다. 몇 개 안 되는 경우만 본다.
+MAX_ALTS = 4
+
+
+def alt_name(name: str, i: int) -> str:
+    """같은 이름의 i 번째 정의 키. 요약을 각각 계산해 서로 같은지 보기 위한 것."""
+    return f"{name}#alt{i}"
+
+
 def _module_qualified(name: str, file: str, depth: int = 3) -> list[str]:
     """helpers/utils.py 의 f 를 'utils.f', 'helpers.utils.f' 로도 부를 수 있게 한다.
 
@@ -85,6 +96,7 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
     registry: dict[str, FuncInfo] = {}
     seen: dict[str, int] = {}
     unique: dict[str, FuncInfo] = {}
+    alts: dict[str, list[FuncInfo]] = {}
     for module, src, file in modules:
         for name, fn in _named_functions(module.body):
             info = FuncInfo(name=name, fn=fn, src=src, file=file)
@@ -94,6 +106,7 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
                 registry[alias] = info
             seen[name] = seen.get(name, 0) + 1
             unique[name] = info
+            alts.setdefault(name, []).append(info)
     # 프로젝트 전체에서 정의가 하나뿐인 이름은 수신자를 몰라도 그 함수가 확실하다.
     # wrapped.get_form_parameter(x) 처럼 변수에 담긴 객체의 메서드를 부르는 형태는
     # 변수의 타입을 모르면 정의를 못 찾는데, 이름이 유일하면 그 위험이 없다.
@@ -102,4 +115,9 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
     for name, n in seen.items():
         if n == 1:
             registry[unique_name(name)] = unique[name]
+        elif n <= MAX_ALTS:
+            # 정의가 여럿이어도 동작이 서로 같으면 수신자를 몰라도 답은 하나다.
+            # 여기서는 후보만 등록하고, 같은지는 요약을 계산한 뒤에 본다.
+            for i, info in enumerate(alts[name]):
+                registry[alt_name(name, i)] = info
     return registry
