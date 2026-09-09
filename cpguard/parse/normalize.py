@@ -124,6 +124,9 @@ def _stmt(node: TSNode, file: str):
     if t in ("while_statement", "for_statement", "for_in_statement", "do_statement"):
         return _loop(node, file)
 
+    if t == "switch_statement":
+        return _switch(node, file)
+
     if t == "statement_block":
         return _block(node.named_children, file)
 
@@ -209,8 +212,67 @@ def _if(node: TSNode, file: str) -> ir.If:
 def _loop(node: TSNode, file: str) -> ir.Loop:
     """while/for/do → ir.Loop (조건 유무는 문법마다 다름)."""
     test_node = child_by_field(node, "condition")
+    body = _branch(child_by_field(node, "body"), file)
+    # for (const x of 오염) — 반복 변수를 대상에 묶지 않으면 본문이 통째로 미탐이다.
+    # 원소를 구분하지 않는 과대근사로, 컨테이너를 통째로 오염으로 보는 모델과 같은 기준.
+    tgt, src = child_by_field(node, "left"), child_by_field(node, "right")
+    if tgt is not None and src is not None:
+        body.insert(0, ir.Assign(loc=loc_of(tgt, file), target=_expr(tgt, file),
+                                 value=_expr(src, file)))
     test = _expr(test_node, file) if test_node is not None else None
-    return ir.Loop(loc=loc_of(node, file), test=test, body=_branch(child_by_field(node, "body"), file))
+    return ir.Loop(loc=loc_of(node, file), test=test, body=body)
+
+
+def _switch(node: TSNode, file: str) -> list[ir.Node]:
+    """switch → if/else 사슬.
+
+    case 본문을 순서대로 이어 붙이면 서로 배타적인 분기가 순차 실행처럼 보여,
+    뒤 분기의 안전한 대입이 앞 분기에서 담긴 오염을 지운다. 조건을 `대상 == 라벨`
+    로 만들어 두면 선택자가 상수일 때 constfold 가 죽은 가지도 지운다.
+    """
+    subj = child_by_field(node, "value")
+    body = child_by_field(node, "body")
+    groups = [c for c in (body.named_children if body is not None else [])
+              if c.type in ("switch_case", "switch_default")]
+    if not groups:
+        return _branch(body, file)
+
+    default: list[ir.Node] = []
+    cases: list[tuple[ir.Node, list[ir.Node]]] = []
+    pending: list[TSNode] = []       # 라벨만 있고 본문이 없는 그룹(fall-through)
+    for g in groups:
+        val = child_by_field(g, "value")
+        stmts = _block([c for c in g.named_children
+                        if val is None or c.start_byte != val.start_byte], file)
+        if not stmts:
+            if val is not None:
+                pending.append(val)
+            continue
+        if g.type == "switch_default":
+            default = stmts
+            pending = []
+            continue
+        cases.append((_case_test(subj, pending + [val] if val is not None else pending,
+                                 node, file), stmts))
+        pending = []
+
+    chain: list[ir.Node] = default
+    for test, stmts in reversed(cases):
+        chain = [ir.If(loc=loc_of(node, file), test=test, then=stmts, orelse=chain)]
+    return chain
+
+
+def _case_test(subj: TSNode | None, vals: list[TSNode], node: TSNode, file: str) -> ir.Node:
+    """`대상 == 라벨1 || 대상 == 라벨2 ...`. 대상이 없으면 접을 수 없는 값을 둔다."""
+    if subj is None or not vals:
+        return ir.Opaque(loc=loc_of(node, file), kind="switch_case_test", children=[])
+    out: ir.Node | None = None
+    for v in vals:
+        cmp_ = ir.Binary(loc=loc_of(v, file), op="==",
+                         children=[_expr(subj, file), _expr(v, file)])
+        out = cmp_ if out is None else ir.Binary(
+            loc=loc_of(v, file), op="||", children=[out, cmp_])
+    return out
 
 
 def _branch(node: TSNode | None, file: str) -> list[ir.Node]:
@@ -245,9 +307,12 @@ def _expr(node: TSNode, file: str) -> ir.Node:
         return ir.Member(loc=loc_of(node, file), obj=obj, prop=prop)
 
     if t == "subscript_expression":
-        # a[expr] : 인덱스가 동적이므로 prop 을 특정할 수 없다 → computed
+        # a[expr] : prop 을 특정할 수 없어 computed. 인덱스가 상수면 엔진이 슬롯을
+        # 구분할 수 있으므로 버리지 않고 실어 보낸다.
         obj = _expr(child_by_field(node, "object"), file)
-        return ir.Member(loc=loc_of(node, file), obj=obj, prop="", computed=True)
+        idx = child_by_field(node, "index")
+        return ir.Member(loc=loc_of(node, file), obj=obj, prop="", computed=True,
+                         index=_expr(idx, file) if idx is not None else None)
 
     if t == "call_expression":
         # f(a, b) : function=callee(재귀), arguments 의 named children=args(각각 재귀)
@@ -256,7 +321,7 @@ def _expr(node: TSNode, file: str) -> ir.Node:
         args = [_expr(a, file) for a in arg_list.named_children] if arg_list is not None else []
         return ir.Call(loc=loc_of(node, file), callee=callee, args=args)
 
-    if t == "assignment_expression":
+    if t in ("assignment_expression", "augmented_assignment_expression"):
         left = child_by_field(node, "left")
         right = child_by_field(node, "right")
         op_node = child_by_field(node, "operator")
@@ -270,8 +335,39 @@ def _expr(node: TSNode, file: str) -> ir.Node:
     if t in ("arrow_function", "function_expression", "generator_function"):
         return _function(node, file)
 
+    if t == "template_string" and any(c.type == "template_substitution"
+                                     for c in node.named_children):
+        # `x${p}` — 보간이 든 템플릿은 상수가 아니다. 리터럴로 접으면 안에 담긴
+        # 오염이 밖으로 나오지 못한다(파이썬 f-string 과 같은 계열의 미탐).
+        return _opaque(node, file)
+
     if t in ("string", "template_string", "number", "true", "false", "null", "undefined", "regex"):
         return ir.Literal(loc=loc_of(node, file), value=None, raw=text_of(node))
+
+    if t == "binary_expression":
+        left, right = child_by_field(node, "left"), child_by_field(node, "right")
+        op = child_by_field(node, "operator")
+        if left is not None and right is not None:
+            return ir.Binary(loc=loc_of(node, file),
+                             op=text_of(op) if op is not None else "",
+                             children=[_expr(left, file), _expr(right, file)])
+
+    if t == "unary_expression":
+        arg = child_by_field(node, "argument")
+        op = child_by_field(node, "operator")
+        if arg is not None:
+            return ir.Unary(loc=loc_of(node, file),
+                            op=text_of(op) if op is not None else "!",
+                            children=[_expr(arg, file)])
+
+    if t == "ternary_expression":
+        cond = child_by_field(node, "condition")
+        con = child_by_field(node, "consequence")
+        alt = child_by_field(node, "alternative")
+        if cond is not None and con is not None and alt is not None:
+            return ir.Ternary(loc=loc_of(node, file),
+                              children=[_expr(cond, file), _expr(con, file),
+                                        _expr(alt, file)])
 
     if t == "parenthesized_expression":
         kids = node.named_children

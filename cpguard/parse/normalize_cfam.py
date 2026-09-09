@@ -656,11 +656,18 @@ class _Worker:
             if right is not None and right.type == "expression_list":
                 rk = self._named(right)
                 right = rk[0] if rk else right
+            # s += p 는 덮어쓰기가 아니라 덧붙이기다. 연산자를 "=" 로 뭉개면 엔진이
+            # 대상 슬롯을 비워버려, 뒤에 안전한 값을 += 하는 순간 앞서 담긴 오염이
+            # 사라진다(자바 미탐의 한 갈래). Go 의 := 는 새 선언이라 "=" 와 같다.
+            op_node = self._fld(node, "operator")
+            op = text_of(op_node) if op_node is not None else "="
+            if op in ("=", ":="):
+                op = "="
             return ir.Assign(loc=loc_of(node, self.file),
                              target=self.expr(left) if left is not None else self._opaque(node),
                              value=self.expr(right) if right is not None else ir.Literal(
                                  loc=loc_of(node, self.file), value=None, raw=""),
-                             operator="=")
+                             operator=op)
 
         if t in s.decl:
             return self._decl(node)

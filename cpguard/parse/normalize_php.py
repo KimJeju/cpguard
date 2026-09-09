@@ -90,13 +90,7 @@ def _stmt(node: TSNode, file: str):
         return _loop(node, file)
 
     if t == "switch_statement":
-        # 분기이므로 If 의 then 자리에 모든 case 를 펼쳐 넣는다
-        cond = child_by_field(node, "condition")
-        body = child_by_field(node, "body")
-        test = _expr(cond, file) if cond is not None else ir.Opaque(
-            loc=loc_of(node, file), kind="switch", children=[])
-        return ir.If(loc=loc_of(node, file), test=test,
-                     then=_branch(body, file), orelse=[])
+        return _switch(node, file)
 
     if t in ("try_statement", "catch_clause", "finally_clause"):
         body = child_by_field(node, "body") or node
@@ -134,17 +128,6 @@ def _branch(node: TSNode | None, file: str) -> list[ir.Node]:
         target = inner if inner is not None else node
         return _block(target.named_children, file)
 
-    if node.type == "switch_block":
-        # case/default 본문을 모두 펼친다. 경로 민감도가 없으므로 어느 분기든
-        # 실행될 수 있다고 보고 전부 분석한다(건전한 과대근사).
-        out: list[ir.Node] = []
-        for case in node.named_children:
-            if case.type in ("case_statement", "default_statement"):
-                out.extend(_block(case.named_children, file))
-            else:
-                out.extend(_branch(case, file))
-        return out
-
     if node.type in ("case_statement", "default_statement"):
         return _block(node.named_children, file)
 
@@ -152,6 +135,57 @@ def _branch(node: TSNode | None, file: str) -> list[ir.Node]:
     if r is None:
         return []
     return r if isinstance(r, list) else [r]
+
+
+def _switch(node: TSNode, file: str) -> list[ir.Node]:
+    """switch → if/else 사슬.
+
+    case 본문을 순서대로 이어 붙이면 서로 배타적인 분기가 순차 실행처럼 보여, 뒤
+    분기의 안전한 대입이 앞 분기에서 담긴 오염을 지운다. 조건을 `대상 == 라벨` 로
+    두면 선택자가 상수일 때 constfold 가 죽은 가지도 지운다.
+    """
+    subj = child_by_field(node, "condition")
+    body = child_by_field(node, "body")
+    groups = [c for c in (body.named_children if body is not None else [])
+              if c.type in ("case_statement", "default_statement")]
+    if not groups:
+        return _branch(body, file)
+
+    default: list[ir.Node] = []
+    cases: list[tuple[ir.Node, list[ir.Node]]] = []
+    pending: list[TSNode] = []       # 라벨만 있고 본문이 없는 그룹(fall-through)
+    for g in groups:
+        val = child_by_field(g, "value")
+        stmts = _block([c for c in g.named_children
+                        if val is None or c.start_byte != val.start_byte], file)
+        if not stmts:
+            if val is not None:
+                pending.append(val)
+            continue
+        if g.type == "default_statement":
+            default, pending = stmts, []
+            continue
+        vals = pending + [val] if val is not None else pending
+        cases.append((_case_test(subj, vals, node, file), stmts))
+        pending = []
+
+    chain: list[ir.Node] = default
+    for test, stmts in reversed(cases):
+        chain = [ir.If(loc=loc_of(node, file), test=test, then=stmts, orelse=chain)]
+    return chain
+
+
+def _case_test(subj: TSNode | None, vals: list[TSNode], node: TSNode, file: str) -> ir.Node:
+    """`대상 == 라벨1 || 대상 == 라벨2 ...`. 대상이 없으면 접을 수 없는 값을 둔다."""
+    if subj is None or not vals:
+        return ir.Opaque(loc=loc_of(node, file), kind="switch_case_test", children=[])
+    out: ir.Node | None = None
+    for v in vals:
+        cmp_ = ir.Binary(loc=loc_of(v, file), op="==",
+                         children=[_expr(subj, file), _expr(v, file)])
+        out = cmp_ if out is None else ir.Binary(
+            loc=loc_of(v, file), op="||", children=[out, cmp_])
+    return out
 
 
 def _if(node: TSNode, file: str) -> ir.If:
@@ -167,10 +201,25 @@ def _if(node: TSNode, file: str) -> ir.If:
 
 def _loop(node: TSNode, file: str) -> ir.Loop:
     cond = child_by_field(node, "condition")
+    body_node = child_by_field(node, "body")
+    body = _branch(body_node, file)
+    if node.type == "foreach_statement":
+        # foreach ($오염 as $x) — 반복 변수를 대상에 묶지 않으면 본문이 통째로
+        # 미탐이다. 원소를 구분하지 않는 과대근사(컨테이너 모델과 같은 기준).
+        kids = [c for c in node.named_children
+                if c.type != "comment"
+                and (body_node is None or c.start_byte != body_node.start_byte)]
+        if len(kids) >= 2:
+            tgt = kids[1]
+            if tgt.type == "pair":          # `$k => $v` 는 값 쪽이 원소다
+                pk = [c for c in tgt.named_children if c.type != "comment"]
+                tgt = pk[-1] if pk else tgt
+            body.insert(0, ir.Assign(loc=loc_of(tgt, file), target=_expr(tgt, file),
+                                     value=_expr(kids[0], file)))
     return ir.Loop(
         loc=loc_of(node, file),
         test=_expr(cond, file) if cond is not None else None,
-        body=_branch(child_by_field(node, "body"), file),
+        body=body,
     )
 
 
@@ -198,10 +247,17 @@ def _expr(node: TSNode, file: str) -> ir.Node:
         return ir.Ident(loc=loc_of(node, file), name=text_of(node))
 
     if t == "subscript_expression":
-        # $_GET['id'] : 인덱스를 특정하지 않고 베이스와 동일 취급(과대근사)
-        obj_node = child_by_field(node, "object") or node.named_children[0]
-        return ir.Member(loc=loc_of(node, file), obj=_expr(obj_node, file),
-                         prop="", computed=True)
+        # $a['키'] : prop 은 특정 못 하지만 인덱스가 상수면 엔진이 슬롯을 구분한다.
+        kids = [c for c in node.named_children if c.type != "comment"]
+        obj_node = child_by_field(node, "object") or (kids[0] if kids else None)
+        idx = child_by_field(node, "index")
+        if idx is None and obj_node is not None:
+            idx = next((c for c in kids if c.start_byte != obj_node.start_byte), None)
+        return ir.Member(
+            loc=loc_of(node, file),
+            obj=_expr(obj_node, file) if obj_node is not None else _opaque(node, file),
+            prop="", computed=True,
+            index=_expr(idx, file) if idx is not None else None)
 
     if t in ("member_access_expression", "nullsafe_member_access_expression",
              "scoped_property_access_expression"):
@@ -258,8 +314,42 @@ def _expr(node: TSNode, file: str) -> ir.Node:
              "anonymous_function"):
         return _function(node, file)
 
+    if t == "encapsed_string" and not any(
+            c.type != "string_content" for c in node.named_children):
+        # 보간이 없는 "..." 는 상수다. Opaque 로 두면 첨자 키도 분기 조건도 접히지
+        # 않는다. 보간이 든 경우는 아래 Opaque 로 떨어져 오염이 합집합 전파된다.
+        return ir.Literal(loc=loc_of(node, file), value=None, raw=text_of(node))
+
     if t in _LITERALS:
         return ir.Literal(loc=loc_of(node, file), value=None, raw=text_of(node))
+
+    # 상수 전파가 죽은 가지를 지우려면 연산자와 조건식이 IR 에 남아 있어야 한다.
+    if t == "binary_expression":
+        left, right = child_by_field(node, "left"), child_by_field(node, "right")
+        op = child_by_field(node, "operator")
+        if left is not None and right is not None:
+            return ir.Binary(loc=loc_of(node, file),
+                             op=text_of(op) if op is not None else "",
+                             children=[_expr(left, file), _expr(right, file)])
+
+    if t == "unary_op_expression":
+        kids = [c for c in node.named_children if c.type != "comment"]
+        op = child_by_field(node, "operator")
+        if kids:
+            return ir.Unary(loc=loc_of(node, file),
+                            op=text_of(op) if op is not None else "!",
+                            children=[_expr(kids[-1], file)])
+
+    if t == "conditional_expression":
+        cond = child_by_field(node, "condition")
+        con = child_by_field(node, "body")
+        alt = child_by_field(node, "alternative")
+        if cond is not None and alt is not None:
+            return ir.Ternary(
+                loc=loc_of(node, file),
+                children=[_expr(cond, file),
+                          _expr(con, file) if con is not None else _expr(cond, file),
+                          _expr(alt, file)])
 
     if t == "parenthesized_expression":
         kids = [c for c in node.named_children if c.type != "comment"]
