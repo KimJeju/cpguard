@@ -47,6 +47,10 @@ sources:
   - MatrixVariable
 sinks:
 - pattern: call
+  # 질의문은 언제나 첫 인자다. executeUpdate(sql, new int[]{1,2}) 나
+  # queryForObject(sql, Integer.class, bar) 처럼 뒤 인자로 넘기는 값은
+  # 바인딩 파라미터·메타데이터라 질의문에 섞이지 않는다.
+  arg: 0
   callee:
   - executeQuery
   - executeUpdate

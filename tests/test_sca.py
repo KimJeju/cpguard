@@ -153,3 +153,53 @@ def test_scan_without_lockfiles_says_so(tmp_path):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# ---- 오프라인(로컬 OSV 스냅샷) ----
+
+def _snapshot(tmp_path):
+    """PyPI flask <0.12.3 을 취약으로 보는 최소 스냅샷."""
+    d = tmp_path / "osv" / "PyPI"
+    d.mkdir(parents=True)
+    (d / "GHSA-x.json").write_text(json.dumps({
+        "id": "GHSA-x", "aliases": ["CVE-2018-1000656"],
+        "severity": [{"type": "CVSS_V3", "score": "7.5"}],
+        "affected": [{"package": {"ecosystem": "PyPI", "name": "flask"},
+                      "ranges": [{"type": "ECOSYSTEM",
+                                  "events": [{"introduced": "0"}, {"fixed": "0.12.3"}]}]}],
+    }), encoding="utf-8")
+    return tmp_path / "osv"
+
+
+def test_local_snapshot_finds_vulnerable_version(tmp_path):
+    (tmp_path / "requirements.txt").write_text("flask==0.12.2\n", encoding="utf-8")
+    findings, note, comps = sca.scan(tmp_path, db_dir=_snapshot(tmp_path))
+    assert len(findings) == 1
+    assert "CVE-2018-1000656" in findings[0].matched_value
+    assert "로컬 스냅샷" in note
+
+
+def test_local_snapshot_clears_fixed_version(tmp_path):
+    (tmp_path / "requirements.txt").write_text("flask==1.0.0\n", encoding="utf-8")
+    findings, note, _ = sca.scan(tmp_path, db_dir=_snapshot(tmp_path))
+    assert findings == []
+    assert "알려진 취약점 없음" in note
+
+
+def test_blocked_lookup_is_reported_as_not_performed(tmp_path, monkeypatch):
+    """조회가 막힌 것을 '취약점 없음'으로 쓰면 안 된다 — 산출물에서 전혀 다른 값이다."""
+    (tmp_path / "requirements.txt").write_text("flask==0.12.2\n", encoding="utf-8")
+    monkeypatch.setattr(sca, "query_osv", lambda comps, timeout=30.0: None)
+    findings, note, comps = sca.scan(tmp_path, db_dir=None)
+    assert findings == []
+    assert "미수행" in note and "알려진 취약점 없음" not in note
+    assert len(comps) == 1          # SBOM 은 오프라인에서도 나온다
+
+
+def test_version_range_and_explicit_list():
+    rng = {"type": "ECOSYSTEM", "events": [{"introduced": "1.0"}, {"fixed": "2.0"}]}
+    assert sca._in_range("1.5", rng) is True
+    assert sca._in_range("2.5", rng) is False
+    assert sca._in_range("1.5", {"type": "GIT", "events": []}) is None   # 판정 보류
+    assert sca._affects("1.5", {"versions": ["1.4", "1.5"]}) is True
+    assert sca._affects("1.6", {"versions": ["1.4", "1.5"]}) is False

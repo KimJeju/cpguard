@@ -7,6 +7,11 @@ languages: [python]
 sources:
   - {pattern: name, name: ["request.GET", "request.POST", "request.args", "request.form", "request.json", "request.data", "request.values", "request.cookies", "request.headers", "sys.argv", "os.environ"]}
 sinks:
-  - {pattern: call, callee: [execute, executemany, raw, extra, executescript]}
+  # 첫 인자만 본다. cur.execute(sql, (bar,)) 는 bar 를 바인딩 파라미터로 넘기는
+  # 정석적인 방어인데, 인자를 전부 검사하면 그 방어를 쓴 코드가 오탐이 된다.
+  # 질의문이 문자열 연결로 만들어진 진짜 취약점은 첫 인자에서 그대로 잡힌다.
+  - {pattern: call, callee: [execute, executemany, executescript, raw], arg: 0}
+  # extra() 는 select=·where= 처럼 키워드로 받아 자리를 특정할 수 없다.
+  - {pattern: call, callee: [extra]}
 sanitizers:
   - {callee: [int, escape_string, quote]}

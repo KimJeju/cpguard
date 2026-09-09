@@ -43,14 +43,14 @@
     "sqli": {
       "TP": 5,
       "FN": 0,
-      "FP": 9,
-      "TN": 2,
+      "FP": 0,
+      "TN": 11,
       "total": 16,
       "recall": 1.0,
-      "precision": 0.35714285714285715,
-      "f1": 0.5263157894736842,
-      "false_positive_rate": 0.8181818181818182,
-      "benchmark_score": 0.18181818181818177
+      "precision": 1.0,
+      "f1": 1.0,
+      "false_positive_rate": 0.0,
+      "benchmark_score": 1.0
     },
     "xss": {
       "TP": 28,
@@ -79,18 +79,18 @@
   "overall": {
     "TP": 110,
     "FN": 24,
-    "FP": 85,
-    "TN": 127,
+    "FP": 76,
+    "TN": 136,
     "total": 346,
     "recall": 0.8208955223880597,
-    "precision": 0.5641025641025641,
-    "f1": 0.668693009118541,
-    "false_positive_rate": 0.4009433962264151,
-    "benchmark_score": 0.4199521261616446
+    "precision": 0.5913978494623656,
+    "f1": 0.6875,
+    "false_positive_rate": 0.3584905660377358,
+    "benchmark_score": 0.4624049563503239
   },
   "uncertain": {
-    "findings": 1266,
+    "findings": 1257,
     "uncertain": 209,
-    "ratio": 0.165086887835703
+    "ratio": 0.1662688941925219
   }
 }

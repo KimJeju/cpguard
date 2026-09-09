@@ -10,6 +10,12 @@
   NuGet 를 한 스키마로 제공하고 무료다. 오프라인 진단이 요구되면 그때 스냅샷을 미러한다.
 * **기본 꺼짐.** 조회는 패키지 이름·버전을 외부(api.osv.dev)로 보낸다. 진단 대상의
   의존성 목록은 그 자체로 정보이므로, 사용자가 ``--sca`` 로 명시할 때만 나간다.
+* **오프라인 조회.** 국내 기반시설 진단은 망분리가 흔하다. OSV 가 공개하는 생태계별
+  덤프를 미리 받아 두면 그걸로 조회한다(``--sca-db`` 또는 ``CPGUARD_OSV_DIR``).
+  스냅샷이 있으면 네트워크보다 먼저 쓴다 — 의존성 목록이 밖으로 나가지 않는다.
+* **"취약점 없음"과 "조회 못 함"을 구분한다.** 예전에는 둘 다 빈 결과였고 문구로만
+  단서를 달았다. 조회 자체가 안 된 경우는 미수행으로 보고한다 — 진단 산출물에
+  "없음"으로 적히면 안 되는 값이다.
 
 라이선스는 잠금파일이 이미 들고 있는 것만 읽는다(npm·composer). 나머지 생태계까지
 보려면 레지스트리 메타데이터 조회가 따로 필요한데, 그건 여기 범위가 아니다.
@@ -234,6 +240,128 @@ def collect(root: str | Path) -> list[Component]:
     return list(found.values())
 
 
+# ── 오프라인 조회(로컬 스냅샷) ───────────────────────────────────────────────
+#
+# OSV 는 생태계별 전체 덤프를 공개한다.
+#   https://osv-vulnerabilities.storage.googleapis.com/<생태계>/all.zip
+# 받아서 아래 둘 중 한 모양으로 두면 된다.
+#   <dir>/PyPI.zip            (받은 zip 그대로)
+#   <dir>/PyPI/*.json         (풀어 둔 것)
+
+def local_db_dir(explicit: str | Path | None = None) -> Path | None:
+    """스냅샷 위치. 인자 > CPGUARD_OSV_DIR > $CPGUARD_HOME/osv 순. 없으면 None."""
+    import os
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_dir() else None
+    if env := os.environ.get("CPGUARD_OSV_DIR"):
+        p = Path(env)
+        return p if p.is_dir() else None
+    p = Path(os.environ.get("CPGUARD_HOME", Path.home() / ".cpguard")) / "osv"
+    return p if p.is_dir() else None
+
+
+def _iter_entries(directory: Path, ecosystem: str):
+    """그 생태계의 OSV 항목들. zip 이면 스트리밍으로 읽어 메모리를 묶어 둔다."""
+    zip_path = directory / f"{ecosystem}.zip"
+    if zip_path.is_file():
+        import zipfile
+        try:
+            with zipfile.ZipFile(zip_path) as zf:
+                for info in zf.infolist():
+                    if not info.filename.endswith(".json"):
+                        continue
+                    try:
+                        yield json.loads(zf.read(info).decode("utf-8"))
+                    except Exception:
+                        continue        # 항목 하나가 깨져도 나머지는 본다
+        except Exception:
+            return
+        return
+    sub = directory / ecosystem
+    if sub.is_dir():
+        for f in sub.rglob("*.json"):
+            try:
+                yield json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+
+def _vkey(version: str):
+    """버전 비교용 키. 숫자 조각은 숫자로, 나머지는 문자열로 본다.
+
+    정식 semver 파서를 두지 않는다 — 생태계마다 규칙이 다르고, 애매하면 판정을
+    보류하는 편이 산출물에 잘못 쓰는 것보다 낫다.
+    """
+    out = []
+    for part in re.split(r"[.\-+_]", str(version or "")):
+        if part.isdigit():
+            out.append((0, int(part), ""))
+        elif part:
+            out.append((1, 0, part))
+    return out
+
+
+def _in_range(version: str, rng: dict) -> bool | None:
+    """이 범위에 걸리는가. 판단할 수 없으면 None."""
+    if rng.get("type") == "GIT":
+        return None                     # 커밋 해시 범위는 버전으로 못 푼다
+    v = _vkey(version)
+    if not v:
+        return None
+    hit, introduced = False, False
+    for ev in rng.get("events") or []:
+        if "introduced" in ev:
+            lo = ev["introduced"]
+            introduced = (lo == "0") or (_vkey(lo) <= v)
+            if introduced:
+                hit = True
+        elif "fixed" in ev and hit:
+            if _vkey(ev["fixed"]) <= v:
+                hit = False
+        elif "last_affected" in ev and hit:
+            if _vkey(ev["last_affected"]) < v:
+                hit = False
+    return hit
+
+
+def _affects(version: str, aff: dict) -> bool | None:
+    """이 affected 항목이 그 버전을 가리키는가. 모르면 None(= 판정 보류)."""
+    versions = aff.get("versions") or []
+    if versions:
+        return version in versions      # 명시 목록이 있으면 그게 가장 정확하다
+    verdicts = [_in_range(version, r) for r in (aff.get("ranges") or [])]
+    if any(v is True for v in verdicts):
+        return True
+    if verdicts and all(v is False for v in verdicts):
+        return False
+    return None
+
+
+def query_local(components: list[Component], directory: Path
+                ) -> tuple[dict[int, list[dict]], int]:
+    """로컬 스냅샷 조회. (컴포넌트 인덱스 -> 취약점 상세, 판정 보류 건수)."""
+    want: dict[tuple[str, str], list[int]] = {}
+    for i, c in enumerate(components):
+        want.setdefault((c.ecosystem, c.name), []).append(i)
+    hits: dict[int, list[dict]] = {}
+    unknown = 0
+    for eco in sorted({c.ecosystem for c in components}):
+        for entry in _iter_entries(directory, eco):
+            for aff in entry.get("affected") or []:
+                pkg = aff.get("package") or {}
+                idxs = want.get((pkg.get("ecosystem") or eco, pkg.get("name") or ""))
+                if not idxs:
+                    continue
+                for i in idxs:
+                    r = _affects(components[i].version, aff)
+                    if r is True:
+                        hits.setdefault(i, []).append(entry)
+                    elif r is None:
+                        unknown += 1
+    return hits, unknown
+
+
 # ── OSV 조회 ─────────────────────────────────────────────────────────────────
 
 def _call(url: str, payload: dict | None, timeout: float) -> dict:
@@ -246,8 +374,13 @@ def _call(url: str, payload: dict | None, timeout: float) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
-def query_osv(components: list[Component], timeout: float = 30.0) -> dict[int, list[dict]]:
-    """컴포넌트 인덱스 -> 취약점 상세 목록. 네트워크가 막히면 빈 dict."""
+def query_osv(components: list[Component], timeout: float = 30.0
+              ) -> dict[int, list[dict]] | None:
+    """컴포넌트 인덱스 -> 취약점 상세 목록. 조회 자체가 안 되면 None.
+
+    빈 dict("취약점 없음")과 None("조회 못 함")을 구분한다 — 산출물에 "없음"으로
+    적어도 되는 값인지가 여기서 갈린다.
+    """
     hits: dict[int, list[str]] = {}
     for start in range(0, len(components), BATCH):
         chunk = components[start:start + BATCH]
@@ -256,7 +389,7 @@ def query_osv(components: list[Component], timeout: float = 30.0) -> dict[int, l
         try:
             res = _call(f"{OSV_API}/v1/querybatch", payload, timeout)
         except Exception:
-            return {}                   # 오프라인·차단 환경 — 호출측이 '미수행'으로 처리
+            return None                 # 오프라인·차단 환경 — 호출측이 '미수행'으로 처리
         for off, r in enumerate(res.get("results") or []):
             ids = [v["id"] for v in (r.get("vulns") or []) if v.get("id")]
             if ids:
@@ -349,23 +482,39 @@ def to_findings(components: list[Component], vulns: dict[int, list[dict]]) -> li
     return out
 
 
-def scan(root: str | Path, timeout: float = 30.0) -> tuple[list[Finding], str, list[Component]]:
+def scan(root: str | Path, timeout: float = 30.0, db_dir: str | Path | None = None
+         ) -> tuple[list[Finding], str, list[Component]]:
     """(탐지, 요약 한 줄, 컴포넌트 목록).
 
     컴포넌트 목록은 취약점이 없어도 돌려준다 — 그 자체가 산출물(SBOM)이다.
+    로컬 스냅샷이 있으면 그것으로 조회한다(망분리 환경 + 의존성 목록 미유출).
     """
     comps = collect(root)
     if not comps:
         return [], "SCA: 잠금파일을 찾지 못해 오픈소스 컴포넌트 점검을 수행하지 않았다.", []
-    vulns = query_osv(comps, timeout)
+
+    db = local_db_dir(db_dir)
+    if db is not None:
+        vulns, unknown = query_local(comps, db)
+        where = f"로컬 스냅샷({db})"
+        tail = f" 버전 판정 보류 {unknown}건." if unknown else ""
+    else:
+        vulns, unknown, tail = query_osv(comps, timeout), 0, ""
+        where = "OSV.dev"
+        if vulns is None:
+            # 여기서 "없음"이라고 쓰면 안 된다 — 조회가 안 된 것과 취약점이 없는 것은
+            # 산출물에서 전혀 다른 값이다. 미수행으로 보고하고 스냅샷 사용을 안내한다.
+            return [], (f"SCA: 컴포넌트 {len(comps)}건을 수집했으나 OSV.dev 조회에 "
+                        f"실패해 취약점 점검을 수행하지 못했다(미수행). 망분리 환경이면 "
+                        f"OSV 스냅샷을 받아 --sca-db 또는 CPGUARD_OSV_DIR 로 지정하십시오."), comps
+
     if not vulns:
-        # 취약점이 없어서 비었는지, 조회가 막혀서 비었는지 구분이 안 된다. 산출물에는
-        # 확정할 수 있는 것만 쓴다 — 진단원이 오프라인이면 다시 돌린다.
-        return [], (f"SCA: 컴포넌트 {len(comps)}건을 조회했다. 알려진 취약점 없음 "
-                    f"(외부 조회가 차단된 환경이면 결과가 비어 보일 수 있다)."), comps
+        return [], (f"SCA: {where} 로 컴포넌트 {len(comps)}건을 조회했다. "
+                    f"알려진 취약점 없음.{tail}"), comps
     findings = to_findings(comps, vulns)
     return (findings,
-            f"SCA: 컴포넌트 {len(comps)}건 중 {len(findings)}건의 알려진 취약점을 확인했다.",
+            f"SCA: {where} 로 컴포넌트 {len(comps)}건 중 {len(findings)}건의 "
+            f"알려진 취약점을 확인했다.{tail}",
             comps)
 
 

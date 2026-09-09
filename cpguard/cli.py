@@ -25,6 +25,44 @@ def _force_utf8_output() -> None:
             pass
 
 
+#: OSV 가 공개하는 생태계별 전체 덤프. 우리가 파싱하는 잠금파일이 가리키는 것만 받는다.
+OSV_ECOSYSTEMS = ("PyPI", "npm", "Maven", "Go", "RubyGems", "Packagist", "NuGet")
+OSV_DUMP = "https://osv-vulnerabilities.storage.googleapis.com/{eco}/all.zip"
+
+
+def _osv_sync(args) -> int:
+    """스냅샷을 내려받아 <dir>/<생태계>.zip 으로 둔다.
+
+    이 명령만 인터넷을 쓴다. 받아 둔 디렉터리를 망분리 환경으로 옮기고 스캔할 때
+    --sca-db 로 가리키면 그다음부터는 네트워크 없이 조회한다.
+    """
+    import os
+    import urllib.request
+    from pathlib import Path
+
+    target = Path(args.dir or os.environ.get("CPGUARD_OSV_DIR")
+                  or (Path(os.environ.get("CPGUARD_HOME", Path.home() / ".cpguard")) / "osv"))
+    target.mkdir(parents=True, exist_ok=True)
+    ecos = args.ecosystem or list(OSV_ECOSYSTEMS)
+    print(f"OSV 스냅샷 받는 중 -> {target}")
+    failed = []
+    for eco in ecos:
+        url = OSV_DUMP.format(eco=eco)
+        out = target / f"{eco}.zip"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "CPGuard-SCA"})
+            with urllib.request.urlopen(req, timeout=300) as r, open(out, "wb") as fh:
+                fh.write(r.read())
+            print(f"  {eco:10} {out.stat().st_size // (1024 * 1024)} MB")
+        except Exception as e:
+            failed.append(eco)
+            print(f"  {eco:10} 실패: {type(e).__name__}: {e}")
+    if failed:
+        print(f"받지 못한 생태계: {', '.join(failed)}")
+    print(f"스캔할 때: cpguard scan <경로> --sca --sca-db {target}")
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     multiprocessing.freeze_support()  # frozen 앱에서 워커가 앱을 재실행하지 않도록
     _force_utf8_output()
@@ -46,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--sca", action="store_true",
                     help="오픈소스 컴포넌트의 알려진 취약점 점검(잠금파일 → OSV.dev). "
                          "패키지 이름·버전이 외부로 나가므로 기본은 꺼져 있다")
+    sc.add_argument("--sca-db", metavar="DIR",
+                    help="OSV 스냅샷 디렉터리. 지정하면 네트워크 대신 여기서 조회한다"
+                         "(망분리 환경 · 의존성 목록이 밖으로 나가지 않는다). "
+                         "환경변수 CPGUARD_OSV_DIR 로도 지정할 수 있고, "
+                         "스냅샷은 `cpguard osv-sync` 로 받는다")
     sc.add_argument("--provider", choices=["claude", "openai", "gemini"],
                     help="트리아지에 쓸 LLM (생략 시 키가 있는 것을 자동 선택)")
     sc.add_argument("--model", help="프로바이더의 모델명 재정의")
@@ -60,11 +103,22 @@ def main(argv: list[str] | None = None) -> int:
     sv.add_argument("--port", type=int, default=8000)
     sv.add_argument("--no-browser", action="store_true", help="브라우저 자동 실행 안 함")
 
+    sy = sub.add_parser("osv-sync",
+                        help="OSV 취약점 스냅샷 내려받기 (인터넷 되는 곳에서 미리 받아 "
+                             "망분리 환경으로 옮긴다)")
+    sy.add_argument("--dir", metavar="DIR",
+                    help="저장 위치 (생략 시 CPGUARD_OSV_DIR 또는 ~/.cpguard/osv)")
+    sy.add_argument("--ecosystem", action="append", metavar="NAME",
+                    help="받을 생태계 (여러 번 지정 가능, 생략 시 전부)")
+
     ap_app = sub.add_parser("app", help="독립 데스크톱 창으로 실행 (브라우저 아님)")
     ap_app.add_argument("--port", type=int, help="사용할 포트 (생략 시 자동 선택)")
     ap_app.add_argument("--debug", action="store_true", help="웹뷰 디버그 도구 활성화")
 
     args = ap.parse_args(argv)
+
+    if args.cmd == "osv-sync":
+        return _osv_sync(args)
 
     if args.cmd == "serve":
         from .web.run import serve
@@ -89,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.sca:
         from . import sca
-        dep_findings, sca_note, _comps = sca.scan(root)
+        dep_findings, sca_note, _comps = sca.scan(root, db_dir=args.sca_db)
         findings += dep_findings
         print(sca_note)
 
