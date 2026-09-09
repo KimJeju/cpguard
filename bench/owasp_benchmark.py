@@ -92,6 +92,64 @@ PYTHON_CATEGORY_RULE = {
 }
 
 
+#: BenchProctor 카테고리 -> 규칙 접미. 언어 접두(js/go/ruby/cpp)는 파일 확장자로 정한다.
+#: 여기 없는 카테고리(weakhash·securecookie·csrf 등)는 설정·API 사용 점검이라 taint 대상이
+#: 아니다 — 기존 코퍼스와 같은 기준으로 지표에서 뺀다.
+BENCHPROCTOR_CATEGORY = {
+    "sqli": "sqli",
+    "nosql": "sqli",
+    "cmdi": "command-injection",
+    "genericcmdi": "command-injection",
+    "argument_injection": "command-injection",
+    "xss": "xss",
+    "basic_xss": "xss",
+    "pathtraver": "path-traversal",
+    "ssrf": "ssrf",
+    "cloud_ssrf_metadata": "ssrf",
+    "redirect": "open-redirect",
+    "codeinj": "code-injection",
+    "eval_injection": "code-injection",
+    "deserial": "deserialization",
+    "xpathi": "xpath-injection",
+    "ldapi": "ldap-injection",
+}
+
+#: 데이터 흐름 대상이지만 **우리가 규칙을 갖고 있지 않은** 유형. 설정 점검이라 빼는 것과
+#: 구별해서 보고한다 — 전자는 범위 밖이고 이쪽은 우리 쪽 공백이다. 있지도 않은 규칙에
+#: 매핑해 두면 그 유형이 전부 미탐으로 잡혀, 가진 규칙의 성능까지 같이 깎인다.
+BENCHPROCTOR_NO_RULE = {
+    "nosql": "NoSQL 주입", "ssti": "템플릿 주입", "el_injection": "표현식 언어 주입",
+    "prototypepollution": "프로토타입 오염", "crlfinjection": "CRLF 주입",
+    "loginjection": "로그 주입", "csv_injection": "CSV 수식 주입",
+    "xxe": "XXE", "fileupload": "위험한 파일 업로드", "idor": "IDOR",
+    "intoverflow": "정수 오버플로", "null_deref": "널 역참조",
+    "resourceexhaust": "자원 고갈",
+}
+
+#: SARD C# 스위트의 CWE -> 규칙 접미.
+SARD_CSHARP_CWE = {
+    "cwe_89": "sqli",
+    "cwe_78": "command-injection",
+    "cwe_22": "path-traversal",
+    "cwe_90": "ldap-injection",
+    "cwe_91": "xpath-injection",
+}
+
+
+def rule_map(prefix: str, table: dict) -> dict:
+    """카테고리 -> 규칙 id. 그 언어에 규칙이 없으면 None(지표에서 제외).
+
+    규칙 목록을 실제로 읽어서 정한다 — 없는 규칙을 정답지에 넣어 두면 그 유형이
+    전부 미탐으로 잡혀 수치가 실제보다 나쁘게 나온다.
+    """
+    have = {r.id for r in load_rules(user_dir=False)}
+    out = {cat: (rid if (rid := f"{prefix}.{suffix}") in have else None)
+           for cat, suffix in table.items()}
+    if table is BENCHPROCTOR_CATEGORY:
+        out.update(dict.fromkeys(BENCHPROCTOR_NO_RULE))   # 규칙 없음 -> 지표에서 제외
+    return out
+
+
 @dataclass
 class Corpus:
     """코퍼스 하나의 생김새 — 정답지 위치, 테스트 파일 위치, 카테고리 매핑."""
@@ -102,6 +160,10 @@ class Corpus:
     category_rule: dict
     #: 정답지가 CSV 가 아니라 경로에 있는 코퍼스(PHP 스위트). testdir 아래를 훑는다.
     labels_in_path: bool = False
+    #: 케이스 디렉터리마다 manifest.sarif 가 good/bad 를 선언하는 코퍼스(SARD C# 스위트).
+    labels_in_manifest: bool = False
+    #: 파일 이름과 정답지 키가 다른 코퍼스. benchmark_test_00178 -> BenchmarkTest00178
+    camel_key: bool = False
 
 
 CORPORA = (
@@ -114,8 +176,42 @@ CORPORA = (
            ".", "**/*.php", PHP_CATEGORY_RULE, labels_in_path=True),
 )
 
+#: BenchProctor 번들은 언어별로 확장자만 다르고 모양이 같다. 프레임워크 디렉터리
+#: 하나(expectedresults-*.csv + testcode/)가 코퍼스 하나다.
+BENCHPROCTOR_EXT = {".js": "js", ".ts": "js", ".go": "go", ".rb": "ruby",
+                    ".c": "cpp", ".cpp": "cpp", ".cs": "csharp", ".py": "py",
+                    ".java": "java", ".php": "php"}
+
+
+def _benchproctor(root: Path) -> Corpus | None:
+    """<언어>/<프레임워크>/ 아래 expectedresults-*.csv 와 testcode/ 가 있으면 그 코퍼스."""
+    answers = next(iter(sorted(root.glob("expectedresults-*.csv"))), None)
+    testdir = root / "testcode"
+    if answers is None or not testdir.is_dir():
+        return None
+    sample = next((q for q in sorted(testdir.glob("benchmark_test_*"))), None)
+    if sample is None:
+        return None
+    prefix = BENCHPROCTOR_EXT.get(sample.suffix)
+    if prefix is None:
+        return None
+    return Corpus(f"BenchProctor {root.parent.name}/{root.name}", answers.name,
+                  "testcode", f"benchmark_test_*{sample.suffix}",
+                  rule_map(prefix, BENCHPROCTOR_CATEGORY), camel_key=True)
+
+
+def _sard_manifest(root: Path) -> Corpus | None:
+    """SARD 케이스 디렉터리 묶음(<id>-v1.0.0/manifest.sarif + src/)."""
+    if next(iter(root.glob("*/manifest.sarif")), None) is None:
+        return None
+    return Corpus("C# Vulnerability Test Suite (SARD)", "", ".", "**/src/*.cs",
+                  rule_map("csharp", SARD_CSHARP_CWE), labels_in_manifest=True)
+
 
 def detect_corpus(root: Path) -> Corpus:
+    for probe in (_benchproctor, _sard_manifest):
+        if (c := probe(root)) is not None:
+            return c
     for c in CORPORA:
         marker = root / c.answers
         if marker.is_dir() if c.labels_in_path else marker.is_file():
@@ -144,7 +240,23 @@ def _scan_one(path_str: str) -> tuple[str, tuple[list[str], int, int]]:
                        sum(1 for f in found if f.uncertain))
 
 
+def _camel(stem: str) -> str:
+    """benchmark_test_00178 -> BenchmarkTest00178 (BenchProctor 의 정답지 키)."""
+    return "".join(part.capitalize() for part in stem.split("_")[:-1]) + stem.split("_")[-1]
+
+
 def load_expected(root: Path, corpus: Corpus) -> dict[str, tuple[str, bool]]:
+    if corpus.labels_in_manifest:
+        # 케이스 디렉터리마다 manifest.sarif 가 state(good/bad)를, 파일 이름이 CWE 를 말한다.
+        out: dict[str, tuple[str, bool]] = {}
+        for m in root.glob("*/manifest.sarif"):
+            try:
+                props = json.loads(m.read_text(encoding="utf-8"))["runs"][0]["properties"]
+            except Exception:
+                continue
+            for src in (m.parent / "src").glob("*.cs"):
+                out[src.stem] = (src.name.split("__")[0], props.get("state") == "bad")
+        return out
     if corpus.labels_in_path:
         # 경로가 곧 정답이다: <유형>/CWE_89/unsafe/....php
         out: dict[str, tuple[str, bool]] = {}
@@ -207,15 +319,19 @@ def evaluate(root: Path, limit: int | None = None, workers: int | None = None,
     category_rule = corpus.category_rule
     expected = load_expected(root, corpus)
     src = root.joinpath(*corpus.testdir.split("/"))
-    files = sorted(p for p in src.glob(corpus.glob) if p.stem in expected)
+    key = _camel if corpus.camel_key else (lambda s: s)
+    files = sorted(p for p in src.glob(corpus.glob) if key(p.stem) in expected)
     if limit:
         files = files[:limit]
 
     if mode == "project":
         results = _scan_project(root, {p.stem for p in files}, workers)
+        if corpus.camel_key:      # 정답지 키로 맞춰 놓는다
+            results = {key(k): v for k, v in results.items()}
     else:
         with ProcessPoolExecutor(max_workers=workers, initializer=_init) as pool:
-            results = dict(pool.map(_scan_one, [str(p) for p in files], chunksize=16))
+            results = {key(k): v for k, v in
+                       pool.map(_scan_one, [str(p) for p in files], chunksize=16)}
 
     # 카테고리별 혼동행렬
     cats: dict[str, dict[str, int]] = {}
@@ -288,9 +404,15 @@ def render(r: dict) -> str:
         "",
     ]
     ex = r["excluded_categories"]
+    gap = {k: v for k, v in ex.items() if k in BENCHPROCTOR_NO_RULE}
+    ex = {k: v for k, v in ex.items() if k not in gap}
     if ex:
         out.append("지표 제외 (데이터 흐름 분석 대상이 아닌 설정·API 사용 점검 항목):")
         out.append("  " + ", ".join(f"{k}({v})" for k, v in ex.items()))
+    if gap:
+        out.append("")
+        out.append("지표 제외 — 흐름 분석 대상이지만 우리에게 그 규칙이 없다(공백):")
+        out.append("  " + ", ".join(f"{k}({v})" for k, v in gap.items()))
     u = r.get("uncertain")
     if u and u["findings"]:
         out.append("")
