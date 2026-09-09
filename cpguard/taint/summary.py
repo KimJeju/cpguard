@@ -40,6 +40,12 @@ class Summary:
     sink_paths: dict[int, list[list[Step]]] = field(default_factory=dict)
     # 인자와 무관하게 함수 내부에서 오염을 만들어 리턴하는 경우, 그 내부 경로
     source_trace: list[Step] = field(default_factory=list)
+    # 첫 파라미터가 self/cls 인가. 파이썬 메서드는 수신자를 파라미터로 세지만 호출부의
+    # 인자에는 안 들어간다 — obj.m(a) 에서 a 는 인자 0 이고 요약의 파라미터 1 이다.
+    # 이 표시가 없으면 인덱스가 한 칸씩 밀려 프로시저간 판정이 통째로 어긋난다.
+    implicit_self: bool = False
+    #: 파라미터 개수. 수신자를 모르는 호출을 이름만으로 이을 때 인자 수가 맞는지 본다.
+    arity: int = -1
 
     @property
     def returns_source(self) -> bool:

@@ -5,76 +5,76 @@
   "parse_errors": 0,
   "per_category": {
     "cmdi": {
-      "TP": 115,
-      "FN": 11,
-      "FP": 30,
-      "TN": 95,
+      "TP": 126,
+      "FN": 0,
+      "FP": 33,
+      "TN": 92,
       "total": 251,
-      "recall": 0.9126984126984127,
-      "precision": 0.7931034482758621,
-      "f1": 0.8487084870848709,
-      "false_positive_rate": 0.24,
-      "benchmark_score": 0.6726984126984127
+      "recall": 1.0,
+      "precision": 0.7924528301886793,
+      "f1": 0.8842105263157896,
+      "false_positive_rate": 0.264,
+      "benchmark_score": 0.736
     },
     "ldapi": {
-      "TP": 24,
-      "FN": 3,
-      "FP": 7,
-      "TN": 25,
+      "TP": 27,
+      "FN": 0,
+      "FP": 8,
+      "TN": 24,
       "total": 59,
-      "recall": 0.8888888888888888,
-      "precision": 0.7741935483870968,
-      "f1": 0.8275862068965517,
-      "false_positive_rate": 0.21875,
-      "benchmark_score": 0.6701388888888888
+      "recall": 1.0,
+      "precision": 0.7714285714285715,
+      "f1": 0.870967741935484,
+      "false_positive_rate": 0.25,
+      "benchmark_score": 0.75
     },
     "pathtraver": {
-      "TP": 104,
-      "FN": 29,
-      "FP": 42,
-      "TN": 93,
+      "TP": 119,
+      "FN": 14,
+      "FP": 46,
+      "TN": 89,
       "total": 268,
-      "recall": 0.7819548872180451,
-      "precision": 0.7123287671232876,
-      "f1": 0.7455197132616488,
-      "false_positive_rate": 0.3111111111111111,
-      "benchmark_score": 0.47084377610693395
+      "recall": 0.8947368421052632,
+      "precision": 0.7212121212121212,
+      "f1": 0.7986577181208053,
+      "false_positive_rate": 0.34074074074074073,
+      "benchmark_score": 0.5539961013645225
     },
     "sqli": {
-      "TP": 245,
-      "FN": 27,
-      "FP": 58,
-      "TN": 174,
+      "TP": 261,
+      "FN": 11,
+      "FP": 61,
+      "TN": 171,
       "total": 504,
-      "recall": 0.9007352941176471,
-      "precision": 0.8085808580858086,
-      "f1": 0.8521739130434782,
-      "false_positive_rate": 0.25,
-      "benchmark_score": 0.6507352941176471
+      "recall": 0.9595588235294118,
+      "precision": 0.8105590062111802,
+      "f1": 0.8787878787878789,
+      "false_positive_rate": 0.2629310344827586,
+      "benchmark_score": 0.6966277890466532
     },
     "xpathi": {
-      "TP": 14,
-      "FN": 1,
-      "FP": 3,
-      "TN": 17,
+      "TP": 15,
+      "FN": 0,
+      "FP": 5,
+      "TN": 15,
       "total": 35,
-      "recall": 0.9333333333333333,
-      "precision": 0.8235294117647058,
-      "f1": 0.8749999999999999,
-      "false_positive_rate": 0.15,
-      "benchmark_score": 0.7833333333333333
+      "recall": 1.0,
+      "precision": 0.75,
+      "f1": 0.8571428571428571,
+      "false_positive_rate": 0.25,
+      "benchmark_score": 0.75
     },
     "xss": {
-      "TP": 212,
-      "FN": 34,
-      "FP": 28,
-      "TN": 181,
+      "TP": 217,
+      "FN": 29,
+      "FP": 29,
+      "TN": 180,
       "total": 455,
-      "recall": 0.8617886178861789,
-      "precision": 0.8833333333333333,
-      "f1": 0.8724279835390947,
-      "false_positive_rate": 0.1339712918660287,
-      "benchmark_score": 0.7278173260201501
+      "recall": 0.8821138211382114,
+      "precision": 0.8821138211382114,
+      "f1": 0.8821138211382114,
+      "false_positive_rate": 0.13875598086124402,
+      "benchmark_score": 0.7433578402769674
     }
   },
   "excluded_categories": {
@@ -85,20 +85,20 @@
     "weakrand": 493
   },
   "overall": {
-    "TP": 714,
-    "FN": 105,
-    "FP": 168,
-    "TN": 585,
+    "TP": 765,
+    "FN": 54,
+    "FP": 182,
+    "TN": 571,
     "total": 1572,
-    "recall": 0.8717948717948718,
-    "precision": 0.8095238095238095,
-    "f1": 0.8395061728395062,
-    "false_positive_rate": 0.22310756972111553,
-    "benchmark_score": 0.6486873020737562
+    "recall": 0.9340659340659341,
+    "precision": 0.8078141499472017,
+    "f1": 0.8663646659116648,
+    "false_positive_rate": 0.24169986719787517,
+    "benchmark_score": 0.6923660668680589
   },
   "uncertain": {
-    "findings": 1855,
-    "uncertain": 80,
-    "ratio": 0.0431266846361186
+    "findings": 1946,
+    "uncertain": 82,
+    "ratio": 0.0421377183967112
   }
 }

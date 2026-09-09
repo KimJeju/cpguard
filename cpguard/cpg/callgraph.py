@@ -54,6 +54,11 @@ def file_scoped(file: str, name: str) -> str:
     return f"{file}::{name}"
 
 
+def unique_name(name: str) -> str:
+    """프로젝트 전체에서 정의가 하나뿐인 이름의 키. 실제 이름과 섞이지 않게 표식을 붙인다."""
+    return f"{name}#unique"
+
+
 def _module_qualified(name: str, file: str, depth: int = 3) -> list[str]:
     """helpers/utils.py 의 f 를 'utils.f', 'helpers.utils.f' 로도 부를 수 있게 한다.
 
@@ -78,6 +83,8 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
     한계: 파일 간 이름이 겹치면 나중 것이 이긴다. import 별칭은 해석하지 않는다.
     """
     registry: dict[str, FuncInfo] = {}
+    seen: dict[str, int] = {}
+    unique: dict[str, FuncInfo] = {}
     for module, src, file in modules:
         for name, fn in _named_functions(module.body):
             info = FuncInfo(name=name, fn=fn, src=src, file=file)
@@ -85,4 +92,14 @@ def collect_functions(modules: list[tuple[ir.Module, bytes, str]]) -> dict[str, 
             registry[file_scoped(file, name)] = info
             for alias in _module_qualified(name, file):
                 registry[alias] = info
+            seen[name] = seen.get(name, 0) + 1
+            unique[name] = info
+    # 프로젝트 전체에서 정의가 하나뿐인 이름은 수신자를 몰라도 그 함수가 확실하다.
+    # wrapped.get_form_parameter(x) 처럼 변수에 담긴 객체의 메서드를 부르는 형태는
+    # 변수의 타입을 모르면 정의를 못 찾는데, 이름이 유일하면 그 위험이 없다.
+    # 이름이 여럿이면 등록하지 않는다 — 그게 doSomething(자바 코퍼스에 1802개) 같은
+    # 흔한 이름이 엉뚱한 파일로 이어지는 것을 막는 안전장치다.
+    for name, n in seen.items():
+        if n == 1:
+            registry[unique_name(name)] = unique[name]
     return registry

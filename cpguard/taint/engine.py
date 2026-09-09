@@ -28,7 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .. import ir
-from ..cpg.callgraph import FuncInfo, collect_functions, file_scoped
+from ..cpg.callgraph import FuncInfo, collect_functions, file_scoped, unique_name
 from ..report.finding import Finding, Step
 from .spec import Rule, SinkPattern
 from .summary import BLOCK, PROPAGATE, LibraryModel, Summary, load_library_model
@@ -93,8 +93,16 @@ def _snippet(loc: ir.Loc, src: bytes) -> str:
 
 # ---------- 스펙 매칭 ----------
 
+#: 인스턴스에 담아 둔 요청 객체를 가리키는 접두. self.request.form 처럼 한 겹 감싼
+#: 형태는 파이썬·자바 웹 코드에서 표준에 가깝다 — 이 한 겹을 벗겨 소스를 본다.
+_SELF_PREFIX = ("self", "this", "cls")
+
+
 def _matches_source(path: str, rule: Rule) -> bool:
     segs = path.split(".")
+    if len(segs) > 1 and segs[0] in _SELF_PREFIX:
+        segs = segs[1:]
+        path = ".".join(segs)
     for s in rule.sources:
         if s.kind == "member":
             if s.object and segs[0] == s.object:
@@ -180,6 +188,40 @@ def _local_function(cp: str | None, callee: ir.Node, ctx: Ctx) -> Summary | None
     return ctx.summaries.get(file_scoped(ctx.file, callee.prop))
 
 
+def _self_shift(summ: Summary, callee: ir.Node) -> int:
+    """수신자를 통해 부른 파이썬 메서드면 요약의 파라미터 자리가 한 칸 앞선다.
+
+    obj.m(a) 는 인자가 [a] 뿐이지만 요약은 self 를 파라미터 0 으로 센다. 맞추지
+    않으면 프로시저간 판정이 한 칸씩 어긋나 엉뚱한 인자를 보게 된다.
+    """
+    return 1 if (summ.implicit_self and isinstance(callee, ir.Member)) else 0
+
+
+def _unique_function(cp: str | None, callee: ir.Node, nargs: int, ctx: Ctx) -> Summary | None:
+    """수신자를 모르는 호출의 마지막 수단 — 그 이름의 정의가 프로젝트에 하나뿐일 때만.
+
+    wrapped.get_form_parameter("x") 처럼 변수에 담긴 객체의 메서드는 변수의 타입을
+    모르면 정의를 찾을 수 없다. 그런데 그 함수가 안에서 소스를 읽어 돌려주는 경우
+    (요청 래퍼가 흔히 그렇다) 과대근사로도 오염이 생기지 않는다 — 인자가 깨끗하기
+    때문이다. 그래서 이 형태는 통째로 미탐이 된다.
+
+    이름이 유일하면 수신자를 몰라도 그 함수가 맞다. 여럿이면 등록 자체를 안 했으므로
+    여기서 걸리지 않는다(자바 코퍼스의 doSomething 은 정의가 1802개다).
+    """
+    if not cp or "." not in cp:
+        return None                      # 맨 이름은 앞의 두 경로가 이미 처리했다
+    # 수신자가 단순 변수일 때만. org.apache.X.foo(...) 처럼 점 경로가 긴 라이브러리
+    # 호출까지 이름만 보고 이으면 엉뚱한 함수의 요약을 씌운다.
+    if not (isinstance(callee, ir.Member) and isinstance(callee.obj, ir.Ident)):
+        return None
+    hit = ctx.summaries.get(unique_name(cp.rpartition(".")[2]))
+    if hit is None:
+        return None
+    # 인자 수가 안 맞으면 같은 이름의 다른 함수다. 수신자 호출이면 self 한 자리를 뺀다.
+    want = hit.arity - (1 if hit.implicit_self else 0)
+    return hit if want < 0 or want == nargs else None
+
+
 # ---------- 오염 판정 ----------
 
 def _env_lookup(path: str, env: dict[str, Trace]) -> Trace | None:
@@ -226,16 +268,18 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                     return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
 
         step = Step("propagation", node.loc, _snippet(node.loc, ctx.src))
-        summ = _user_function(cp, ctx) or _local_function(cp, node.callee, ctx)
+        summ = (_user_function(cp, ctx) or _local_function(cp, node.callee, ctx)
+                or _unique_function(cp, node.callee, len(node.args), ctx))
 
         if summ is not None:
             # 함수가 자기 안에서 오염을 만들어 리턴하면, 인자와 무관하게 결과가 오염이다.
             if summ.returns_source:
                 return summ.source_trace + [step]
             # 그 외에는 요약에 따라 "인자 오염 -> 리턴 오염" 여부를 정확히 판단한다.
+            shift = _self_shift(summ, node.callee)
             for i, a in enumerate(node.args):
                 tr = _taint(a, env, ctx)
-                if tr and i in summ.returns_tainted:
+                if tr and (i + shift) in summ.returns_tainted:
                     return tr + [step]
             return None  # 인자가 오염돼도 리턴으로 흐르지 않으면 오염 아님(정밀도)
 
@@ -351,16 +395,18 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
                     break
 
         # (b) 프로시저 간: 요약이 "이 파라미터는 내부에서 sink 에 닿는다"고 말하는 경우
-        summ = _user_function(cp, ctx) or _local_function(cp, call.callee, ctx)
+        summ = (_user_function(cp, ctx) or _local_function(cp, call.callee, ctx)
+                or _unique_function(cp, call.callee, len(call.args), ctx))
         if summ is not None and summ.sink_paths:
+            shift = _self_shift(summ, call.callee)
             for i, arg in enumerate(call.args):
-                if i not in summ.sink_paths:
+                if (i + shift) not in summ.sink_paths:
                     continue
                 tr = _taint(arg, env, ctx)
                 if not tr:
                     continue
                 enter = Step("call", call.loc, _snippet(call.loc, ctx.src))
-                for inner in summ.sink_paths[i]:
+                for inner in summ.sink_paths[i + shift]:
                     _emit(ctx, tr + [enter] + inner)
                 break
 
@@ -609,6 +655,8 @@ def _summarize(info: FuncInfo, rule: Rule, summaries: dict[str, Summary]) -> Sum
     여기서 다시 세면 중복이 된다.
     """
     result = Summary()
+    result.implicit_self = bool(info.fn.params) and info.fn.params[0].name in ("self", "cls")
+    result.arity = len(info.fn.params)
 
     # (1) 인자 무관 오염 리턴
     base = Ctx(rule=rule, src=info.src, out=[], summaries=summaries, file=info.file)
