@@ -56,6 +56,10 @@ class Spec:
     unwrap_decl: tuple[str, ...] = field(default_factory=tuple)  # C 의 pointer_declarator 등
     new_expr: tuple[str, ...] = field(default_factory=tuple)     # 객체 생성식(new X(y))
     splice: tuple[str, ...] = field(default_factory=tuple)       # try/switch 등: 자식을 문으로 펼침
+    # switch 처럼 "서로 배타적인 분기"를 담는 컨테이너 -> 그 안의 한 분기 노드 타입들.
+    # 그냥 펼치면 분기가 순차 실행처럼 보여, 뒤 분기의 안전한 대입이 앞 분기에서 담긴
+    # 오염을 지운다. if 사슬로 감싸 분기 합류(_merge)를 태운다.
+    branches: dict = field(default_factory=dict)
     # 상수 전파가 분기 조건을 접으려면 연산자를 알아야 한다 → 이 세 가지는 Opaque 로 접지 않는다.
     binary: tuple[str, ...] = ("binary_expression",)
     unary: tuple[str, ...] = ("unary_expression",)
@@ -91,6 +95,7 @@ LANG: dict[str, Spec] = {
                 "resource", "catch_clause", "finally_clause", "synchronized_statement",
                 "switch_expression", "switch_block", "switch_block_statement_group",
                 "labeled_statement"),
+        branches={"switch_block": ("switch_block_statement_group", "switch_rule")},
     ),
     "csharp": Spec(
         call="invocation_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -112,6 +117,7 @@ LANG: dict[str, Spec] = {
         splice=("try_statement", "catch_clause", "finally_clause", "switch_statement",
                 "switch_body", "switch_section", "lock_statement", "using_statement",
                 "checked_statement", "labeled_statement"),
+        branches={"switch_body": ("switch_section",)},
         unary=("prefix_unary_expression", "unary_expression"),
     ),
     "go": Spec(
@@ -130,6 +136,8 @@ LANG: dict[str, Spec] = {
                "expression_list"),
         idents=_ID + ("field_identifier", "package_identifier"), literals=_LIT_COMMON,
         splice=("select_statement", "type_switch_statement", "expression_switch_statement", "labeled_statement", "communication_case", "default_case", "expression_case", "type_case",),
+        branches={"expression_switch_statement": ("expression_case", "default_case"),
+                  "type_switch_statement": ("type_case", "default_case")},
     ),
     "cpp": Spec(
         call="call_expression", call_fn="function", call_args="arguments", args_types=("argument_list",),
@@ -169,6 +177,7 @@ LANG: dict[str, Spec] = {
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("string_literal", "character_literal"),
         descend=("class_declaration", "object_declaration", "companion_object"),
         splice=("try_expression", "catch_block", "finally_block", "when_expression", "when_entry",),
+        branches={"when_expression": ("when_entry",)},
     ),
     "swift": Spec(
         call="call_expression", call_fn=None, call_args=None, args_types=("call_suffix", "value_arguments"),
@@ -186,6 +195,7 @@ LANG: dict[str, Spec] = {
         idents=_ID + ("simple_identifier",), literals=_LIT_COMMON + ("line_string_literal", "multi_line_string_literal"),
         descend=("class_declaration", "protocol_declaration"),
         splice=("do_statement", "catch_block", "switch_statement", "switch_entry",),
+        branches={"switch_statement": ("switch_entry",)},
         binary=("additive_expression", "multiplicative_expression", "comparison_expression",
                 "equality_expression", "conjunction_expression", "disjunction_expression"),
         unary=("prefix_expression",),
@@ -207,6 +217,7 @@ LANG: dict[str, Spec] = {
         literals=_LIT_COMMON + ("string", "symbol", "simple_symbol", "hash_key_symbol"),
         descend=("class", "module"),
         splice=("begin", "rescue", "ensure", "case", "when", "then",),
+        branches={"case": ("when", "else")},
         binary=("binary",),
         unary=("unary",),
         ternary=("conditional",),
@@ -350,10 +361,38 @@ class _Worker:
         # try/switch/synchronized 처럼 블록을 품지만 우리가 모델링하지 않는 문.
         # Opaque 로 접으면 블록 안 대입의 "순서"가 사라져 오염 추적이 그 지점에서 끊긴다
         # (Java 는 위험 코드가 대부분 try 안에 있어 치명적). 자식을 문 리스트로 펼친다.
+        # switch 계열은 분기를 순차로 펼치면 안 된다 — 아래 splice 보다 먼저 본다.
+        if t in s.branches:
+            return self._branches(node, s.branches[t])
+
         if t in s.splice:
             return self.block(self._named(node))
 
         return self.expr(node)
+
+    def _branches(self, node: TSNode, group_types: tuple[str, ...]):
+        """switch 의 분기들을 if 사슬로 편다.
+
+        분기는 서로 배타적인데 문 리스트로 그냥 이어 붙이면 마지막 분기가 앞 분기의
+        대입을 덮어쓴다. 실측: OWASP 자바 코퍼스의 sqli 미탐 109건 중 17건이
+        `case 'A': bar = param; ... default: bar = "safe";` 형태였다.
+
+        조건식은 쓰지 않는다(Literal). 여기서 필요한 것은 분기 합류뿐이고, switch 의
+        대상식을 조건 자리에 넣으면 sink 검사가 그 식을 한 번 더 훑는다.
+        """
+        kids = self._named(node)
+        groups = [c for c in kids if c.type in group_types]
+        if not groups:
+            return self.block(kids)
+        rest = [c for c in kids if c.type not in group_types]
+        test = ir.Literal(loc=loc_of(node, self.file), value=None, raw="switch")
+        chain = None
+        for g in reversed(groups):
+            chain = ir.If(loc=loc_of(g, self.file), test=test,
+                          then=self.block(self._named(g)),
+                          orelse=[chain] if chain is not None else [])
+        # 분기 밖에 남은 것(대상식 등)은 그대로 앞에 둔다.
+        return self.block(rest) + [chain]
 
     def _stmt_or_expr(self, node: TSNode):
         r = self.stmt(node)

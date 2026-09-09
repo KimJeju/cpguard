@@ -11,6 +11,7 @@ sources:
   property: &id001
   - getParameter
   - getParameterValues
+  - getParameterNames
   - getParameterMap
   - getHeader
   - getHeaders
@@ -60,6 +61,15 @@ sinks:
   - addBatch
   - queryForList
   - queryForObject
+  # Spring JdbcTemplate 의 나머지 조회·갱신 진입점. 첫 인자가 SQL 문자열이라
+  # queryForList/queryForObject 와 성질이 같다. 이름만으로 구분되는 것만 넣는다
+  # (bare 'query' 는 흔한 메서드 이름이라 넣지 않는다).
+  - queryForRowSet
+  - queryForMap
+  - queryForStream
+  - queryForInt
+  - queryForLong
+  - batchUpdate
   - update
 sanitizers:
 - callee:
