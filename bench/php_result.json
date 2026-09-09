@@ -1,0 +1,107 @@
+{
+  "benchmark": "PHP Vulnerability test suite (SAMATE)",
+  "scan_mode": "project",
+  "files_scanned": 42212,
+  "parse_errors": 0,
+  "per_category": {
+    "CWE_601": {
+      "TP": 510,
+      "FN": 2082,
+      "FP": 330,
+      "TN": 1878,
+      "total": 4800,
+      "recall": 0.19675925925925927,
+      "precision": 0.6071428571428571,
+      "f1": 0.2972027972027972,
+      "false_positive_rate": 0.14945652173913043,
+      "benchmark_score": 0.04730273752012884
+    },
+    "CWE_78": {
+      "TP": 330,
+      "FN": 294,
+      "FP": 930,
+      "TN": 942,
+      "total": 2496,
+      "recall": 0.5288461538461539,
+      "precision": 0.2619047619047619,
+      "f1": 0.3503184713375796,
+      "false_positive_rate": 0.4967948717948718,
+      "benchmark_score": 0.03205128205128205
+    },
+    "CWE_79": {
+      "TP": 1180,
+      "FN": 3172,
+      "FP": 1220,
+      "TN": 4508,
+      "total": 10080,
+      "recall": 0.2711397058823529,
+      "precision": 0.49166666666666664,
+      "f1": 0.34952606635071093,
+      "false_positive_rate": 0.21298882681564246,
+      "benchmark_score": 0.05815087906671046
+    },
+    "CWE_89": {
+      "TP": 450,
+      "FN": 462,
+      "FP": 2910,
+      "TN": 5730,
+      "total": 9552,
+      "recall": 0.4934210526315789,
+      "precision": 0.13392857142857142,
+      "f1": 0.21067415730337077,
+      "false_positive_rate": 0.3368055555555556,
+      "benchmark_score": 0.15661549707602335
+    },
+    "CWE_95": {
+      "TP": 183,
+      "FN": 153,
+      "FP": 594,
+      "TN": 702,
+      "total": 1632,
+      "recall": 0.5446428571428571,
+      "precision": 0.23552123552123552,
+      "f1": 0.3288409703504043,
+      "false_positive_rate": 0.4583333333333333,
+      "benchmark_score": 0.08630952380952378
+    },
+    "CWE_98": {
+      "TP": 360,
+      "FN": 312,
+      "FP": 1080,
+      "TN": 1512,
+      "total": 3264,
+      "recall": 0.5357142857142857,
+      "precision": 0.25,
+      "f1": 0.3409090909090909,
+      "false_positive_rate": 0.4166666666666667,
+      "benchmark_score": 0.11904761904761901
+    }
+  },
+  "excluded_categories": {
+    "CWE_209": 8,
+    "CWE_311": 4,
+    "CWE_327": 8,
+    "CWE_862_Fopen": 64,
+    "CWE_862_SQL": 320,
+    "CWE_862_XPath": 96,
+    "CWE_90": 3840,
+    "CWE_91": 6048
+  },
+  "overall": {
+    "TP": 3013,
+    "FN": 6475,
+    "FP": 7064,
+    "TN": 15272,
+    "total": 31824,
+    "recall": 0.31755902192242835,
+    "precision": 0.298997717574675,
+    "f1": 0.3079989777664196,
+    "false_positive_rate": 0.31626074498567336,
+    "benchmark_score": 0.001298276936754994
+  },
+  "uncertain": {
+    "findings": 40140,
+    "uncertain": 12290,
+    "ratio": 0.30617837568510214
+  }
+}

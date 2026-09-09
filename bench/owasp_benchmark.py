@@ -10,9 +10,13 @@ weakrand·crypto·hash·securecookie 는 "위험한 API 를 썼는가"를 보는
 trustbound 는 세션 속성 신뢰 경계 문제라 CPGuard 의 taint 규칙 대상이 아니다. 대상 밖
 유형을 정답 없이 집계하면 수치가 왜곡되므로 별도로 표시하고 지표에서 제외한다.
 
-코퍼스는 두 가지를 지원한다. 정답지 파일 이름으로 자동 판별한다.
+코퍼스는 세 가지를 지원한다. 정답지 파일(또는 표시 디렉터리)로 자동 판별한다.
   - OWASP Benchmark v1.2 (Java)   expectedresults-1.2.csv
   - OWASP Benchmark for Python    expectedresults-0.1.csv
+  - PHP Vulnerability test suite   Injection/ 디렉터리 (라벨이 경로에 safe/unsafe 로 있다)
+
+PHP 스위트는 NIST SAMATE 의 Bertrand Stivalet 생성 코퍼스다. 정답지 파일이 따로 없고
+경로가 곧 라벨이다: <유형>/CWE_89/unsafe/....php
 
 사용:
     python bench/owasp_benchmark.py <코퍼스 경로> [--json out.json] [--limit N]
@@ -50,6 +54,25 @@ JAVA_CATEGORY_RULE = {
     "securecookie": None,
 }
 
+#: PHP 스위트의 CWE 폴더 -> 우리 규칙. 우리 규칙이 없는 CWE 는 지표에서 뺀다.
+PHP_CATEGORY_RULE = {
+    "CWE_78": "php.command-injection",
+    "CWE_79": "php.xss",
+    "CWE_89": "php.sqli",
+    "CWE_95": "php.code-injection",     # eval 계열 — 우리 규칙은 CWE-94 로 잡는다
+    "CWE_98": "php.file-inclusion",
+    "CWE_601": "php.open-redirect",
+    # 아래는 php 규칙이 없거나 데이터 흐름 대상이 아니다 -> 지표에서 제외
+    "CWE_90": None,        # LDAP 주입
+    "CWE_91": None,        # XML/XPath 주입
+    "CWE_209": None,
+    "CWE_311": None,
+    "CWE_327": None,
+    "CWE_862_SQL": None,
+    "CWE_862_XPath": None,
+    "CWE_862_Fopen": None,
+}
+
 PYTHON_CATEGORY_RULE = {
     "sqli": "py.sqli",
     "cmdi": "py.command-injection",
@@ -77,6 +100,8 @@ class Corpus:
     testdir: str                 # 루트 기준 테스트코드 디렉터리
     glob: str
     category_rule: dict
+    #: 정답지가 CSV 가 아니라 경로에 있는 코퍼스(PHP 스위트). testdir 아래를 훑는다.
+    labels_in_path: bool = False
 
 
 CORPORA = (
@@ -85,12 +110,15 @@ CORPORA = (
            JAVA_CATEGORY_RULE),
     Corpus("OWASP Benchmark for Python v0.1", "expectedresults-0.1.csv",
            "testcode", "BenchmarkTest*.py", PYTHON_CATEGORY_RULE),
+    Corpus("PHP Vulnerability test suite (SAMATE)", "Injection",
+           ".", "**/*.php", PHP_CATEGORY_RULE, labels_in_path=True),
 )
 
 
 def detect_corpus(root: Path) -> Corpus:
     for c in CORPORA:
-        if (root / c.answers).is_file():
+        marker = root / c.answers
+        if marker.is_dir() if c.labels_in_path else marker.is_file():
             return c
     raise SystemExit(
         f"OWASP Benchmark 코퍼스가 아닙니다(정답지를 찾을 수 없음): {root}\n"
@@ -117,6 +145,16 @@ def _scan_one(path_str: str) -> tuple[str, tuple[list[str], int, int]]:
 
 
 def load_expected(root: Path, corpus: Corpus) -> dict[str, tuple[str, bool]]:
+    if corpus.labels_in_path:
+        # 경로가 곧 정답이다: <유형>/CWE_89/unsafe/....php
+        out: dict[str, tuple[str, bool]] = {}
+        for p in root.rglob("*.php"):
+            parts = p.parts
+            cwe = next((x for x in parts if x.startswith("CWE_")), None)
+            if cwe is None or ("safe" not in parts and "unsafe" not in parts):
+                continue
+            out[p.stem] = (cwe, "unsafe" in parts)
+        return out
     csv_path = root / corpus.answers
     expected = {}
     with csv_path.open(encoding="utf-8") as fh:

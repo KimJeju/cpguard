@@ -5,8 +5,17 @@ cwe: CWE-89
 owasp: "A03:2021-Injection"
 languages: [php]
 sources:
-  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER", "$_SESSION", "$_ENV"]}
+  # 프로세스 밖에서 들어온 값. 명령 출력과 파일 내용은 이 프로그램이 만든 값이 아니다.
+  - {pattern: name, name: [shell_exec, exec, system, passthru, popen, proc_open,
+                           fgets, fread, file_get_contents, fgetss, stream_get_contents,
+                           readline, getenv]}
 sinks:
   - {pattern: call, callee: [mysqli_query, mysql_query, pg_query, query, exec_query, mysqli_multi_query]}
 sanitizers:
+  # filter_var 는 넣지 않는다 — 두 번째 인자(FILTER_SANITIZE_EMAIL 등)에 따라
+  # 주입 방어가 되기도 안 되기도 한다. 이름만 보는 지금 모델로는 구분할 수 없어
+  # 정제로 인정하면 실제 취약점을 놓친다(실측: CWE_89 재현율 32.6%→54.3%).
   - {callee: [mysqli_real_escape_string, real_escape_string, intval, floatval, is_numeric, addslashes, prepare, bindParam, quote]}
+  # SQL 이스케이프의 구 API · 숫자 변환 계열
+  - {callee: [mysql_real_escape_string, pg_escape_string, pg_escape_literal, sqlite_escape_string, settype, number_format]}

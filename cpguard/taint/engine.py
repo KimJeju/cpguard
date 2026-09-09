@@ -118,7 +118,7 @@ def _snippet(loc: ir.Loc, src: bytes) -> str:
 
 #: 인스턴스에 담아 둔 요청 객체를 가리키는 접두. self.request.form 처럼 한 겹 감싼
 #: 형태는 파이썬·자바 웹 코드에서 표준에 가깝다 — 이 한 겹을 벗겨 소스를 본다.
-_SELF_PREFIX = ("self", "this", "cls")
+_SELF_PREFIX = ("self", "this", "cls", "$this")
 
 
 def _matches_source(path: str, rule: Rule) -> bool:
@@ -247,6 +247,19 @@ def _unique_function(cp: str | None, callee: ir.Node, nargs: int, ctx: Ctx) -> S
 
 # ---------- 오염 판정 ----------
 
+#: payload 를 담을 수 없는 자료형. 여기로 캐스트하면 오염이 끊긴다.
+_NUMERIC_CASTS = ("int", "integer", "float", "double", "real", "bool", "boolean", "long")
+
+
+def _numeric_cast(node: ir.Opaque, ctx: Ctx) -> bool:
+    """이 캐스트가 숫자·불리언으로 바꾸는가. 원문에서 괄호 안 타입을 본다."""
+    text = _snippet(node.loc, ctx.src).lstrip()
+    if not text.startswith("("):
+        return False
+    end = text.find(")")
+    return end > 0 and text[1:end].strip().lower() in _NUMERIC_CASTS
+
+
 def _env_lookup(path: str, env: dict[str, Trace], slots: bool = False) -> Trace | None:
     """정확 일치 또는 오염된 경로의 하위 경로(x 오염 -> x.y 도 오염).
 
@@ -354,6 +367,11 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
         return _taint(node.value, env, ctx)
 
     if isinstance(node, ir.FOLDED):
+        # (int)$x · (float)$x — 숫자로 바꾼 값은 payload 를 담을 수 없다. 규칙과 무관한
+        # 자료형의 성질이라 sanitizers(규칙별 함수 목록)가 아니라 여기서 끊는다.
+        if isinstance(node, ir.Opaque) and node.kind.endswith("cast_expression"):
+            if _numeric_cast(node, ctx):
+                return None
         for c in node.children:
             tr = _taint(c, env, ctx)
             if tr:

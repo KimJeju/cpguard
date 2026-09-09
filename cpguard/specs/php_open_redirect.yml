@@ -5,8 +5,14 @@ cwe: CWE-601
 owasp: "A01:2021-Broken Access Control"
 languages: [php]
 sources:
-  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER"]}
+  - {pattern: name, name: ["$_GET", "$_POST", "$_REQUEST", "$_COOKIE", "$_FILES", "$_SERVER", "$_SESSION", "$_ENV"]}
+  # 프로세스 밖에서 들어온 값. 명령 출력과 파일 내용은 이 프로그램이 만든 값이 아니다.
+  - {pattern: name, name: [shell_exec, exec, system, passthru, popen, proc_open,
+                           fgets, fread, file_get_contents, fgetss, stream_get_contents,
+                           readline, getenv]}
 sinks:
   - {pattern: call, callee: [header]}
 sanitizers:
   - {callee: [in_array, filter_var, parse_url]}
+  # 숫자 변환 · 인코딩
+  - {callee: [intval, settype, urlencode, number_format]}
