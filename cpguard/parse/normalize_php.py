@@ -30,6 +30,9 @@ _AS_CALL = {
     "unset_statement": "unset",
 }
 
+#: 결과가 반드시 수치인 연산자. PHP 의 문자열 결합은 '.' 이라 겹치지 않는다.
+_NUMERIC_OPS = frozenset({"+", "-", "*", "/", "%", "**", "|", "&", "^", "<<", ">>"})
+
 _LITERALS = {
     "string", "integer", "float", "boolean", "null",
     "heredoc", "nowdoc", "shell_command_expression_literal",
@@ -297,6 +300,17 @@ def _expr(node: TSNode, file: str) -> ir.Node:
             args=args,
         )
 
+    if t == "augmented_assignment_expression":
+        optxt = text_of(o) if (o := child_by_field(node, "operator")) is not None else ".="
+        left, right = child_by_field(node, "left"), child_by_field(node, "right")
+        if optxt[:-1] in _NUMERIC_OPS and left is not None and right is not None:
+            # `$t += 0` 은 산술이라 결과가 수치다. 증강 대입을 그대로 두면 "덧붙이기니
+            # 오염을 남긴다"는 규칙에 걸려 오탐이 된다 — `$t = $t + 0` 으로 편다.
+            return ir.Assign(
+                loc=loc_of(node, file), operator="=", target=_expr(left, file),
+                value=ir.Binary(loc=loc_of(node, file), op=optxt[:-1], numeric=True,
+                                children=[_expr(left, file), _expr(right, file)]))
+
     if t == "assignment_expression" or t == "augmented_assignment_expression":
         left = child_by_field(node, "left")
         right = child_by_field(node, "right")
@@ -328,8 +342,9 @@ def _expr(node: TSNode, file: str) -> ir.Node:
         left, right = child_by_field(node, "left"), child_by_field(node, "right")
         op = child_by_field(node, "operator")
         if left is not None and right is not None:
-            return ir.Binary(loc=loc_of(node, file),
-                             op=text_of(op) if op is not None else "",
+            optxt = text_of(op) if op is not None else ""
+            return ir.Binary(loc=loc_of(node, file), op=optxt,
+                             numeric=optxt in _NUMERIC_OPS,
                              children=[_expr(left, file), _expr(right, file)])
 
     if t == "unary_op_expression":

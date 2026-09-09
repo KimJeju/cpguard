@@ -9,4 +9,9 @@ sources:
 sinks:
   - {pattern: call, callee: [db.query, connection.query, pool.query, sequelize.query, knex.raw], arg: 0}
 sanitizers:
-  - {callee: [escapeSql, mysql.escape]}
+  # SQL 이스케이프·식별자 인용
+  - {callee: [escapeSql, mysql.escape, mysql.escapeId, escape, escapeId, pool.escape, connection.escape, sequelize.escape, validator.escape]}
+  # 수치 변환 — 숫자로 바뀐 값은 payload 를 담지 못한다
+  - {callee: [parseInt, parseFloat, Number, Number.parseInt, Number.parseFloat, BigInt, Math.floor, Math.round, Math.abs, toFixed]}
+  # 형식 검사 가드 — if (/^[0-9]+$/.test(x)) { ... } 를 인정한다
+  - {callee: [test, validator.isInt, validator.isNumeric, validator.isAlphanumeric, validator.isUUID, isNaN, Number.isInteger, Number.isFinite]}

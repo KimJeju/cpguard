@@ -10,4 +10,9 @@ sources:
 sinks:
   - {pattern: call, callee: [child_process.exec, child_process.execSync, child_process.spawn, exec, execSync], arg: 0}
 sanitizers:
-  - {callee: [shellQuote, shellEscape, quote]}
+  # 셸 인자 이스케이프
+  - {callee: [shellQuote, shellEscape, quote, shell-quote, escapeShellArg, shellescape]}
+  # 수치 변환 — 숫자로 바뀐 값은 payload 를 담지 못한다
+  - {callee: [parseInt, parseFloat, Number, Number.parseInt, Number.parseFloat, BigInt, Math.floor, Math.round, Math.abs, toFixed]}
+  # 형식 검사 가드 — if (/^[0-9]+$/.test(x)) { ... } 를 인정한다
+  - {callee: [test, validator.isInt, validator.isNumeric, validator.isAlphanumeric, validator.isUUID, isNaN, Number.isInteger, Number.isFinite]}

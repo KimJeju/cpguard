@@ -79,6 +79,9 @@ class Binary(Node):
     알아야 분기 조건을 접을 수 있어 별도 노드로 둔다."""
     op: str
     children: list[Node] = field(default_factory=list)
+    # 결과가 반드시 수치인 연산인가. `$x + 0` 은 PHP 에서 산술이지만 JS·파이썬의 +
+    # 는 문자열 결합이라 언어를 모르는 엔진은 판단할 수 없다 — 정규화기가 표시한다.
+    numeric: bool = False
 
 
 @dataclass

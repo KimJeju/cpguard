@@ -112,8 +112,15 @@ def _stmt(node: TSNode, file: str):
     if t in ("lexical_declaration", "variable_declaration"):
         return _decl(node, file)
 
-    if t in ("function_declaration", "generator_function_declaration"):
+    if t in ("function_declaration", "generator_function_declaration",
+             "method_definition"):
         return _function(node, file)
+
+    if t in ("class_declaration", "class"):
+        # 클래스 선언 자체는 흐름 대상이 아니고 안의 메서드만 분석한다. 접지 않으면
+        # 메서드가 통째로 사라져 호출부에서 정의를 찾지 못한다.
+        body = child_by_field(node, "body")
+        return _block(body.named_children, file) if body is not None else None
 
     if t == "return_statement":
         return _return(node, file)
@@ -148,13 +155,59 @@ def _decl(node: TSNode, file: str) -> list[ir.Node]:
         value_node = child_by_field(d, "value")
         if name_node is None:
             continue
-        target = _expr(name_node, file)
         if value_node is not None:
             value = _expr(value_node, file)
         else:
             # 초기화 없는 선언(let x;) — undefined 리터럴로 둔다
             value = ir.Literal(loc=loc_of(d, file), value=None, raw="undefined")
-        out.append(ir.Assign(loc=loc_of(d, file), target=target, value=value, operator="declare"))
+        if name_node.type in ("object_pattern", "array_pattern"):
+            # const { x } = req.query — 패턴을 통째로 Opaque 로 두면 x 가 어디에도
+            # 묶이지 않아 이후가 통째로 미탐이다. 이름 하나하나를 대입으로 편다.
+            out.extend(_destructure(name_node, value, d, file))
+            continue
+        out.append(ir.Assign(loc=loc_of(d, file), target=_expr(name_node, file),
+                             value=value, operator="declare"))
+    return out
+
+
+def _destructure(pat: TSNode, value: ir.Node, d: TSNode, file: str) -> list[ir.Node]:
+    """구조분해 패턴 → 이름별 Assign.
+
+    객체 패턴은 키를 알 수 있으므로 `x = 원본.x` 로 슬롯을 특정하고, 배열 패턴과
+    rest 는 원소를 특정할 수 없으므로 컨테이너 전체를 잇는다(과대근사).
+    """
+    out: list[ir.Node] = []
+
+    def bind(name: TSNode, val: ir.Node) -> None:
+        out.append(ir.Assign(loc=loc_of(name, file), target=_expr(name, file),
+                             value=val, operator="declare"))
+
+    def whole(node: TSNode) -> ir.Node:
+        return ir.Member(loc=loc_of(node, file), obj=value, prop="", computed=True)
+
+    for c in pat.named_children:
+        t = c.type
+        if t == "object_assignment_pattern":       # { x = '기본값' }
+            c = child_by_field(c, "left") or c
+            t = c.type
+        if t in ("shorthand_property_identifier_pattern", "identifier"):
+            key = text_of(c)
+            bind(c, ir.Member(loc=loc_of(c, file), obj=value, prop=key)
+                 if pat.type == "object_pattern" else whole(c))
+        elif t == "pair_pattern":                  # { a: b }
+            k, v = child_by_field(c, "key"), child_by_field(c, "value")
+            if k is not None and v is not None:
+                inner = ir.Member(loc=loc_of(c, file), obj=value, prop=text_of(k))
+                if v.type in ("object_pattern", "array_pattern"):
+                    out.extend(_destructure(v, inner, d, file))
+                else:
+                    bind(v, inner)
+        elif t == "rest_pattern":                  # { ...r } / [ ...r ]
+            kids = c.named_children
+            if kids:
+                bind(kids[0], value)
+        elif t in ("object_pattern", "array_pattern"):
+            out.extend(_destructure(c, whole(c), d, file))
     return out
 
 
@@ -296,7 +349,8 @@ def _expr(node: TSNode, file: str) -> ir.Node:
     """표현식 레벨 디스패치."""
     t = node.type
 
-    if t in ("identifier", "property_identifier", "shorthand_property_identifier"):
+    if t in ("identifier", "property_identifier", "shorthand_property_identifier",
+             "shorthand_property_identifier_pattern"):
         return ir.Ident(loc=loc_of(node, file), name=text_of(node))
 
     if t == "member_expression":
@@ -313,6 +367,40 @@ def _expr(node: TSNode, file: str) -> ir.Node:
         idx = child_by_field(node, "index")
         return ir.Member(loc=loc_of(node, file), obj=obj, prop="", computed=True,
                          index=_expr(idx, file) if idx is not None else None)
+
+    if t == "object":
+        # { a: 오염, b: '안전' } — 통째로 Opaque 로 접으면 o.b 를 읽어도 o.a 의 오염이
+        # 딸려 나온다. 키를 아는 항목은 pair 대입으로 남겨 슬롯을 구분할 수 있게 한다.
+        # 키를 모르는 항목(전개·계산된 키)이 하나라도 있으면 통째로 취급한다.
+        pairs: list[ir.Node] = []
+        exact = True
+        for c in node.named_children:
+            key = child_by_field(c, "key") if c.type == "pair" else None
+            val = child_by_field(c, "value") if c.type == "pair" else None
+            if key is not None and val is not None and key.type != "computed_property_name":
+                pairs.append(ir.Assign(loc=loc_of(c, file), operator="pair",
+                                       target=ir.Ident(loc=loc_of(key, file),
+                                                       name=text_of(key).strip("'\"")),
+                                       value=_expr(val, file)))
+            elif c.type == "shorthand_property_identifier":
+                pairs.append(ir.Assign(loc=loc_of(c, file), operator="pair",
+                                       target=_expr(c, file), value=_expr(c, file)))
+            else:
+                exact = False
+                pairs.append(_expr(c, file))
+        return ir.Opaque(loc=loc_of(node, file),
+                         kind="object_literal" if exact else "object", children=pairs)
+
+    if t == "new_expression":
+        # new X(a) — Opaque 로 접으면 `new X().m()` 의 수신자 경로가 사라져 m 의 정의를
+        # 찾지 못한다. 다른 언어 정규화기와 같게 Call 로 둔다.
+        ctor = child_by_field(node, "constructor")
+        arg_list = child_by_field(node, "arguments")
+        return ir.Call(
+            loc=loc_of(node, file),
+            callee=_expr(ctor, file) if ctor is not None else _opaque(node, file),
+            args=[_expr(a, file) for a in arg_list.named_children]
+            if arg_list is not None else [])
 
     if t == "call_expression":
         # f(a, b) : function=callee(재귀), arguments 의 named children=args(각각 재귀)

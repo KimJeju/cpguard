@@ -12,7 +12,11 @@ sources:
                            readline, getenv]}
 sinks:
   - {pattern: call, callee: [header]}
+  # pecl_http 의 리다이렉트 함수. Location 헤더를 직접 쓰는 것과 같다.
+  - {pattern: call, callee: [http_redirect]}
 sanitizers:
-  - {callee: [in_array, filter_var, parse_url]}
   # 숫자 변환 · 인코딩
-  - {callee: [intval, settype, urlencode, number_format]}
+  # 화이트리스트·형식 검사 가드
+  - {callee: [in_array, parse_url, intval, settype, urlencode, number_format, array_search, array_key_exists, preg_match, ctype_digit, ctype_alnum]}
+  # filter_var 는 두 번째 인자로 갈린다 — 숫자 필터만 주입을 막는다.
+  - {callee: [filter_var], requires: [FILTER_VALIDATE_INT, FILTER_VALIDATE_FLOAT, FILTER_VALIDATE_BOOLEAN, FILTER_SANITIZE_NUMBER_INT, FILTER_SANITIZE_NUMBER_FLOAT]}

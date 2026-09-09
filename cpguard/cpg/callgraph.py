@@ -21,7 +21,12 @@ class FuncInfo:
 
 
 def _walk_stmts(stmts: list[ir.Node]):
-    """문 리스트를 재귀적으로 훑으며 모든 문을 낸다."""
+    """문 리스트를 재귀적으로 훑으며 모든 문을 낸다.
+
+    표현식 안(호출 인자·대입 우변)에 들어 있는 함수 본문까지 내려간다. 노드 웹 코드는
+    라우트 전체가 `app.post('/x', function (req, res) { ... })` 처럼 콜백 인자 안에
+    들어 있어서, 문만 훑으면 그 안에 선언된 함수가 레지스트리에 아예 오르지 않는다.
+    """
     for s in stmts:
         yield s
         if isinstance(s, ir.Function):
@@ -31,6 +36,27 @@ def _walk_stmts(stmts: list[ir.Node]):
             yield from _walk_stmts(s.orelse)
         elif isinstance(s, ir.Loop):
             yield from _walk_stmts(s.body)
+        else:
+            for fn in _nested_functions(s):
+                yield fn
+                yield from _walk_stmts(fn.body)
+
+
+def _nested_functions(node: ir.Node):
+    """표현식 트리 안에 직접 놓인 함수들(중첩 함수의 본문은 호출자가 훑는다)."""
+    if node is None or isinstance(node, ir.Function):
+        return
+    kids: list = []
+    for attr in ("value", "target", "callee", "obj", "test"):
+        if isinstance(c := getattr(node, attr, None), ir.Node):
+            kids.append(c)
+    for attr in ("args", "children"):
+        kids.extend(getattr(node, attr, None) or [])
+    for c in kids:
+        if isinstance(c, ir.Function):
+            yield c
+        else:
+            yield from _nested_functions(c)
 
 
 def _named_functions(stmts: list[ir.Node]):

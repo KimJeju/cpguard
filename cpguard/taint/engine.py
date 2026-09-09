@@ -107,6 +107,15 @@ def path_of(node: ir.Node) -> str | None:
     return None
 
 
+def _var_rooted(node: ir.Node) -> bool:
+    """변수에서 시작해 알려진 속성만 타고 온 경로인가(a.b.c 는 참, f().b 는 거짓)."""
+    while isinstance(node, ir.Member):
+        if node.computed:
+            return False
+        node = node.obj
+    return isinstance(node, ir.Ident)
+
+
 def _snippet(loc: ir.Loc, src: bytes) -> str:
     try:
         return src[loc.start_byte:loc.end_byte].decode("utf-8", "replace").strip()
@@ -159,8 +168,20 @@ def _sink_for(path: str, rule: Rule) -> SinkPattern | None:
     return None
 
 
-def _is_sanitizer(path: str, rule: Rule) -> bool:
-    return _callee_matches(path, rule.sanitizers)
+def _is_sanitizer(path: str, rule: Rule, call: "ir.Call | None" = None,
+                  ctx: "Ctx | None" = None) -> bool:
+    if _callee_matches(path, rule.sanitizers):
+        return True
+    if call is None or ctx is None or not rule.sanitizer_args:
+        return False
+    # 인자 원문에 지정 토큰이 있어야 정제로 인정한다(filter_var 의 필터 상수 등).
+    for name, tokens in rule.sanitizer_args.items():
+        if not _callee_matches(path, [name]):
+            continue
+        text = " ".join(_snippet(a.loc, ctx.src) for a in call.args)
+        if any(t in text for t in tokens):
+            return True
+    return False
 
 
 def _user_function(path: str | None, ctx: Ctx) -> Summary | None:
@@ -247,6 +268,13 @@ def _unique_function(cp: str | None, callee: ir.Node, nargs: int, ctx: Ctx) -> S
 
 # ---------- 오염 판정 ----------
 
+#: 값이 아니라 크기를 내는 속성. 읽어도 공격 문자열이 따라오지 않는다.
+_SIZE_PROPS = frozenset({"length", "size", "byteLength", "Length"})
+
+#: 결과가 불리언인 연산자. 언어와 무관하게 비교는 참/거짓만 낸다.
+_BOOL_OPS = frozenset({"==", "!=", "===", "!==", "<>", "<", ">", "<=", ">=", "<=>",
+                       "instanceof", "in", "not in", "is", "is not"})
+
 #: payload 를 담을 수 없는 자료형. 여기로 캐스트하면 오염이 끊긴다.
 _NUMERIC_CASTS = ("int", "integer", "float", "double", "real", "bool", "boolean", "long")
 
@@ -291,6 +319,11 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
         # 컨테이너를 통째로 보는 것이므로 안에 오염된 슬롯이 있으면 딸려 나온다.
         const_slot = (isinstance(node, ir.Member) and node.computed
                       and _const_key(node.index) is not None)
+        if isinstance(node, ir.Member) and not node.computed and node.prop in _SIZE_PROPS:
+            # x.length — 수치라 payload 를 sink 로 옮길 수 없다. env 조회보다 먼저
+            # 봐야 한다: 'x' 가 오염이면 하위 경로 'x.length' 도 오염으로 잡히기 때문.
+            # 호출 형태(x.length())는 라이브러리 요약이 이미 끊고 있고 이건 속성 형태다.
+            return None
         if p:
             if _matches_source(p, ctx.rule):
                 return [Step("source", node.loc, _snippet(node.loc, ctx.src))]
@@ -307,12 +340,18 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                 base = path_of(node.obj)
                 if base and (hit := _env_lookup(base, env, slots=True)) is not None:
                     return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
+            elif _var_rooted(node.obj):
+                # o.safe — 변수에 담긴 객체의 알려진 속성 하나만 읽는다. 위 조회에서
+                # 안 걸렸다면 그 슬롯도, 그 슬롯을 품은 어떤 조상도 오염이 아니다
+                # (_env_lookup 이 접두 일치로 조상까지 본다). 여기서 객체 전체로
+                # 되돌아가면 o.cmd 의 오염이 o.safe 로 새어 나온다.
+                return None
             return _taint(node.obj, env, ctx)
         return None
 
     if isinstance(node, ir.Call):
         cp = path_of(node.callee)
-        if cp and _is_sanitizer(cp, ctx.rule):
+        if cp and _is_sanitizer(cp, ctx.rule, node, ctx):
             return None  # 정제 통과 -> 오염 끊김
 
         # map.get("키") — 넣을 때 키 단위로 기록했으므로 읽을 때도 그 슬롯만 본다.
@@ -372,6 +411,19 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
         if isinstance(node, ir.Opaque) and node.kind.endswith("cast_expression"):
             if _numeric_cast(node, ctx):
                 return None
+        if isinstance(node, ir.Binary) and (node.numeric or node.op in _BOOL_OPS):
+            # 비교 결과는 불리언, 산술 결과는 수치다. 둘 다 공격 문자열을 담을 수 없다.
+            # `$t = ($t == 'safe1') ? 'safe1' : 'safe2'` 를 오탐으로 만들던 경로.
+            return None
+        if isinstance(node, ir.Unary) and node.op in ("!", "not"):
+            return None
+        if isinstance(node, ir.Ternary) and len(node.children) == 3:
+            # 조건식의 값은 then/else 중 하나다. 조건의 오염은 값으로 흐르지 않는다.
+            for c in node.children[1:]:
+                tr = _taint(c, env, ctx)
+                if tr:
+                    return tr + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
+            return None
         for c in node.children:
             tr = _taint(c, env, ctx)
             if tr:
@@ -400,6 +452,46 @@ def _iter_calls(node: ir.Node):
     elif isinstance(node, ir.FOLDED):
         for c in node.children:
             yield from _iter_calls(c)
+
+
+def _iter_assigns(node: ir.Node):
+    """표현식 트리 안의 모든 Assign 을 안쪽부터 훑는다."""
+    if node is None:
+        return
+    if isinstance(node, ir.Assign):
+        yield from _iter_assigns(node.value)
+        yield node
+    elif isinstance(node, ir.Call):
+        for a in node.args:
+            yield from _iter_assigns(a)
+        yield from _iter_assigns(node.callee)
+    elif isinstance(node, ir.Member):
+        yield from _iter_assigns(node.obj)
+        yield from _iter_assigns(node.index)
+    elif isinstance(node, ir.FOLDED):
+        for c in node.children:
+            yield from _iter_assigns(c)
+
+
+def _bind_inline(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
+    """조건식 안에서 이뤄진 대입을 환경에 반영한다.
+
+    `if (($t = fgets($h)) === false)` / `while ((m = re.exec(s)))` 처럼 조건 자리에서
+    변수를 채우는 형태는 흔한데, 표현식으로만 평가하면 $t 가 어디에도 묶이지 않아
+    이후 본문이 통째로 미탐이었다. 대입문과 같은 규칙으로 묶는다.
+    """
+    for a in _iter_assigns(node):
+        p = path_of(a.target)
+        if not p or a.operator == "pair":     # 객체 리터럴의 키는 변수가 아니다
+            continue
+        tr = _taint(a.value, env, ctx)
+        if tr:
+            env = dict(env)
+            env[p] = tr + [Step("propagation", a.loc, _snippet(a.loc, ctx.src))]
+        elif a.operator == "=" and _precise_target(a.target) and p in env:
+            env = dict(env)
+            env.pop(p, None)
+    return env
 
 
 def _iter_functions(node: ir.Node):
@@ -550,7 +642,11 @@ def _guarded_paths(test: ir.Node, ctx: Ctx) -> set[str]:
     out: set[str] = set()
     for call in _iter_calls(test):
         cp = path_of(call.callee)
-        if not cp or not _is_sanitizer(cp, ctx.rule):
+        if cp is None and isinstance(call.callee, ir.Member):
+            # /^[0-9]+$/.test(x) — 리시버가 리터럴이라 점 경로가 나오지 않는다.
+            # 이름만으로도 검증 호출임을 알 수 있으면 인정한다.
+            cp = call.callee.prop
+        if not cp or not _is_sanitizer(cp, ctx.rule, call, ctx):
             continue
         if _negated(call, ctx):
             continue
@@ -622,9 +718,40 @@ def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
             if not any(k == g or k.startswith(g + ".") for g in guarded)}
 
 
-def _run_nested(node: ir.Node, ctx: Ctx) -> None:
+def _run_nested(node: ir.Node, ctx: Ctx, env: dict[str, Trace] | None = None) -> None:
     for fn in _iter_functions(node):
-        _run_function(fn, ctx)
+        _run_function(fn, ctx, seed=_callback_seed(fn, node, env, ctx))
+
+
+#: 콜백에 원소를 넘겨주는 메서드. 수신자가 오염이면 콜백의 첫 인자도 오염이다.
+_ITER_METHODS = frozenset({
+    "forEach", "map", "filter", "flatMap", "find", "findIndex", "some", "every",
+    "then", "catch", "finally", "reduce", "sort", "each", "eachSeries", "eachLimit"})
+
+
+def _callback_seed(fn: ir.Function, node: ir.Node, env: dict[str, Trace] | None,
+                   ctx: Ctx) -> dict[str, Trace] | None:
+    """`오염.map(function (v) { ... })` 의 v 를 오염으로 시작시킨다.
+
+    콜백을 빈 환경으로 돌리면 배열·프로미스를 거친 흐름이 통째로 미탐이다. 원소를
+    하나하나 구분하지 않는 과대근사로, 컨테이너를 통째로 오염으로 보는 모델과 같다.
+    """
+    if env is None or not fn.params:
+        return None
+    for call in _iter_calls(node):
+        if not any(a is fn for a in call.args):
+            continue
+        cp = path_of(call.callee)
+        meth = cp.rpartition(".")[2] if cp and "." in cp else (
+            call.callee.prop if isinstance(call.callee, ir.Member) else None)
+        if meth not in _ITER_METHODS:
+            continue
+        src_node = call.callee.obj if isinstance(call.callee, ir.Member) else None
+        tr = _taint(src_node, env, ctx) if src_node is not None else None
+        if tr:
+            return {fn.params[0].name: tr + [
+                Step("propagation", fn.loc, _snippet(fn.loc, ctx.src))]}
+    return None
 
 
 # ---------- 문 실행 ----------
@@ -664,10 +791,24 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.Assign):
             _check_sinks(s.value, env, ctx)
-            _run_nested(s.value, ctx)
+            _run_nested(s.value, ctx, env)
             env = _apply_mutations(s.value, env, ctx)
             tr = _taint(s.value, env, ctx)
             p = path_of(s.target)
+            if p and isinstance(s.value, ir.Opaque) and s.value.kind == "object_literal":
+                # const o = { a: 오염, b: '안전' } — 슬롯별로 담아 o.b 읽기를 지킨다.
+                env = dict(env)
+                env.pop(p, None)
+                for pair in s.value.children:
+                    key = path_of(pair.target) if isinstance(pair, ir.Assign) else None
+                    ptr = _taint(pair.value, env, ctx) if key else None
+                    slot = f"{p}.{key}"
+                    if ptr:
+                        env[slot] = ptr + [Step("propagation", s.loc,
+                                                _snippet(s.loc, ctx.src))]
+                    else:
+                        env.pop(slot, None)
+                continue
             if p:
                 env = dict(env)
                 if tr:
@@ -680,7 +821,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.Return):
             _check_sinks(s.value, env, ctx)
-            _run_nested(s.value, ctx)
+            _run_nested(s.value, ctx, env)
             rt = _taint(s.value, env, ctx)
             if rt:
                 ctx.return_traces.append(rt)  # 요약 계산용: 리턴값이 오염됨
@@ -689,6 +830,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.If):
             _check_sinks(s.test, env, ctx)
+            env = _bind_inline(s.test, env, ctx)
             # 조건이 검증한 경로는 참 분기에서만 오염을 뺀다(경로 민감도 최소판).
             guarded = _guarded_paths(s.test, ctx)
             then_env = _run(s.then, _drop_guarded(dict(env), guarded), ctx)
@@ -702,11 +844,11 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.Loop):
             _check_sinks(s.test, env, ctx)
-            env = _run_loop(s, env, ctx)
+            env = _run_loop(s, _bind_inline(s.test, env, ctx), ctx)
 
         else:
             _check_sinks(s, env, ctx)
-            _run_nested(s, ctx)
+            _run_nested(s, ctx, env)
             env = _apply_mutations(s, env, ctx)
 
     return env
@@ -743,12 +885,19 @@ def _annotated_env(fn: ir.Function, ctx: Ctx) -> dict[str, Trace]:
             for p in fn.params if wanted.intersection(p.annotations)}
 
 
-def _run_function(fn: ir.Function, ctx: Ctx) -> None:
-    """함수 본문을 분석한다(일반 파라미터 오염은 요약이 담당)."""
+def _run_function(fn: ir.Function, ctx: Ctx,
+                  seed: dict[str, Trace] | None = None) -> None:
+    """함수 본문을 분석한다(일반 파라미터 오염은 요약이 담당).
+
+    seed 는 콜백처럼 호출부가 값을 직접 넘겨주는 경우의 시작 오염이다.
+    """
     prev = ctx.return_is_sink
     ctx.return_is_sink = _returns_are_sink(fn, ctx.rule)
     try:
-        _run(fn.body, _annotated_env(fn, ctx), ctx)
+        env = _annotated_env(fn, ctx)
+        if seed:
+            env = {**env, **seed}
+        _run(fn.body, env, ctx)
     finally:
         ctx.return_is_sink = prev
 

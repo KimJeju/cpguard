@@ -69,6 +69,11 @@ class Rule:
     # 코드(`if '../' in name: return`)는 정제 함수를 부르지 않으므로 sanitizers 로는
     # 잡히지 않는다. 무엇을 검증으로 인정할지는 규칙마다 다르므로 규칙이 선언한다.
     validators: list[str] = field(default_factory=list)
+    # 인자를 봐야 정제 여부가 갈리는 호출. filter_var($x, FILTER_SANITIZE_EMAIL) 은
+    # 이메일만 남길 뿐 따옴표를 막지 않아 SQL 주입을 못 막지만, 같은 함수라도
+    # FILTER_VALIDATE_INT 면 막는다. 이름만 보면 둘 중 하나는 반드시 틀린다.
+    #   callee -> 이 토큰 중 하나가 인자 원문에 있어야 정제로 인정
+    sanitizer_args: dict[str, list[str]] = field(default_factory=dict)
 
 
 def _as_list(v) -> list[str]:
@@ -95,8 +100,13 @@ def rule_from_dict(d: dict) -> Rule:
                          decorator=_as_list(s.get("decorator")))
              for s in d.get("sinks", [])]
     sanitizers: list[str] = []
+    sanitizer_args: dict[str, list[str]] = {}
     for s in d.get("sanitizers", []):
-        sanitizers.extend(_as_list(s.get("callee")))
+        if req := _as_list(s.get("requires")):
+            for c in _as_list(s.get("callee")):
+                sanitizer_args.setdefault(c, []).extend(req)
+        else:
+            sanitizers.extend(_as_list(s.get("callee")))
     validators: list[str] = []
     for v in d.get("validators", []):
         validators.extend(_as_list(v.get("token")) if isinstance(v, dict) else [v])
@@ -108,6 +118,7 @@ def rule_from_dict(d: dict) -> Rule:
         owasp=d.get("owasp", ""),
         languages=_as_list(d.get("languages")) or ["javascript", "typescript"],
         sources=sources, sinks=sinks, sanitizers=sanitizers, validators=validators,
+        sanitizer_args=sanitizer_args,
     )
 
 

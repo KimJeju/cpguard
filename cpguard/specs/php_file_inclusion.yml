@@ -13,9 +13,8 @@ sources:
 sinks:
   - {pattern: call, callee: [include, include_once, require, require_once, readfile]}
 sanitizers:
-  # filter_var 는 넣지 않는다 — 두 번째 인자(FILTER_SANITIZE_EMAIL 등)에 따라
-  # 주입 방어가 되기도 안 되기도 한다. 이름만 보는 지금 모델로는 구분할 수 없어
-  # 정제로 인정하면 실제 취약점을 놓친다(실측: CWE_89 재현율 32.6%→54.3%).
-  - {callee: [basename, realpath, intval, in_array]}
   # 경로 정규화 · 숫자 변환
-  - {callee: [settype]}
+  # 화이트리스트·형식 검사 가드
+  - {callee: [basename, realpath, intval, in_array, settype, array_search, array_key_exists, preg_match, ctype_digit, ctype_alpha, ctype_alnum, htmlspecialchars, htmlentities, preg_replace]}
+  # filter_var 는 두 번째 인자로 갈린다 — 숫자 필터만 주입을 막는다.
+  - {callee: [filter_var], requires: [FILTER_VALIDATE_INT, FILTER_VALIDATE_FLOAT, FILTER_VALIDATE_BOOLEAN, FILTER_SANITIZE_NUMBER_INT, FILTER_SANITIZE_NUMBER_FLOAT]}
