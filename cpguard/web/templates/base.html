@@ -734,8 +734,12 @@ window.cgDialog = (function () {
     ov.addEventListener('click', function (e) { if (e.target === ov) done(false); });
     document.addEventListener('keydown', function (e) {
       if (!ov.classList.contains('on')) return;
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
-      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); return; }
+      // Enter 는 가로채지 않는다 — 포커스된 버튼이 눌리게 두어야 '취소'에 포커스를
+      // 두는 안전장치가 실제로 동작한다. 다만 그 아래 화면 단축키로는 새지 않게 막는다.
+      if (e.key === 'Enter') { e.stopPropagation(); return; }
+      // 나머지 키도 뒤 화면(검토 화면의 판정 단축키 등)으로 넘기지 않는다.
+      e.stopPropagation();
     }, true);   // 캡처 단계 — 화면별 단축키로 새지 않게
   }
   function done(v) {
@@ -745,6 +749,9 @@ window.cgDialog = (function () {
   }
   function open(msg, ttl, opts) {
     init();
+    // 창이 이미 떠 있는데 다시 열면 앞의 resolver 가 그냥 버려져 그 Promise 가 영영
+    // 안 풀린다(호출자의 .then 이 실행되지 않는다). 앞의 것을 '아니오'로 닫고 연다.
+    if (resolver) { var prev = resolver; resolver = null; prev(false); }
     opts = opts || {};
     title.textContent = ttl || '알림';
     text.textContent = msg;

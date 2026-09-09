@@ -1546,14 +1546,23 @@ def set_audit_bulk(request, pk: int):
         return JsonResponse({"ok": False, "error": "대상 없음"}, status=400)
     # 같은 근거로 한꺼번에 내리는 판정이라 의견도 같이 남길 수 있어야 한다.
     # 발주처 검수에서 묻는 것은 "왜 오탐인가"이지 "몇 건인가"가 아니다.
+    #
+    # 다만 이미 적혀 있는 의견은 기본적으로 건드리지 않는다. 메모는 이력이 없어서
+    # 덮어쓰면 복구할 방법이 없고, 개별로 공들여 쓴 근거가 일괄 한 번에 사라진다.
+    # 덮어쓰려면 호출부가 overwrite 를 명시해야 한다.
     note = (request.POST.get("note", "") or "").strip()[:4000]
+    overwrite = request.POST.get("overwrite") in ("1", "true", "on")
     from .models import AuditEvent
     a = scan.audit
     notes = scan.audit_notes if note else None
+    kept = 0                      # 기존 의견이 있어 건너뛴 건수 — 화면에 알려 준다
     events = []
     for i in idxs:
         if note:
-            notes[str(i)] = note
+            if notes.get(str(i)) and not overwrite:
+                kept += 1
+            else:
+                notes[str(i)] = note
         before = a.get(str(i), "")
         if before == status:
             continue
@@ -1569,7 +1578,8 @@ def set_audit_bulk(request, pk: int):
         fields.append("audit_notes_json")
     scan.save(update_fields=fields)
     AuditEvent.objects.bulk_create(events, batch_size=500)
-    return JsonResponse({"ok": True, "count": len(idxs), "status": status, "note": note})
+    return JsonResponse({"ok": True, "count": len(idxs), "status": status,
+                         "note": note, "note_kept": kept})
 
 
 @require_POST
