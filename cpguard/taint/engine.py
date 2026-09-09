@@ -137,9 +137,19 @@ def _user_function(path: str | None, ctx: Ctx) -> Summary | None:
 
     이름 정확 일치만 인정한다. 'db.query' 같은 점 경로가 지역 함수 'query' 로
     잘못 해석되는 것을 막기 위함이다.
+
+    같은 파일에 같은 이름이 있으면 그쪽이 먼저다. 레지스트리는 맨 이름을 전역 하나로
+    들고 있어 같은 이름이 여러 파일에 있으면 나중 것이 이긴다 — 수신자 없는 호출은
+    자기 클래스의 메서드를 부르는 것이므로 그 규칙을 그대로 두면 엉뚱한 파일의 동명
+    함수에 연결된다(실측: OWASP 자바 코퍼스에 doSomething 정의가 880개 있고, 안전한
+    변형의 오탐 287건 중 64건이 이 때문이었다).
     """
     if not path:
         return None
+    if ctx.file:
+        hit = ctx.summaries.get(file_scoped(ctx.file, path))
+        if hit is not None:
+            return hit
     return ctx.summaries.get(path)
 
 
