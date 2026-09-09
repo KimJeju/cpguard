@@ -89,8 +89,8 @@
     "benchmark_score": 0.7171219374823994
   },
   "uncertain": {
-    "findings": 1025,
-    "uncertain": 34,
-    "ratio": 0.033170731707317075
+    "findings": 987,
+    "uncertain": 29,
+    "ratio": 0.029381965552178316
   }
 }

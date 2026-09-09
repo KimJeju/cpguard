@@ -783,9 +783,28 @@ def _validated_paths(test: ir.Node, ctx: Ctx) -> set[str]:
     return out
 
 
+#: 거부하고 빠져나가는 호출. 예외를 던지는 것과 같은 자리다.
+_EXIT_CALLS = frozenset({"panic", "exit", "Exit", "abort", "die", "halt",
+                         "process.exit", "sys.exit", "os.Exit", "System.exit"})
+
+
 def _always_exits(stmts: list[ir.Node]) -> bool:
-    """이 블록이 끝까지 가지 않고 반드시 빠져나가는가(현재는 return 만 본다)."""
-    return any(isinstance(s, ir.Return) for s in stmts)
+    """이 블록이 끝까지 가지 않고 반드시 빠져나가는가.
+
+    return 만 보면 예외로 거부하는 코드를 통째로 놓친다. NestJS 는 `throw new
+    BadRequestException(...)`, 파이썬은 raise, Go 는 panic 으로 거부한다 — 같은
+    코퍼스의 express 판(return)과 nest 판(throw)이 점수가 2.7배 갈렸다.
+    """
+    for s in stmts:
+        if isinstance(s, ir.Return):
+            return True
+        if isinstance(s, ir.Opaque) and ("throw" in s.kind or "raise" in s.kind):
+            return True
+        if isinstance(s, ir.Call):
+            cp = path_of(s.callee)
+            if cp and (cp in _EXIT_CALLS or cp.rpartition(".")[2] in _EXIT_CALLS):
+                return True
+    return False
 
 
 def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
