@@ -12,25 +12,29 @@ CPGuard 의 데이터 흐름(taint) 탐지 정확도를 **라벨링된 정답지
 |---|---|---:|---:|---:|---:|---:|
 | [OWASP Benchmark v1.2](#owasp-benchmark-java--python) | Java | 1,572 | 93.4% | 88.4% | 13.3% | **0.801** |
 | [OWASP Benchmark for Python](#owasp-benchmark-java--python) | Python | 346 | 82.1% | 83.3% | 10.4% | **0.717** |
-| [BenchProctor](#benchproctor-6언어) express_ts | TypeScript | 1,100 | 55.8% | 75.4% | 18.2% | **0.376** |
-| [BenchProctor](#benchproctor-6언어) express | JavaScript | 1,100 | 56.2% | 75.0% | 18.7% | **0.375** |
-| [BenchProctor](#benchproctor-6언어) rails | Ruby | 1,200 | 54.3% | 76.2% | 17.0% | **0.373** |
+| [BenchProctor](#benchproctor-6언어) express | JavaScript | 1,100 | 65.3% | 75.9% | 20.7% | **0.445** |
+| [BenchProctor](#benchproctor-6언어) express_ts | TypeScript | 1,100 | 62.2% | 76.5% | 19.1% | **0.431** |
+| [BenchProctor](#benchproctor-6언어) koa | JavaScript | 1,100 | 52.4% | 81.1% | 12.2% | **0.402** |
+| [BenchProctor](#benchproctor-6언어) rails | Ruby | 1,200 | 55.8% | 76.7% | 17.0% | **0.388** |
+| [BenchProctor](#benchproctor-6언어) nestjs | TypeScript | 1,100 | 47.6% | 83.2% | 9.6% | **0.380** |
 | [PHP Vulnerability test suite](#php-vulnerability-test-suite-samate) | PHP | 31,824 | 47.0% | 66.4% | 10.1% | **0.369** |
-| [BenchProctor](#benchproctor-6언어) koa | JavaScript | 1,100 | 47.6% | 80.6% | 11.5% | **0.362** |
-| [BenchProctor](#benchproctor-6언어) nestjs | TypeScript | 1,100 | 43.1% | 82.9% | 8.9% | **0.342** |
-| [BenchProctor](#benchproctor-6언어) sinatra | Ruby | 1,200 | 51.0% | 75.2% | 16.8% | **0.342** |
+| [BenchProctor](#benchproctor-6언어) sinatra | Ruby | 1,200 | 52.3% | 75.7% | 16.8% | **0.355** |
 | [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 30.0% | 87.8% | 5.8% | **0.242** |
 | [BenchProctor](#benchproctor-6언어) standalone | C | 500 | 52.0% | 61.3% | 32.8% | **0.192** |
+| [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 43.0% | 61.8% | 26.6% | **0.164** |
+| [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 44.8% | 60.2% | 29.6% | **0.152** |
 | [BenchProctor](#benchproctor-6언어) httplib | C++ | 400 | 61.5% | 54.7% | 51.0% | **0.105** |
 | [BenchProctor](#benchproctor-6언어) standalone | C++ | 400 | 58.5% | 53.9% | 50.0% | **0.085** |
-| [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 36.8% | 53.3% | 32.2% | **0.046** |
-| [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 32.8% | 53.6% | 28.4% | **0.044** |
 | [DVWA](#dvwa-php-실제-앱-보조-지표) | PHP | 4 | 100% | 80% | — | (표본 소규모) |
 
 **점수 = 재현율 − 오탐률** (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000).
 
-숫자를 그대로 읽는 법: **Java·Python 은 실무 수준, JS·TS·Ruby·PHP 는 쓸 만한 수준,
-C#·C/C++·Go 는 아직 부족하다.** 아래에 유형별 내역과 남은 원인을 적었다.
+숫자를 그대로 읽는 법: **Java·Python(0.72~0.80) 은 실무 수준, JS·TS·Ruby·PHP(0.36~0.45)
+는 쓸 만한 수준, C#·C(0.19~0.24) 와 Go·C++(0.09~0.16) 는 아직 부족하다.** 아래에 유형별
+내역과 남은 원인을 적었다.
+
+정밀도만 보면 순서가 다르다 — nestjs 83.2% · koa 81.1% · C# 87.8% 는 자바(88.4%)에 가깝다.
+점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**다(C# 재현율 30.0%).
 
 ---
 
@@ -119,17 +123,17 @@ c·cpp** 의 quicktest 티어 11개 스위트(60,600 케이스)를 쓴다. 구�
 
 | 언어 | 스위트 | 대상 | 재현율 | 정밀도 | 오탐률 | 점수 |
 |---|---|---:|---:|---:|---:|---:|
-| TypeScript | express_ts | 1,100 | 55.8% | 75.4% | 18.2% | 0.376 |
-| JavaScript | express | 1,100 | 56.2% | 75.0% | 18.7% | 0.375 |
-| Ruby | rails | 1,200 | 54.3% | 76.2% | 17.0% | 0.373 |
-| JavaScript | koa | 1,100 | 47.6% | 80.6% | 11.5% | 0.362 |
-| TypeScript | nestjs | 1,100 | 43.1% | 82.9% | 8.9% | 0.342 |
-| Ruby | sinatra | 1,200 | 51.0% | 75.2% | 16.8% | 0.342 |
+| JavaScript | express | 1,100 | 65.3% | 75.9% | 20.7% | 0.445 |
+| TypeScript | express_ts | 1,100 | 62.2% | 76.5% | 19.1% | 0.431 |
+| JavaScript | koa | 1,100 | 52.4% | 81.1% | 12.2% | 0.402 |
+| Ruby | rails | 1,200 | 55.8% | 76.7% | 17.0% | 0.388 |
+| TypeScript | nestjs | 1,100 | 47.6% | 83.2% | 9.6% | 0.380 |
+| Ruby | sinatra | 1,200 | 52.3% | 75.7% | 16.8% | 0.355 |
 | C | standalone | 500 | 52.0% | 61.3% | 32.8% | 0.192 |
+| Go | net_http | 1,000 | 43.0% | 61.8% | 26.6% | 0.164 |
+| Go | gin | 1,000 | 44.8% | 60.2% | 29.6% | 0.152 |
 | C++ | httplib | 400 | 61.5% | 54.7% | 51.0% | 0.105 |
 | C++ | standalone | 400 | 58.5% | 53.9% | 50.0% | 0.085 |
-| Go | net_http | 1,000 | 36.8% | 53.3% | 32.2% | 0.046 |
-| Go | gin | 1,000 | 32.8% | 53.6% | 28.4% | 0.044 |
 
 ## 이 코퍼스가 드러낸 것
 
@@ -141,11 +145,18 @@ c·cpp** 의 quicktest 티어 11개 스위트(60,600 케이스)를 쓴다. 구�
 | koa | `ctx.request.headers[...]` | `req.*` 만 | 0.002 → 0.362 |
 | sinatra | 라우트 전체가 `post "/x" do ... end` 블록 안 | 메서드만 | 0.000 → 0.342 |
 | httplib | `req.get_param_value("id")` | 이름 소스(argv·getenv)만 | 0.000 → 0.105 |
-| nestjs | `throw new BadRequestException()` 로 거부 | `return` 만 | 0.138 → 0.342 |
+| nestjs | `throw new BadRequestException()` 로 거부 | `return` 만 | 0.138 → 0.380 |
+| gin · net_http | `go func(){ … }()` 클로저가 바깥 변수를 붙잡는다 | 빈 환경으로 실행 | 0.044 → 0.152 |
 
-마지막 줄이 특히 분명한 신호였다. **express_ts 0.376 과 nestjs 0.342 는 같은 언어·같은
-규칙**인데 처음엔 0.376 대 0.138 로 2.7배 갈렸다. 안전 변형의 거부 방식이 `return` 이냐
-`throw` 냐의 차이 하나였고, 조건 가드 판정(`_always_exits`)이 `return` 만 보고 있었다.
+nestjs 줄이 특히 분명한 신호였다. **express_ts 와 nestjs 는 같은 언어·같은 규칙**인데
+처음엔 0.376 대 0.138 로 2.7배 갈렸다. 안전 변형의 거부 방식이 `return` 이냐 `throw` 냐의
+차이 하나였고, 조건 가드 판정(`_always_exits`)이 `return` 만 보고 있었다.
+
+Go 줄은 더 넓게 번졌다. 중첩 함수를 **빈 환경으로** 실행하고 있어서 클로저가 붙잡은
+변수가 전부 깨끗해 보였는데, 이건 Go 만의 문제가 아니었다 — 고치자 JS·TS·Ruby 여섯
+스위트가 같이 올랐다(express 0.375 → 0.445, koa 0.362 → 0.402, rails 0.373 → 0.388).
+**한 코퍼스에서 찾은 결함이 다른 코퍼스의 점수를 올리는 것이, 그 수정이 코퍼스에
+맞춘 것이 아니라는 가장 좋은 증거다.**
 
 C 계열은 **참조 출력 인자**가 핵심이었다.
 
@@ -158,6 +169,10 @@ system(cmd);
 
 C 계열 입력 API 가 전부 이 모양이라 리턴값만 보는 모델로는 통째로 미탐이었다(C 재현율
 10.8% → 66.4%). 어떤 호출의 몇 번째 인자가 출력인지는 규칙이 선언한다.
+
+**Go 도 같은 계열이었다.** `json.NewDecoder(c.Request.Body).Decode(&q)` 는 오염이
+수신자에 있고 결과는 `&q` 로 나간다. `c.ShouldBindJSON(&q)` 는 호출 자체가 입력이다.
+같은 장치를 확장해 수신자도 보게 하고, `&q` 처럼 주소를 넘기는 형태를 한 겹 벗겼다.
 
 ## 이 코퍼스의 한계
 
@@ -317,8 +332,8 @@ BenchProctor 에도, 논문 벤치마크에도 없다.
 
 | 대상 | 상태 | 원인 |
 |---|---|---|
-| Go | 0.044 / 0.046 | 소스는 붙었는데 재현율 33~37% · 정밀도 53%. 미분해 |
-| C/C++ | 오탐률 50% | 안전 변형이 `regexec` 검사 후 불일치 시 상수로 교체 — 분기 합류 + 간접 가드 |
+| C++ | 오탐률 50% | 안전 변형이 `regexec` 로 검사하고 불일치 시 상수로 교체 — 분기 합류 + 간접 가드 |
+| Go·전 언어 | **파생값 가드** | `url.Parse(x).Hostname()` 을 검사해 거부해도 `x` 의 오염이 남는다. Go 오탐의 45%(87건). provenance 는 들고 있어 구현은 가능하지만, 투영을 검사했다고 원본을 안전하다고 보는 것은 일반적으로 건전하지 않다 — 전 언어 영향이라 따로 측정해 정한다 |
 | PHP CWE_79 | 미탐 다수 | 출력 문맥(HTML body / script / 속성)에 따라 답이 갈린다 |
 | C# CWE_89 | 재현율 낮음 | sink·구성 변형이 다른 CWE 보다 많다 |
 | 객체 필드 | 미분해 | 지금은 객체 단위 근사라 `obj.sanitize()` 로 필드가 씻긴 것을 못 본다 |
