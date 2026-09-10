@@ -49,6 +49,12 @@ sources:
   - params
   - headers
   - get_file_value
+  - files
+  - matches
+  - remote_addr
+  - version
+  - method
+  - get_header_value_count
 - pattern: member
   object: request
   property:

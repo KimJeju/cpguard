@@ -34,6 +34,13 @@ sources:
   - QueryParam
   - PathParam
   - Vars
+  - Host
+  - RemoteAddr
+  - RequestURI
+  - MultipartForm
+  - FormFile
+  - Trailer
+  - TLS
 - pattern: member
   object: req
   property:
@@ -62,6 +69,11 @@ sources:
   - QueryParam
   - PathParam
   - Vars
+  - Host
+  - RemoteAddr
+  - RequestURI
+  - MultipartForm
+  - FormFile
 - pattern: member
   object: request
   property:
@@ -90,6 +102,11 @@ sources:
   - QueryParam
   - PathParam
   - Vars
+  - Host
+  - RemoteAddr
+  - RequestURI
+  - MultipartForm
+  - FormFile
 - pattern: member
   object: c
   property:
@@ -118,6 +135,20 @@ sources:
   - QueryParam
   - PathParam
   - Vars
+  - Request
+  - FormFile
+  - MultipartForm
+  - SaveUploadedFile
+  - ClientIP
+  - ContentType
+  - GetString
+  - QueryArray
+  - PostFormArray
+  - FullPath
+  - ShouldBindQuery
+  - ShouldBindUri
+  - ShouldBindWith
+  - DefaultPostForm
 - pattern: member
   object: ctx
   property:
@@ -146,6 +177,14 @@ sources:
   - QueryParam
   - PathParam
   - Vars
+  - Request
+  - FormFile
+  - MultipartForm
+  - ClientIP
+  - ContentType
+  - ShouldBindQuery
+  - ShouldBindUri
+  - ShouldBindWith
 - pattern: member
   object: e
   property:
@@ -180,6 +219,32 @@ sources:
   - os.Getenv
   - mux.Vars
   - flag.Arg
+- pattern: outparam
+  arg: 0
+  name:
+  - ShouldBindJSON
+  - ShouldBind
+  - BindJSON
+  - Bind
+  - ShouldBindQuery
+  - ShouldBindUri
+  - ShouldBindWith
+  - BindQuery
+  - BindUri
+  - ShouldBindYAML
+  - ShouldBindXML
+  - BindXML
+- pattern: outcopy
+  arg: 0
+  name:
+  - Decode
+  - Scan
+  - StructScan
+- pattern: outcopy
+  arg: 1
+  name:
+  - Unmarshal
+  - NewDecoder
 sinks:
 - pattern: call
   callee:
@@ -218,13 +283,11 @@ sanitizers:
   - regexp.MatchString
   - shellescape.Quote
 validators:
-  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
-  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
-  - {token: 'Contains'}
-  - {token: 'MatchString'}
-  - {token: 'HasPrefix'}
-  - {token: 'HasSuffix'}
-  - {token: 'EqualFold'}
-  - {token: 'ParseInt'}
-  - {token: 'Atoi'}
-  - {token: 'ParseFloat'}
+- token: Contains
+- token: MatchString
+- token: HasPrefix
+- token: HasSuffix
+- token: EqualFold
+- token: ParseInt
+- token: Atoi
+- token: ParseFloat

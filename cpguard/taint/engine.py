@@ -645,20 +645,32 @@ def _out_params(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
                 continue
             if s.arg >= len(call.args):
                 continue
-            p = path_of(call.args[s.arg])
+            p = _out_target(call.args[s.arg])
             if not p or p in env:
                 continue
-            if s.kind == "outparam":          # 그 자체가 입력이다(fgets)
+            if s.kind == "outparam":          # 그 자체가 입력이다(fgets · ShouldBindJSON)
                 tr = [Step("source", call.loc, _snippet(call.loc, ctx.src))]
-            else:                             # 다른 인자를 그 자리로 옮긴다(snprintf)
-                tr = next((t for i, a in enumerate(call.args) if i != s.arg
-                           and (t := _taint(a, env, ctx))), None)
+            else:                             # 다른 값을 그 자리로 옮긴다(snprintf · Decode)
+                # 수신자도 본다 — json.NewDecoder(오염).Decode(&v) 는 오염이 수신자에 있다.
+                recv = call.callee.obj if isinstance(call.callee, ir.Member) else None
+                tr = next((t for a in ([recv] if recv is not None else [])
+                           + [a for i, a in enumerate(call.args) if i != s.arg]
+                           if (t := _taint(a, env, ctx))), None)
                 if tr:
                     tr = tr + [Step("propagation", call.loc, _snippet(call.loc, ctx.src))]
             if tr:
                 env = dict(env)
                 env[p] = tr
     return env
+
+
+def _out_target(node: ir.Node) -> str | None:
+    """출력 인자가 가리키는 경로. `&q` 처럼 주소를 넘기는 형태를 한 겹 벗긴다."""
+    p = path_of(node)
+    if p is not None:
+        return p
+    kids = getattr(node, "children", None) or []
+    return path_of(kids[0]) if len(kids) == 1 else None
 
 
 def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
@@ -761,12 +773,12 @@ def _validated_paths(test: ir.Node, ctx: Ctx) -> set[str]:
     한계는 분명하다. `'../' in name` 은 상대경로만 막고 절대경로(/etc/passwd)는 막지
     못한다. 그래도 "검사했으니 넘어간다"가 규칙이 선언한 기준이다.
     """
+    out: set[str] = _lookup_guarded(test)
     if not ctx.rule.validators:
-        return set()
+        return out
     text = _snippet(test.loc, ctx.src)
     if not any(tok in text for tok in ctx.rule.validators):
-        return set()
-    out: set[str] = set()
+        return out
     stack = [test]
     while stack:
         n = stack.pop()
@@ -786,6 +798,35 @@ def _validated_paths(test: ir.Node, ctx: Ctx) -> set[str]:
 #: 거부하고 빠져나가는 호출. 예외를 던지는 것과 같은 자리다.
 _EXIT_CALLS = frozenset({"panic", "exit", "Exit", "abort", "die", "halt",
                          "process.exit", "sys.exit", "os.Exit", "System.exit"})
+
+
+def _lookup_guarded(test: ir.Node) -> set[str]:
+    """조회표의 **키로** 쓰인 경로. 허용 목록 검사의 언어 무관 형태다.
+
+        allowed := map[string]bool{"asc": true, "desc": true}
+        if !allowed[data] { 거부; return }      // data 는 컴파일 시점 상수 집합 안의 값
+        exec.Command("sh", "-c", "echo "+data)
+
+    값이 **표의 키로 조회됐고** 그 분기가 돌아가 버렸다면, 이어지는 코드에서 그 값은
+    미리 정해진 집합의 원소다. 컨테이너 자체를 읽는 형태(`data[i]`)와는 다르다 —
+    그쪽은 첨자가 아니라 베이스가 오염 경로다.
+    """
+    out: set[str] = set()
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if isinstance(n, ir.Member) and n.computed and n.index is not None:
+            key, base = path_of(n.index), path_of(n.obj)
+            if key and base and key != base and not key.startswith(base + "."):
+                out.add(key)
+        for attr in ("callee", "obj", "value", "target", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out
 
 
 def _always_exits(stmts: list[ir.Node]) -> bool:
@@ -817,7 +858,12 @@ def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
 
 def _run_nested(node: ir.Node, ctx: Ctx, env: dict[str, Trace] | None = None) -> None:
     for fn in _iter_functions(node):
-        _run_function(fn, ctx, seed=_callback_seed(fn, node, env, ctx))
+        # 클로저는 바깥 스코프를 그대로 붙잡는다. 빈 환경으로 돌리면 `v := 오염;
+        # go func(){ 위험(v) }()` 같은 형태가 통째로 미탐이다 — Go 의 고루틴·defer,
+        # JS 의 콜백이 전부 이 모양이다. 파라미터로 받는 값은 seed 가 따로 덮는다.
+        captured = {k: v for k, v in (env or {}).items()
+                    if not any(p.name == k.split(".")[0] for p in fn.params)}
+        _run_function(fn, ctx, seed={**captured, **(_callback_seed(fn, node, env, ctx) or {})})
 
 
 #: 콜백에 원소를 넘겨주는 메서드. 수신자가 오염이면 콜백의 첫 인자도 오염이다.

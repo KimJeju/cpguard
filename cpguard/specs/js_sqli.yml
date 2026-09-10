@@ -15,6 +15,19 @@ sources:
   - params
   - headers
   - cookies
+  - files
+  - file
+  - rawBody
+  - originalUrl
+  - url
+  - hostname
+  - ip
+  - path
+  - get
+  - header
+  - session
+  - user
+  - socket
 - pattern: annotation
   name:
   - Query
@@ -43,6 +56,12 @@ sources:
   - host
   - href
   - search
+  - state
+  - URL
+  - hostname
+  - ip
+  - method
+  - path
 - pattern: member
   object: ctx.request
   property:
@@ -112,14 +131,12 @@ sanitizers:
   - Number.isInteger
   - Number.isFinite
 validators:
-  # 허용 목록·형식 검사로 거부하고 돌아가면 이어지는 코드에서는 검증된 값이다.
-  # (실측: BenchProctor 안전 변형 오탐의 상당수가 이 형태였다)
-  - {token: 'includes'}
-  - {token: 'indexOf'}
-  - {token: 'hasOwnProperty'}
-  - {token: 'Object.keys'}
-  - {token: 'test'}
-  - {token: 'startsWith'}
-  - {token: 'endsWith'}
-  - {token: 'safeParse'}
-  - {token: 'new Set'}
+- token: includes
+- token: indexOf
+- token: hasOwnProperty
+- token: Object.keys
+- token: test
+- token: startsWith
+- token: endsWith
+- token: safeParse
+- token: new Set
