@@ -21,7 +21,7 @@ repo: https://github.com/KimJeju/cpguard
 - **감사 작업대** — 코드 뷰어 위 Source→Sink 흐름 강조 + 인스펙터 + 사람 판정/메모.
 - **완전 오프라인** — 파이썬·인터넷·관리자 권한 없이 단일 설치본. 에어갭 환경 OK.
 - **대형 코드베이스** — 26,049 파일 / 2.3GB 프로젝트를 ~5분에 4,857건 탐지(실측).
-- **정확도(측정치)** — OWASP Benchmark v1.2 대상 6유형 1,572건에서 F1 **0.689**, 공식 점수(재현율−오탐률) **0.392**. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
+- **정확도(측정치)** — 라벨링 정답지 **8개 언어 5개 코퍼스 138,785건(채점 76,866건)**. 자바 점수 **0.801**(F1 0.909) · 파이썬 **0.717** · JS/TS **0.375** · PHP **0.369** · C# **0.242** · Go **0.045**. 언어 편차가 크다는 사실을 그대로 공개한다. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
 - **CI 연동** — GitHub Action + SARIF → Code Scanning. `fail-on` 게이트.
 - **언어** — JS/TS · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C#.
 - 오픈소스(졸업작품에서 출발).
@@ -45,13 +45,15 @@ summaries, so it follows user input from a source to a dangerous sink across fil
 rather than matching a regex at one line. Optionally it sends each finding to an LLM
 (Claude/Gemini/GPT) to judge reachability, which removes some false positives.
 
-Numbers, so you can calibrate: on OWASP Benchmark v1.2 it gets F1 0.689 and a
-benchmark score (recall minus false-positive rate) of 0.392 over the 1,572 cases in
-the six categories taint analysis actually covers. I exclude 1,168 cases that are API
-misuse checks rather than data flow (weak crypto/hash/RNG, cookie flags, trust
-boundary) and say so in the README; the harness is in bench/ if you want to re-run it.
-That is well short of a mature commercial engine, and the gap is mostly path
-sensitivity — it does not know that an is_numeric() check upstream makes a flow safe.
+Numbers, so you can calibrate. Measured against labelled ground truth in eight
+languages (five corpora, 76,866 scored cases), score = recall minus false-positive rate:
+Java 0.801 (F1 0.909), Python 0.717, TypeScript/JavaScript 0.375, PHP 0.369,
+C# 0.242, C/C++ 0.13, Go 0.045. The spread is the honest headline — Java and Python
+are at working-tool quality and Go is not there yet. I exclude categories that are
+API-misuse checks rather than data flow (weak crypto/hash/RNG, cookie flags, trust
+boundary), and I report categories that *are* data-flow problems but that I have no
+rule for separately from those, so coverage is not quietly inflated. The harness is
+in bench/ if you want to re-run any of it.
 
 Findings land in a three-pane audit workbench: issue list, a code viewer that draws
 the source-to-sink flow inline, and an inspector where you mark true/false positive
@@ -132,7 +134,7 @@ are the top three sources of false positives in the benchmark run.
   인스펙터에서 사람이 판정·메모합니다.
 - 완전 오프라인(파이썬·인터넷·관리자 권한 불필요, 단일 설치본). 에어갭 환경 대응.
 - SARIF·GitHub Action 으로 CI 연동. 언어: JS/TS·PHP·Python·Java·Kotlin·Go·Ruby·C/C++·Swift·C#.
-- OWASP Benchmark v1.2(대상 1,572건) F1 0.689 · 점수 0.392. 측정 스크립트와 제외 기준 공개.
+- 라벨링 정답지 8개 언어 76,866건(채점 기준)으로 측정. 자바 0.801 · 파이썬 0.717 · JS/TS 0.375 · PHP 0.369 · C# 0.242 · Go 0.045 — 편차를 그대로 공개합니다. 측정 스크립트와 제외 기준도 공개.
 - 실제 26,049 파일 / 2.3GB 프로젝트로 검증(약 5분에 4,857건).
 
 졸업작품에서 시작해 오픈소스로 이어가고 있습니다. 엔진·오탐률 피드백 특히 환영합니다.

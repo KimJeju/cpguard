@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
   <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-Java%200.801%20·%20Python%200.717-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -220,26 +220,42 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 ## 📊 정확도
 
-**OWASP Benchmark v1.2**(Java, 취약/안전 쌍이 라벨된 정답지)의 데이터 흐름 6개 유형,
-**표본 1,572건** 기준 측정 결과입니다.
-
-| 재현율 | 정밀도 | F1 | 오탐률 | 점수 |
-|---:|---:|---:|---:|---:|
-| 65.1% | 73.2% | 0.689 | 25.9% | **0.392** |
-
+**라벨링된 정답지 8개 언어, 5개 코퍼스 138,785건** 기준 측정 결과입니다(그중 채점 대상 **76,866건**, 나머지는 아래 제외 기준에 해당).
 점수 = 재현율 − 오탐률 (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000).
-설정 점검 성격의 유형(`weakrand`·`crypto`·`hash`·`securecookie`·`trustbound`, 1,168건)은
-데이터 흐름 문제가 아니므로 공짜 점수로 넣지 않고 지표에서 제외했습니다.
 
-**벤치마크가 실제 엔진 개선을 이끌었습니다.** 첫 측정은 0.137 이었고, 이후의 모든 상승은
-수치가 드러낸 결함을 고친 결과입니다 — `try` 블록 안에서 오염이 끊기던 문제, for-each 반복
-변수가 컬렉션의 오염을 잃던 문제, 생성자가 위험 지점으로 매칭되지 않던 문제, 경로 민감도 부재,
-컨테이너 변경(`list.add`·`map.put`) 미전파. 각 수정은 테스트케이스에 맞춘 것이 아니라
-일반적인 분석 기법입니다. 단계별 전후 기록은 [`bench/README.md`](bench/README.md) 에 있습니다.
+| 코퍼스 | 언어 | 지표 대상 | 재현율 | 정밀도 | 점수 |
+|---|---|---:|---:|---:|---:|
+| OWASP Benchmark v1.2 | Java | 1,572 | 93.4% | 88.4% | **0.801** |
+| OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
+| BenchProctor (express) | TypeScript / JavaScript | 2,200 | ~56% | ~75% | **0.375** |
+| PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~53% | ~76% | **0.36** |
+| C# Vulnerability Test Suite | C# | 33,024 | 30.0% | 87.8% | **0.242** |
+| BenchProctor (standalone) | C / C++ | 1,300 | ~57% | ~57% | **0.13** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~35% | ~53% | **0.045** |
 
-**남은 한계:** 오탐의 주류는 `list.add(param); list.remove(0); list.get(1)` 같은 원소 인덱스
-추적이 필요한 형태로, 사실상 기호 실행의 영역이라 대부분의 정적 분석기가 함께 놓칩니다.
-미탐의 주류는 프레임워크 어노테이션이나 헬퍼 클래스를 경유해 들어오는 입력입니다.
+그대로 읽으면 이렇습니다. **Java·Python 은 실무에 쓸 수준, JS/TS·Ruby·PHP 는 쓸 만한
+수준, C#·C/C++·Go 는 아직 부족합니다.** Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
+관용구 테스트로 대신합니다(아래).
+
+설정 점검 성격의 유형(`weakrand`·`crypto`·`hash`·`securecookie`·`trustbound`)은 데이터
+흐름 문제가 아니므로 공짜 점수로 넣지 않고 제외합니다. 반대로 **흐름 분석 대상이지만
+우리에게 규칙이 없는 유형**(NoSQL 주입·SSTI·프로토타입 오염·XXE 등)은 앞엣것과 **따로**
+보고합니다 — 같이 묶어 빼면 커버리지를 부풀리게 됩니다.
+
+**벤치마크가 실제 엔진 개선을 이끌었습니다.** Java 는 0.137, PHP 는 0.001 에서 시작했고
+이후의 모든 상승은 수치가 드러낸 결함을 고친 결과입니다 — `try` 블록 안에서 오염이 끊기던
+문제, for-each 반복 변수가 컬렉션의 오염을 잃던 문제, 경로 민감도 부재, 컨테이너 변경
+미전파, 비교 연산 결과가 오염을 옮기던 문제, 생성자→필드→메서드 흐름이 **네 언어 전부에서**
+미탐이던 문제, 리턴이 아니라 인자로 결과를 내주는 입력 API(`fgets(buf, …)`) 미모델링.
+각 수정은 테스트케이스에 맞춘 것이 아니라 일반적인 분석 기법입니다. 단계별 전후 기록은
+[`bench/README.md`](bench/README.md) 에 있습니다.
+
+**정답지가 없는 자리**(Kotlin·Swift, 그리고 코퍼스가 다루지 않는 프레임워크)는 **관용구
+테스트**로 대신합니다. 실제 코드에서 흔한 형태 130건을 최소 재현으로 만들어 테스트 스위트에
+넣었습니다. 이쪽은 벤치마크와 **다른 종류의 결함**을 잡습니다 — TypeScript 파라미터가 타입
+표기를 이름에 달고 들어와 **타입을 쓴 모든 함수가 프로시저간 분석에서 빠져 있던** 결함이
+그렇게 드러났고, 고쳤을 때 벤치마크 점수는 하나도 움직이지 않았습니다.
 
 실제 앱(DVWA, PHP) 기준 보조 측정도 함께 공개합니다. 전체 방법론·유형별 표·한계는
 [`bench/README.md`](bench/README.md) 참조.
@@ -257,7 +273,7 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 - [x] Finding DB 테이블화 + 서버측 페이지네이션 · 가상 스크롤(대량 탐지)
 - [x] 싱크 사전 필터링 · 멀티프로세스 · 파싱/요약 캐시 · 트리아지 클러스터링
 - [x] CI/CD 통합 — GitHub Action · SARIF → Code Scanning · 등급 게이트
-- [x] 정확도 벤치마크 공개 — OWASP Benchmark v1.2, 표본 1,572건, F1 0.689 ([상세](bench/README.md))
+- [x] 정확도 측정 8개 언어 — 라벨링 코퍼스 5종, 채점 76,866건 ([상세](bench/README.md))
 - [x] 11개 언어 — Java · Kotlin · Go · Ruby · C/C++ · Swift · C# 추가
 - [x] 다건 배치 진단 · 프로젝트 포트폴리오 · 대량 산출물 배부
 - [x] 상수 전파 · 컨테이너 오염 전파 · 리터럴 키 단위 맵 추적

@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
   <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/OWASP%20Benchmark-N%3D1572%20·%20F1%200.689-2e7d32" alt="OWASP Benchmark">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-Java%200.801%20·%20Python%200.717-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -218,17 +218,26 @@ Stack: Python 3.11+ · tree-sitter (11 languages) · Django (SSR) · reportlab (
 
 ## 📊 Accuracy
 
-Measured against **OWASP Benchmark v1.2** (Java, labelled vulnerable/safe pairs) over the six data-flow categories, **N = 1,572**:
+Measured against **labelled ground truth in eight languages** — five corpora totalling 138,785 cases, of which **76,866 are scored** (the rest are categories excluded below). Score = recall − false-positive rate (the official OWASP metric; random guessing = 0.000).
 
-| Recall | Precision | F1 | False-positive rate | Benchmark score |
-|---:|---:|---:|---:|---:|
-| 65.1% | 73.2% | 0.689 | 25.9% | **0.392** |
+| Corpus | Language | Scored | Recall | Precision | Score |
+|---|---|---:|---:|---:|---:|
+| OWASP Benchmark v1.2 | Java | 1,572 | 93.4% | 88.4% | **0.801** |
+| OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
+| BenchProctor (express) | TypeScript / JavaScript | 2,200 | ~56% | ~75% | **0.375** |
+| PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~53% | ~76% | **0.36** |
+| C# Vulnerability Test Suite | C# | 33,024 | 30.0% | 87.8% | **0.242** |
+| BenchProctor (standalone) | C / C++ | 1,300 | ~57% | ~57% | **0.13** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~35% | ~53% | **0.045** |
 
-Score = recall − false-positive rate (the official OWASP metric; random guessing = 0.000). Config-only categories (`weakrand`, `crypto`, `hash`, `securecookie`, `trustbound` — 1,168 cases) are not data-flow problems and are excluded rather than counted as free wins.
+Read it plainly: **Java and Python are at working-tool quality; JS/TS, Ruby and PHP are usable; C#, C/C++ and Go are not there yet.** Kotlin and Swift have no public labelled corpus at all, so they are covered by idiom tests instead (see below).
 
-**The benchmark drove real engine work.** The first run scored 0.137; every point since came from a defect the numbers exposed — taint dying inside `try` blocks, for-each variables losing the collection's taint, constructors not matching as sinks, no path sensitivity at all, and container mutations (`list.add`, `map.put`) not propagating. Each fix is a general analysis technique, not a tweak aimed at the test cases. The full before/after ledger is in [`bench/README.md`](bench/README.md).
+Config-only categories (`weakrand`, `crypto`, `hash`, `securecookie`, `trustbound`) are not data-flow problems and are excluded rather than counted as free wins. Categories that *are* data-flow problems but that CPGuard has no rule for (NoSQL injection, SSTI, prototype pollution, XXE …) are reported **separately** from those, so coverage is not quietly inflated.
 
-**What still trips it:** most remaining false positives need element-level index tracking (`list.add(param); list.remove(0); list.get(1)`), which is effectively symbolic execution and defeats most static analyzers. Most false negatives are inputs arriving through framework annotations or helper classes that are not yet modelled as sources.
+**The benchmarks drove real engine work.** Java started at 0.137 and PHP at 0.001; every point since came from a defect the numbers exposed — taint dying inside `try` blocks, for-each variables losing the collection's taint, no path sensitivity at all, container mutations not propagating, comparison results carrying taint, constructor-to-field-to-method flows missing in every language, and by-reference output parameters (`fgets(buf, …)`) invisible to a return-value-only model. Each fix is a general analysis technique, not a tweak aimed at the test cases. The full before/after ledger is in [`bench/README.md`](bench/README.md).
+
+**Where labelled data does not exist** (Kotlin, Swift, and any framework a corpus does not cover), CPGuard ships **idiom tests** instead: 130 minimal reproductions of shapes that are common in real code, run as part of the test suite. They catch a different class of defect than the benchmarks do — TypeScript parameters were carrying their type annotation into the parameter name, which silently removed *every typed function* from interprocedural analysis, and no benchmark score moved when it was fixed.
 
 A second measurement on a real application (DVWA, PHP) is also published. Full methodology, per-category tables and limitations: [`bench/README.md`](bench/README.md).
 
@@ -243,7 +252,7 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] Finding DB table + server-side pagination · virtual scrolling for large results
 - [x] Sink pre-filtering · multiprocessing · parse/summary caches · triage clustering
 - [x] CI/CD — GitHub Action · SARIF → Code Scanning · severity gate
-- [x] Accuracy benchmark published — OWASP Benchmark v1.2, N=1,572, F1 0.689 ([details](bench/README.md))
+- [x] Accuracy measured in 8 languages — 5 labelled corpora, 76,866 scored cases ([details](bench/README.md))
 - [x] 11 languages — Java, Kotlin, Go, Ruby, C/C++, Swift, C# added
 - [x] Batch scanning, project portfolio and bulk deliverables for hundreds of projects
 - [x] Constant propagation · container taint · key-sensitive map tracking
