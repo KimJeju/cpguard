@@ -20,7 +20,7 @@
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11개 언어">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="taint 규칙 78개">
   <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
-  <img src="https://img.shields.io/badge/OWASP%20Benchmark-Java%200.801%20·%20Python%200.717-2e7d32" alt="OWASP Benchmark">
+  <img src="https://img.shields.io/badge/OWASP%20Benchmark-Java%200.826%20·%20Python%200.717-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
 
@@ -225,22 +225,22 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 
 | 코퍼스 | 언어 | 지표 대상 | 재현율 | 정밀도 | 점수 |
 |---|---|---:|---:|---:|---:|
-| OWASP Benchmark v1.2 | Java | 1,572 | 93.4% | 88.4% | **0.801** |
+| OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
-| BenchProctor (express / koa) | JavaScript | 2,200 | ~58% | ~78% | **0.42** |
-| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.41** |
-| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.40** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~70% | ~85% | **0.57** |
+| BenchProctor (express / koa) | JavaScript | 2,200 | ~59% | ~78% | **0.43** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.42** |
+| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.41** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
-| BenchProctor (gin / net_http) | Go | 2,000 | ~44% | ~79% | **0.32** |
-| C# Vulnerability Test Suite | C# | 33,024 | 30.0% | 87.8% | **0.242** |
+| C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 61.3% | **0.192** |
-| BenchProctor (httplib / standalone) | C++ | 800 | ~60% | ~54% | **0.10** |
+| BenchProctor (httplib / standalone) | C++ | 800 | ~79% | ~55% | **0.14** |
 
-그대로 읽으면 이렇습니다. **Java·Python 은 실무에 쓸 수준, JS/TS·Ruby·PHP 는 쓸 만한
-수준, Go·C#·C·C++ 는 아직 부족합니다.** Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
+그대로 읽으면 이렇습니다. **Java·Python·Go 는 실무에 쓸 수준, JS/TS·Ruby·PHP 는 쓸
+만한 수준, C#·C·C++ 는 아직 부족합니다.** Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
 관용구 테스트로 대신합니다(아래).
 
-정밀도만 보면 순서가 다릅니다 — NestJS 83.1% · Koa 81.0% · C# 87.8% 는 자바(88.4%)에
+정밀도만 보면 순서가 다릅니다 — NestJS 83.0% · Koa 81.0% · C# 87.8% 는 자바(88.7%)에
 가깝습니다. 점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**입니다
 (C# 재현율 30.0%).
 
