@@ -338,6 +338,83 @@ def _compared_paths(test: ir.Node, op: str) -> set[str] | None:
     return out if found else None
 
 
+#: 리턴값 자체가 비교 결과인 C 표준 함수. `strcmp(x, "a") != 0` 은 x 를 상수와
+#: 맞춰 본 것이고, `regexec(&re, x, …) != 0` 은 x 가 패턴에 안 맞는다는 뜻이다.
+_COMPARE_CALLS = frozenset({"strcmp", "strncmp", "strcasecmp", "strncasecmp",
+                            "memcmp", "regexec", "fnmatch", "wcscmp", "wcsncmp"})
+
+
+def _check_call_paths(test: ir.Node, ctx: Ctx) -> set[str]:
+    """검사 함수의 결과를 상수와 맞춰 본 조건에서, 그 검사가 본 경로들."""
+    out: set[str] = set()
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        # `!=` 만 본다. `strcmp(x,"a") == 0` 은 **일치했다**는 뜻이라 기본값으로
+        # 바꾸는 분기의 조건이 될 수 없다 — 빠져나온 쪽에서 x 가 무엇인지 모른다.
+        if isinstance(n, ir.Binary) and n.op == "!=" and len(n.children) == 2:
+            for x, y in ((n.children[0], n.children[1]), (n.children[1], n.children[0])):
+                if not (_is_const(y) and isinstance(x, ir.Call)):
+                    continue
+                cp = path_of(x.callee) or ""
+                base = cp.rpartition(".")[2]
+                if base in _COMPARE_CALLS or _is_sanitizer(cp, ctx.rule, x, ctx):
+                    out |= {q for a in x.args if _var_rooted(a) and (q := path_of(a))}
+        for attr in ("callee", "obj", "value", "target", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out
+
+
+def _defaulted_path(s: ir.If, env: dict[str, Trace], ctx: Ctx) -> str | None:
+    """`if (검사 실패) v = 기본값;` — 합류 후 v 가 고정 집합 안이면 그 경로.
+
+        const char *safe = data;
+        if (strcmp(data, "/bin/echo") != 0 && strcmp(data, "/bin/cat") != 0)
+            safe = "/bin/echo";
+        system(safe);                      // safe 는 셋 중 하나다
+
+    삼항(`검사(x) ? x : 기본값`)과 같은 판단을 분기 합류로 쓴 것이다. C 코퍼스 오탐
+    82건이 전부 이 형태였다(strcmp 43 · regexec 39).
+
+    분기가 하나뿐이고 본문이 대입 하나여야 하며, 조건은 **실패 쪽**(`!=` · 검사 함수의
+    결과를 상수와 비교)이어야 한다. `if (x == "a") v = 상수;` 는 빠져나온 쪽에서 x 가
+    무엇인지 모르므로 인정하지 않는다.
+    """
+    if s.orelse:
+        return None
+    # 블록 전체를 본다. C 관용구는 준비 호출로 한 겹 더 싸여 있다.
+    #     if (regcomp(&re, …) == 0) { if (regexec(&re, data, …) != 0) safe = "config";
+    #                                 regfree(&re); }
+    # 안쪽만 보면 바깥 합류에서 오염이 되살아난다(바깥 if 에 else 가 없으므로).
+    assigns: dict[str, list[ir.Assign]] = {}
+    checked: set[str] = (_compared_paths(s.test, "!=") or set()) | _check_call_paths(s.test, ctx)
+    stack = list(s.then)
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Function):
+            continue
+        if isinstance(n, ir.Assign) and (q := path_of(n.target)):
+            assigns.setdefault(q, []).append(n)
+        if isinstance(n, ir.If):
+            checked |= (_compared_paths(n.test, "!=") or set()) | _check_call_paths(n.test, ctx)
+        for attr in ("body", "then", "orelse", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    if not checked:
+        return None
+    for v, writes in assigns.items():
+        if v not in env or any(_taint(w.value, env, ctx) is not None for w in writes):
+            continue
+        # v 자신이거나, v 가 파생돼 나온 원본을 검사했어야 한다.
+        if checked & (_derived_origins(env, {v}) | {v}):
+            return v
+    return None
+
+
 def _const_selected(node: ir.Ternary, env: dict[str, Trace], ctx: Ctx) -> bool:
     """`검사(x) ? x : 상수` — 결과가 반드시 미리 정해진 값인가.
 
@@ -1195,6 +1272,9 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
                 env = _drop_guarded(else_env, clean | _derived_origins(else_env, clean))
             else:
                 env = _merge(then_env, else_env)
+                if (dv := _defaulted_path(s, env, ctx)) is not None:
+                    env = {k: t for k, t in env.items()
+                           if k != dv and not k.startswith(dv + ".")}
 
         elif isinstance(s, ir.Loop):
             _check_sinks(s.test, env, ctx)

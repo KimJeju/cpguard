@@ -181,3 +181,57 @@ def test_ternary_constant_set(tmp_path, name, want, body):
         assert hit, f"미탐: {name}"
     else:
         assert not hit, f"오탐: {name}"
+
+
+C_TPL = """#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <regex.h>
+
+void handle(void) {
+    char buf[256];
+    fgets(buf, sizeof(buf), stdin);
+    const char *data = buf;
+%s
+}
+"""
+
+#: 같은 판단을 분기 합류로 쓴 형태 — `검사에 실패하면 기본값으로 바꾼다`.
+#: C 코퍼스 오탐 82건이 전부 이 모양이었다(strcmp 43 · regexec 39).
+DEFAULTED = [
+    ("strcmp 실패 시 기본값", "안전",
+     '    const char *safe = data;\n'
+     '    if (strcmp(data, "/bin/echo") != 0 && strcmp(data, "/bin/cat") != 0)\n'
+     '        safe = "/bin/echo";\n    system(safe);'),
+
+    ("준비 호출로 한 겹 감싼 regexec", "안전",
+     '    regex_t re;\n    const char *safe = data;\n'
+     '    if (regcomp(&re, "^[a-z]+$", REG_EXTENDED) == 0) {\n'
+     '        if (regexec(&re, data, 0, NULL, 0) != 0) safe = "config";\n'
+     '        regfree(&re);\n    }\n    system(safe);'),
+
+    # --- 경계선 ---
+    ("성공 쪽에서 바꾸면 증명이 안 된다", "취약",
+     '    const char *safe = data;\n'
+     '    if (strcmp(data, "/bin/echo") == 0) safe = "/bin/echo";\n    system(safe);'),
+
+    ("기본값이 아니라 오염을 넣는다", "취약",
+     '    const char *other = getenv("X");\n    const char *safe = "ls";\n'
+     '    if (strcmp(data, "a") != 0) safe = data;\n    system(safe);'),
+
+    ("검사 없이 덮어쓰기", "취약",
+     '    const char *safe = data;\n    if (getenv("MODE")) safe = "ls";\n'
+     '    system(safe);'),
+]
+
+
+@pytest.mark.parametrize("name,want,body", DEFAULTED, ids=[c[0] for c in DEFAULTED])
+def test_defaulted_on_failed_check(tmp_path, name, want, body):
+    f = tmp_path / "probe.c"
+    f.write_text(C_TPL % body, encoding="utf-8")
+    # C 도 cpp. 접두 규칙을 쓴다(같은 규칙 집합).
+    hit = any(x.rule_id == "cpp.command-injection" for x in scan_file(f, RULES))
+    if want == "취약":
+        assert hit, f"미탐: {name}"
+    else:
+        assert not hit, f"오탐: {name}"
