@@ -228,16 +228,21 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
-| BenchProctor (gin / net_http) | Go | 2,000 | ~70% | ~85% | **0.57** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~80% | ~85% | **0.66** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |
-| BenchProctor (express / koa) | JavaScript | 2,200 | ~59% | ~78% | **0.43** |
-| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.42** |
-| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.41** |
+| BenchProctor (express / koa) | JavaScript | 2,200 | ~66% | ~78% | **0.47** |
+| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~62% | ~79% | **0.45** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~56% | ~81% | **0.43** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
 | C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
 
-그대로 읽으면 이렇습니다. **Java·C++·Python·Go·C 는 실무에 쓸 수준, JS/TS·Ruby·PHP 는
-쓸 만한 수준, C# 은 아직 부족합니다.**
+그대로 읽으면 이렇습니다. **Java·C++·Python·Go 는 실무에 쓸 수준, C·JS/TS·Ruby 는
+쓸 만한 수준, PHP·C# 은 아직 부족합니다.**
+
+**DB·파일에서 읽은 값은 기본적으로 사용자 입력으로 봅니다** — 2차 주입과 저장형 XSS 가
+여기서 나옵니다. `--trust-stored-data` 로 끌 수 있습니다. 이 기본값은 취향이 아니라
+측정으로 정했습니다: 15개 스위트를 A/B 로 재니 손해 보는 곳이 하나도 없었고, Go 는
+취약 50건을 더 잡으면서 오탐은 9건만 늘었습니다.
 
 다만 **C·C++ 의 정밀도 100% 는 그대로 믿을 숫자가 아닙니다.** 표본이 400~500건으로
 작고, 이 코퍼스의 안전 변형이 두 가지 관용구(`검사(x) ? x : 기본값`, `검사 실패 시

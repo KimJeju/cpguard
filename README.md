@@ -225,15 +225,17 @@ Measured against **labelled ground truth in eight languages** — five corpora t
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
-| BenchProctor (gin / net_http) | Go | 2,000 | ~70% | ~85% | **0.57** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~80% | ~85% | **0.66** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |
-| BenchProctor (express / koa) | JavaScript | 2,200 | ~59% | ~78% | **0.43** |
-| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.42** |
-| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.41** |
+| BenchProctor (express / koa) | JavaScript | 2,200 | ~66% | ~78% | **0.47** |
+| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~62% | ~79% | **0.45** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~56% | ~81% | **0.43** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
 | C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
 
-Read it plainly: **Java, C++, Python, Go and C are at working-tool quality; JS/TS, Ruby and PHP are usable; C# is not there yet.** Where the score is low it is usually recall, not noise (C# recall is 30.5%).
+Read it plainly: **Java, C++, Python and Go are at working-tool quality; C, JS/TS and Ruby are usable; PHP and C# are not there yet.** Where the score is low it is usually recall, not noise (C# recall is 30.5%).
+
+**Values read out of a database or a file count as user input by default** — that is where second-order injection and stored XSS come from. Pass `--trust-stored-data` to turn it off. The default was chosen by measurement, not taste: across 15 suites, treating stored data as a source cost nothing anywhere and bought Go 50 extra true positives for 9 extra false ones.
 
 **Do not take the 100% precision on C/C++ at face value.** Those corpora are small (400-500 cases each) and their safe variants are generated from exactly two guard idioms (`check(x) ? x : default`, and "replace with a default when the check fails"). Teaching the engine to read those two took the false positives to zero in one step — that measures how completely the generator's rules were matched, not how varied real C code is. The 52-80% recall is the more honest signal. Kotlin and Swift have no public labelled corpus at all, so they are covered by idiom tests instead (see below).
 

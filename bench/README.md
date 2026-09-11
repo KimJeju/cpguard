@@ -14,23 +14,23 @@ CPGuard 의 데이터 흐름(taint) 탐지 정확도를 **라벨링된 정답지
 | [BenchProctor](#benchproctor-6언어) httplib | C++ | 400 | 80.0% | 100% | 0.0% | **0.800** |
 | [BenchProctor](#benchproctor-6언어) standalone | C++ | 400 | 77.0% | 100% | 0.0% | **0.770** |
 | [OWASP Benchmark for Python](#owasp-benchmark-java--python) | Python | 346 | 82.1% | 83.3% | 10.4% | **0.717** |
-| [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 71.4% | 83.8% | 13.8% | **0.576** |
-| [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 69.0% | 85.2% | 12.0% | **0.570** |
+| [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 81.4% | 83.9% | 15.6% | **0.658** |
+| [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 79.0% | 85.1% | 13.8% | **0.652** |
 | [BenchProctor](#benchproctor-6언어) standalone | C | 500 | 52.0% | 100% | 0.0% | **0.520** |
-| [BenchProctor](#benchproctor-6언어) express | JavaScript | 1,100 | 65.8% | 75.7% | 21.1% | **0.447** |
-| [BenchProctor](#benchproctor-6언어) express_ts | TypeScript | 1,100 | 62.5% | 76.3% | 19.5% | **0.431** |
-| [BenchProctor](#benchproctor-6언어) rails | Ruby | 1,200 | 56.2% | 81.0% | 13.2% | **0.430** |
-| [BenchProctor](#benchproctor-6언어) koa | JavaScript | 1,100 | 52.7% | 81.0% | 12.4% | **0.404** |
+| [BenchProctor](#benchproctor-6언어) express | JavaScript | 1,100 | 73.3% | 75.0% | 24.4% | **0.489** |
+| [BenchProctor](#benchproctor-6언어) express_ts | TypeScript | 1,100 | 70.0% | 75.5% | 22.7% | **0.473** |
+| [BenchProctor](#benchproctor-6언어) rails | Ruby | 1,200 | 59.2% | 81.2% | 13.7% | **0.455** |
+| [BenchProctor](#benchproctor-6언어) koa | JavaScript | 1,100 | 58.7% | 80.1% | 14.5% | **0.442** |
+| [BenchProctor](#benchproctor-6언어) nestjs | TypeScript | 1,100 | 54.0% | 81.8% | 12.0% | **0.420** |
 | [BenchProctor](#benchproctor-6언어) sinatra | Ruby | 1,200 | 52.7% | 80.6% | 12.7% | **0.400** |
-| [BenchProctor](#benchproctor-6언어) nestjs | TypeScript | 1,100 | 48.0% | 83.0% | 9.8% | **0.382** |
 | [PHP Vulnerability test suite](#php-vulnerability-test-suite-samate) | PHP | 31,824 | 47.0% | 66.4% | 10.1% | **0.369** |
 | [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 30.5% | 87.8% | 5.9% | **0.245** |
 | [DVWA](#dvwa-php-실제-앱-보조-지표) | PHP | 4 | 100% | 80% | — | (표본 소규모) |
 
 **점수 = 재현율 − 오탐률** (OWASP Benchmark 공식 지표, 무작위 추측 = 0.000).
 
-숫자를 그대로 읽는 법: **Java·C++·Python·Go·C(0.52~0.83) 는 실무 수준,
-JS·TS·Ruby·PHP(0.37~0.45) 는 쓸 만한 수준, C#(0.25) 은 아직 부족하다.**
+숫자를 그대로 읽는 법: **Java·C++·Python·Go(0.65~0.83) 는 실무 수준,
+C·JS·TS·Ruby(0.40~0.52) 는 쓸 만한 수준, PHP·C#(0.25~0.37) 은 아직 부족하다.**
 아래에 유형별 내역과 남은 원인을 적었다.
 
 **C·C++ 의 오탐 0 은 그대로 믿을 숫자가 아니다.** 표본이 400~500건으로 작고, 이
@@ -132,15 +132,15 @@ c·cpp** 의 quicktest 티어 11개 스위트(60,600 케이스)를 쓴다. 구�
 |---|---|---:|---:|---:|---:|---:|
 | C++ | httplib | 400 | 80.0% | 100% | 0.0% | 0.800 |
 | C++ | standalone | 400 | 77.0% | 100% | 0.0% | 0.770 |
-| Go | gin | 1,000 | 71.4% | 83.8% | 13.8% | 0.576 |
-| Go | net_http | 1,000 | 69.0% | 85.2% | 12.0% | 0.570 |
+| Go | gin | 1,000 | 81.4% | 83.9% | 15.6% | 0.658 |
+| Go | net_http | 1,000 | 79.0% | 85.1% | 13.8% | 0.652 |
 | C | standalone | 500 | 52.0% | 100% | 0.0% | 0.520 |
-| JavaScript | express | 1,100 | 65.8% | 75.7% | 21.1% | 0.447 |
-| TypeScript | express_ts | 1,100 | 62.5% | 76.3% | 19.5% | 0.431 |
-| Ruby | rails | 1,200 | 56.2% | 81.0% | 13.2% | 0.430 |
-| JavaScript | koa | 1,100 | 52.7% | 81.0% | 12.4% | 0.404 |
+| JavaScript | express | 1,100 | 73.3% | 75.0% | 24.4% | 0.489 |
+| TypeScript | express_ts | 1,100 | 70.0% | 75.5% | 22.7% | 0.473 |
+| Ruby | rails | 1,200 | 59.2% | 81.2% | 13.7% | 0.455 |
+| JavaScript | koa | 1,100 | 58.7% | 80.1% | 14.5% | 0.442 |
+| TypeScript | nestjs | 1,100 | 54.0% | 81.8% | 12.0% | 0.420 |
 | Ruby | sinatra | 1,200 | 52.7% | 80.6% | 12.7% | 0.400 |
-| TypeScript | nestjs | 1,100 | 48.0% | 83.0% | 9.8% | 0.382 |
 
 ## 이 코퍼스가 드러낸 것
 
@@ -309,6 +309,39 @@ C  standalone   0.192 → 0.520   오탐  82 → 0
 변형이 두 관용구로만 만들어져 있어서 나온 값이다. 재현율이 52~80% 에 머무는 쪽이 더
 정직한 신호다.
 
+## 저장소를 신뢰할 것인가 — A/B 로 정한 기본값
+
+`DB.QueryRow(...).Scan(&bio)` 로 읽은 값을 사용자 입력으로 볼 것인가. 2차 주입·저장형
+XSS 가 여기서 나온다. 미탐의 **29.6%(66건)** 가 걸려 있었다.
+
+기술이 아니라 **정책**이라 답을 정하지 않고 플래그 뒤에 넣어 15개 스위트를 A/B 로 쟀다.
+결과가 예상을 뒤집었다 — "DB 를 읽어 출력하는 정상 코드가 통째로 후보가 된다"고 봤는데
+**손해 보는 스위트가 하나도 없었다.**
+
+| | A (신뢰) | B (소스로 봄) | |
+|---|---:|---:|---|
+| Go gin | 0.576 | **0.658** | 취약 +50, 오탐 +9 — 교환비 5.6:1 |
+| Go net_http | 0.570 | **0.652** | 정밀도 83.8% → 83.9% 로 오히려 상승 |
+| JS·TS 4개 | | +0.011 씩 | 취약 +8, 오탐 +2 |
+| 나머지 7개 | | 변화 없음 | |
+
+그래서 **기본은 B**(저장소를 신뢰하지 않음)이고, `--trust-stored-data` 로 끌 수 있다.
+
+**변화 없는 스위트를 '안전 확인'으로 읽으면 안 된다.** 그 코퍼스에 저장소-소스 케이스가
+없는 것이다(Ruby·C#·Java 에 넣은 이름은 아예 걸리지 않았다). 그리고 실제 앱은 합성
+코퍼스보다 DB 를 훨씬 자주 읽는다 — 케이스당 한 번 읽고 바로 sink 로 가는 구조가 아니다.
+끌 수 있게 남겨 둔 이유가 그것이고, 이 코퍼스로는 그 위험이 보이지 않는다.
+
+곁에서 하나 더 나왔다. 상수 첨자 조기 종료가 **베이스의 경로를 모를 때도** 끊고 있었다.
+
+```js
+const row = (await db.query("SELECT text FROM comments")).rows[0].text;
+```
+
+`d["a"]` 가 깨끗함을 확인했으니 베이스로 되돌아가지 않는다는 최적화인데, 베이스가 호출
+결과라 경로가 안 나오면 **애초에 조회가 일어나지 않았다** — '깨끗함이 확인됐다'고 말할 수
+없다. 고치자 JS·TS 네 스위트와 rails 가 0.025~0.031 씩 올랐다.
+
 ## 이 코퍼스의 한계
 
 - **신생 프로젝트다.** 별 9개, 생성기는 비공개다. OWASP Benchmark·NIST SARD 와 같은
@@ -471,5 +504,5 @@ BenchProctor 에도, 논문 벤치마크에도 없다.
 | PHP CWE_79 | 미탐 다수 | 출력 문맥(HTML body / script / 속성)에 따라 답이 갈린다 |
 | C# CWE_89 | 재현율 낮음 | sink·구성 변형이 다른 CWE 보다 많다 |
 | 객체 필드 | 미분해 | 지금은 객체 단위 근사라 `obj.sanitize()` 로 필드가 씻긴 것을 못 본다 |
-| DB·파일이 소스인가 | 미결정 | Go 미탐의 29.6%. 2차 주입·저장형 XSS 관점에서는 소스가 맞지만 신뢰 경계를 어디로 볼지는 정책 문제다 |
+| 저장소 정책의 실앱 비용 | 미측정 | 기본 켜짐으로 정했지만(→ [위](#저장소를-신뢰할-것인가--ab-로-정한-기본값)), 실제 앱에서의 오탐 비용은 합성 코퍼스로 보이지 않는다 |
 | 정규식 검증 | 미해석 | 같은 `MatchString` 이라도 패턴이 HTML 메타문자를 허용하는지에 따라 답이 갈린다 |
