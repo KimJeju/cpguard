@@ -893,6 +893,17 @@ class _Worker:
                              prop="", computed=True,
                              index=self.expr(idx) if idx is not None else None)
 
+        # Go 의 채널 송신 `ch <- v` 는 결국 채널로의 대입이다. Opaque 로 접으면
+        # 오염이 여기서 끊긴다(수신 `<-ch` 쪽은 단항이라 이미 채널을 따라간다).
+        # 연산자를 '=' 로 두지 않는 이유: 채널은 컨테이너라 안전한 값을 한 번 보냈다고
+        # 앞서 담긴 오염이 사라지면 안 된다.
+        if t == "send_statement":
+            chan = child_by_field(node, "channel")
+            val = child_by_field(node, "value")
+            if chan is not None and val is not None:
+                return ir.Assign(loc=loc_of(node, self.file), operator="send",
+                                 target=self.expr(chan), value=self.expr(val))
+
         if t in s.assign:
             left = self._fld(node, s.assign_left) if s.assign_left else (kids[0] if kids else None)
             right = self._fld(node, s.assign_right) if s.assign_right else (kids[-1] if len(kids) > 1 else None)

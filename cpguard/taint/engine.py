@@ -315,6 +315,19 @@ def _env_lookup(path: str, env: dict[str, Trace], slots: bool = False) -> Trace 
     return None
 
 
+def _returns_of(fn: ir.Function):
+    """함수 본문의 return 문들(중첩 함수의 것은 빼고)."""
+    stack = list(fn.body)
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ir.Function):
+            continue
+        if isinstance(n, ir.Return):
+            yield n
+        for attr in ("body", "then", "orelse", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+
+
 def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
     """이 표현식이 오염됐으면 여기까지의 트레이스를, 아니면 None."""
     if node is None or isinstance(node, ir.Literal):
@@ -396,6 +409,8 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                 for i, a in enumerate(node.args):
                     if (i + csh) in summ.taints_self and (tr := _taint(a, env, ctx)):
                         return tr + [step]
+            if cp and (hit := _env_lookup(cp, env)) is not None:
+                return hit + [step]      # 변수에 담긴 클로저 — 위 ir.Function 참조
             return None  # 인자가 오염돼도 리턴으로 흐르지 않으면 오염 아님(정밀도)
 
         # 분석 대상 밖 함수. 표준 라이브러리처럼 동작이 선언된 것은 그대로 쓴다.
@@ -418,6 +433,18 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
                 return tr + [Step("propagation", node.loc, _snippet(node.loc, ctx.src),
                                   uncertain=True)]
         return _taint(node.callee, env, ctx)
+
+    if isinstance(node, ir.Function):
+        # capture := func() string { return data } — 요약은 **파라미터만** 본다.
+        # 바깥 변수를 잡아 돌려주는 클로저는 "인자가 리턴으로 흐르지 않는다"가 되어
+        # 통째로 끊긴다. 리턴식을 지금 환경에서 직접 재 보면 된다(파라미터로 가려진
+        # 이름은 제외 — 그쪽은 요약이 이미 맞게 처리한다).
+        shadow = {p.name for p in node.params}
+        inner = {k: v for k, v in env.items() if k.split(".")[0] not in shadow}
+        for r in _returns_of(node):
+            if tr := _taint(r.value, inner, ctx):
+                return tr + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
+        return None
 
     if isinstance(node, ir.Assign):
         return _taint(node.value, env, ctx)
@@ -959,14 +986,26 @@ def _drop_guarded(env: dict[str, Trace], guarded: set[str]) -> dict[str, Trace]:
             if not any(k == g or k.startswith(g + ".") for g in guarded)}
 
 
-def _run_nested(node: ir.Node, ctx: Ctx, env: dict[str, Trace] | None = None) -> None:
+def _run_nested(node: ir.Node, ctx: Ctx,
+                env: dict[str, Trace] | None = None) -> dict[str, Trace]:
     for fn in _iter_functions(node):
         # 클로저는 바깥 스코프를 그대로 붙잡는다. 빈 환경으로 돌리면 `v := 오염;
         # go func(){ 위험(v) }()` 같은 형태가 통째로 미탐이다 — Go 의 고루틴·defer,
         # JS 의 콜백이 전부 이 모양이다. 파라미터로 받는 값은 seed 가 따로 덮는다.
         captured = {k: v for k, v in (env or {}).items()
                     if not any(p.name == k.split(".")[0] for p in fn.params)}
-        _run_function(fn, ctx, seed={**captured, **(_callback_seed(fn, node, env, ctx) or {})})
+        out = _run_function(fn, ctx,
+                            seed={**captured, **(_callback_seed(fn, node, env, ctx) or {})})
+        # 클로저가 바깥 변수를 **쓰는** 쪽도 밖으로 나와야 한다.
+        #     go func() { ch <- data }();  v := <-ch
+        # 안에서 오염된 것만 올린다 — 안에서 정제됐다고 바깥의 오염을 지우면 안 된다
+        # (콜백이 언제 도는지 모르는 상태에서 지우는 쪽은 미탐을 만든다).
+        if env is not None and out:
+            inner_params = {p.name for p in fn.params}
+            for k, v in out.items():
+                if k.split(".")[0] not in inner_params and k not in env:
+                    env[k] = v
+    return env or {}
 
 
 #: 콜백에 원소를 넘겨주는 메서드. 수신자가 오염이면 콜백의 첫 인자도 오염이다.
@@ -1137,7 +1176,7 @@ def _annotated_env(fn: ir.Function, ctx: Ctx) -> dict[str, Trace]:
 
 
 def _run_function(fn: ir.Function, ctx: Ctx,
-                  seed: dict[str, Trace] | None = None) -> None:
+                  seed: dict[str, Trace] | None = None) -> dict[str, Trace]:
     """함수 본문을 분석한다(일반 파라미터 오염은 요약이 담당).
 
     seed 는 콜백처럼 호출부가 값을 직접 넘겨주는 경우의 시작 오염이다.
@@ -1148,7 +1187,7 @@ def _run_function(fn: ir.Function, ctx: Ctx,
         env = _annotated_env(fn, ctx)
         if seed:
             env = {**env, **seed}
-        _run(fn.body, env, ctx)
+        return _run(fn.body, env, ctx)
     finally:
         ctx.return_is_sink = prev
 
