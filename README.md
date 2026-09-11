@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white" alt="Django 5.2">
   <img src="https://img.shields.io/badge/languages-11-4da3ff" alt="11 languages">
   <img src="https://img.shields.io/badge/taint%20rules-78-4da3ff" alt="78 taint rules">
-  <img src="https://img.shields.io/badge/tests-253%20passing-2e7d32" alt="tests passing">
+  <img src="https://img.shields.io/badge/tests-519%20passing-2e7d32" alt="tests passing">
   <img src="https://img.shields.io/badge/OWASP%20Benchmark-Java%200.826%20·%20Python%200.717-2e7d32" alt="OWASP Benchmark">
   <img src="https://img.shields.io/badge/LLM-Claude%20%C2%B7%20GPT%20%C2%B7%20Gemini-8b5cf6" alt="LLM">
 </p>
@@ -224,16 +224,18 @@ Measured against **labelled ground truth in eight languages** — five corpora t
 |---|---|---:|---:|---:|---:|
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
+| BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
 | BenchProctor (gin / net_http) | Go | 2,000 | ~70% | ~85% | **0.57** |
+| BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |
 | BenchProctor (express / koa) | JavaScript | 2,200 | ~59% | ~78% | **0.43** |
 | BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.42** |
 | BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.41** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
 | C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
-| BenchProctor (standalone) | C | 500 | 52.0% | 61.3% | **0.192** |
-| BenchProctor (httplib / standalone) | C++ | 800 | ~79% | ~55% | **0.14** |
 
-Read it plainly: **Java, Python and Go are at working-tool quality; JS/TS, Ruby and PHP are usable; C#, C and C++ are not there yet.** Precision tells a different story from score — NestJS 83.0%, Koa 81.0% and C# 87.8% are close to Java's 88.7%. Where the score is low it is usually recall, not noise (C# recall is 30.5%) — except C++, which recalls 79% and loses the score to a 64% false-positive rate. Kotlin and Swift have no public labelled corpus at all, so they are covered by idiom tests instead (see below).
+Read it plainly: **Java, C++, Python, Go and C are at working-tool quality; JS/TS, Ruby and PHP are usable; C# is not there yet.** Where the score is low it is usually recall, not noise (C# recall is 30.5%).
+
+**Do not take the 100% precision on C/C++ at face value.** Those corpora are small (400-500 cases each) and their safe variants are generated from exactly two guard idioms (`check(x) ? x : default`, and "replace with a default when the check fails"). Teaching the engine to read those two took the false positives to zero in one step — that measures how completely the generator's rules were matched, not how varied real C code is. The 52-80% recall is the more honest signal. Kotlin and Swift have no public labelled corpus at all, so they are covered by idiom tests instead (see below).
 
 Config-only categories (`weakrand`, `crypto`, `hash`, `securecookie`, `trustbound`) are not data-flow problems and are excluded rather than counted as free wins. Categories that *are* data-flow problems but that CPGuard has no rule for (NoSQL injection, SSTI, prototype pollution, XXE …) are reported **separately** from those, so coverage is not quietly inflated.
 
