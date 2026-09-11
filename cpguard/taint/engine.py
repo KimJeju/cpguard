@@ -489,9 +489,14 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
             if hit is not None:
                 return hit + [Step("propagation", node.loc, _snippet(node.loc, ctx.src))]
         if isinstance(node, ir.Member):
-            if node.computed and _const_key(node.index) is not None:
+            if (node.computed and _const_key(node.index) is not None
+                    and path_of(node.obj) is not None):
                 # 상수 키로 슬롯을 특정했고 그 슬롯이 깨끗한 것이 확정이다. 베이스로
                 # 되돌아가면 다른 슬롯의 오염이 딸려 나와 키 단위 정밀도가 사라진다.
+                #
+                # 단 **베이스의 경로를 알 때만** 확정이다. `(await db.query(…)).rows[0]`
+                # 처럼 베이스가 호출 결과라 경로가 안 나오면 위 조회가 애초에 일어나지
+                # 않았으므로 '깨끗함이 확인됐다'고 말할 수 없다 — 그대로 내려가야 한다.
                 return None
             if node.computed:
                 # 인덱스를 특정할 수 없는 읽기 — 컨테이너의 어느 슬롯이든 나올 수 있다.

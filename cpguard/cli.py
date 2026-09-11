@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from collections import Counter
 import multiprocessing
 import sys
@@ -92,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--provider", choices=["claude", "openai", "gemini"],
                     help="트리아지에 쓸 LLM (생략 시 키가 있는 것을 자동 선택)")
     sc.add_argument("--model", help="프로바이더의 모델명 재정의")
+    sc.add_argument("--trust-stored-data", action="store_true",
+                    help="DB·파일에서 읽은 값을 사용자 입력으로 보지 않는다"
+                         " (기본은 소스로 봄 — 2차 주입·저장형 XSS)")
     sc.add_argument("-j", "--jobs", type=int, default=1,
                     help="파싱 병렬 워커 수 (기본 1; 대형 프로젝트에서만 이득)")
     sc.add_argument("--fail-on", choices=["critical", "high", "medium", "low", "info", "none"],
@@ -138,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
     if not root.exists():
         print(f"경로 없음: {root}", file=sys.stderr)
         return 2
+
+    if args.trust_stored_data:
+        # 규칙 로딩 시점에 읽으므로 스캔 전에 세운다.
+        os.environ["CPGUARD_TRUST_STORED_DATA"] = "1"
 
     findings, report = scan_path(root, jobs=args.jobs)
 

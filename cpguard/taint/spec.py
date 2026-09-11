@@ -155,6 +155,55 @@ def _read_specs(directory: Path) -> dict[str, dict]:
     return out
 
 
+#: 저장소(DB·파일)에서 읽은 값을 사용자 입력으로 본다 — **기본 켜짐**.
+#:
+#: 2차 주입·저장형 XSS 는 여기서 나온다. 신뢰 경계를 어디로 볼지는 조직마다 다르므로
+#: `--trust-stored-data`(또는 `CPGUARD_TRUST_STORED_DATA=1`)로 끌 수 있다.
+#:
+#: 켜는 쪽으로 정한 근거는 측정이다. 15개 스위트를 A/B 로 재니 **손해 보는 스위트가
+#: 하나도 없었다** — Go 는 취약 50건을 더 잡고 오탐은 9건 늘어(교환비 5.6:1) 정밀도가
+#: 오히려 올랐고(83.8% → 83.9%), JS·TS 는 +8/+2, 나머지 7개 스위트는 변화가 없었다.
+#: "DB 를 읽어 출력하는 정상 코드가 통째로 후보가 된다"는 예상이 빗나갔다.
+#:
+#: 한계도 분명하다. 변화 없는 스위트는 '안전이 확인된 것'이 아니라 **그 코퍼스에
+#: 저장소-소스 케이스가 없는 것**이고, 실제 앱은 합성 코퍼스보다 DB 를 훨씬 자주 읽는다.
+#: 끌 수 있게 남겨 둔 이유가 그것이다.
+#:
+#: 형태는 BenchProctor 코퍼스에서 실측한 것이다(추측 아님).
+_STORE_SOURCES: dict[str, list[dict]] = {
+    "go": [{"pattern": "outparam", "arg": 0, "name": ["Scan"]},
+           {"pattern": "name", "name": ["os.ReadFile", "ioutil.ReadFile", "os.Open"]}],
+    "javascript": [{"pattern": "name", "name": [
+        "db.query", "db.execute", "db.querySync", "db.collection", "db.get", "db.all",
+        "readFileSync", "fs.readFileSync", "fs.readFile", "readFile"]}],
+    "typescript": [{"pattern": "name", "name": [
+        "db.query", "db.execute", "db.querySync", "db.collection", "db.get", "db.all",
+        "readFileSync", "fs.readFileSync", "fs.readFile", "readFile"]}],
+    "ruby": [{"pattern": "name", "name": [
+        "find_by", "find_by_sql", "exec_query", "File.read", "IO.read"]}],
+    "java": [{"pattern": "name", "name": [
+        "getString", "getObject", "readAllBytes", "readString"]}],
+    "php": [{"pattern": "name", "name": [
+        "mysqli_fetch_assoc", "mysqli_fetch_array", "mysqli_fetch_row",
+        "mysqli_fetch_object", "pg_fetch_assoc", "pg_fetch_array", "pg_fetch_row",
+        "fetch", "fetchAll", "fetchColumn", "file_get_contents", "fgets", "fread"]}],
+    "csharp": [{"pattern": "name", "name": [
+        "GetString", "GetValue", "ReadAllText", "ReadAllLines", "ReadLine"]}],
+    "c": [{"pattern": "name", "name": ["sqlite3_column_text", "sqlite3_column_blob"]}],
+    "cpp": [{"pattern": "name", "name": ["sqlite3_column_text", "sqlite3_column_blob"]}],
+}
+
+
+def _add_store_sources(specs: dict[str, dict]) -> None:
+    """저장소 읽기를 소스로 더한다."""
+    for d in specs.values():
+        extra: list[dict] = []
+        for lang in _as_list(d.get("languages")) or ["javascript", "typescript"]:
+            extra += _STORE_SOURCES.get(lang, [])
+        if extra:
+            d["sources"] = list(d.get("sources") or []) + extra
+
+
 def load_rules(directory: str | Path | None = None, language: str | None = None,
                user_dir: str | Path | None = None) -> list[Rule]:
     """동봉 규칙 + 사용자 오버레이. user_dir=False 로 오버레이를 끌 수 있다."""
@@ -171,6 +220,9 @@ def load_rules(directory: str | Path | None = None, language: str | None = None,
     for rid, d in specs.items():
         for old_id in _as_list(d.get("legacy_ids")):
             RULE_ALIASES[old_id] = rid
+
+    if os.environ.get("CPGUARD_TRUST_STORED_DATA") != "1":
+        _add_store_sources(specs)
 
     rules = [rule_from_dict(d) for _, d in sorted(specs.items())]
     if language:
