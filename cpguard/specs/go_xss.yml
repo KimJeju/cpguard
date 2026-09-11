@@ -251,12 +251,24 @@ sinks:
   - Fprintf
   - Fprint
   - Fprintln
-  - WriteString
   - template.HTML
   - template.JS
   - template.URL
+  - c.Data
+  - c.String
+  - c.HTML
+  - ctx.Data
+  - ctx.String
+  - ctx.HTML
+  - w.Write
+  - w.WriteString
+  - rw.Write
+  - io.WriteString
 sanitizers:
 - callee:
+  - Sanitize
+  - bluemonday.UGCPolicy
+  - bluemonday.StrictPolicy
   - EscapeString
   - HTMLEscapeString
   - html.EscapeString
@@ -266,8 +278,6 @@ sanitizers:
   - Atoi
   - ParseInt
   - strconv.ParseInt
-  - filepath.Clean
-  - Clean
   - filepath.Base
   - Base
   - MatchString

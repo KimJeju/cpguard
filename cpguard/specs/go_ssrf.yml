@@ -256,6 +256,9 @@ sinks:
   - http.NewRequestWithContext
   - NewRequest
   - NewRequestWithContext
+  - net.Dial
+  - net.DialTimeout
+  - net.DialTCP
   arg: 0
 sanitizers:
 - callee:
@@ -268,8 +271,6 @@ sanitizers:
   - Atoi
   - ParseInt
   - strconv.ParseInt
-  - filepath.Clean
-  - Clean
   - filepath.Base
   - Base
   - MatchString

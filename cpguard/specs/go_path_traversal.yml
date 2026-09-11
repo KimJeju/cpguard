@@ -276,8 +276,6 @@ sanitizers:
   - Atoi
   - ParseInt
   - strconv.ParseInt
-  - filepath.Clean
-  - Clean
   - filepath.Base
   - Base
   - MatchString
