@@ -245,6 +245,12 @@ sources:
   name:
   - Unmarshal
   - NewDecoder
+- pattern: outcopy
+  arg: 0
+  name:
+  - Fprintf
+  - Fprint
+  - Fprintln
 sinks:
 - pattern: call
   callee:

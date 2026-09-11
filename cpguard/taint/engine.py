@@ -598,7 +598,12 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
 _MUTATORS = ("add", "addAll", "addFirst", "addLast", "put", "putAll", "putIfAbsent",
              "append", "insert", "push", "offer", "offerLast", "write", "concat",
              # ConfigParser.set(섹션, 키, 값) · List.set(i, x) · AtomicReference.set(x)
-             "set")
+             "set",
+             # Go·C# 은 메서드가 대문자로 시작한다. strings.Builder 누적
+             # (b.WriteString(오염) → b.String())과 atomic.Value 저장(v.Store(오염) →
+             # v.Load())이 전부 이 형태다 — 이름만 모르고 있었다.
+             "Write", "WriteString", "WriteByte", "WriteRune", "Store",
+             "Add", "Append", "Insert", "Push", "Put", "Set")
 
 
 # 키가 리터럴인 맵 접근은 키 단위로 구분한다. map.put("a", 오염) 뒤에 map.get("b") 를

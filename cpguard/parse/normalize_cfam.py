@@ -722,6 +722,22 @@ class _Worker:
         # for-each (for (T v : coll) / foreach (var v in coll)): 반복 변수는 순회 대상의 원소다.
         # 대상이 오염됐으면 변수도 오염된 것으로 보고(과대근사) 본문 앞에 바인딩을 넣는다.
         # 이게 없으면 컬렉션으로 들어온 사용자 입력이 루프 안에서 통째로 사라진다.
+        # Go 의 range 는 반복 변수와 대상이 for_statement 가 아니라 range_clause 에
+        # 달려 있다. 게다가 left 는 `_, p` / `k, v` 처럼 둘이고 **값은 뒤쪽**이다
+        # (앞은 인덱스나 키). 하나뿐인 `for i := range xs` 는 인덱스만 받는 형태라
+        # 묶지 않는다 — 인덱스에 컬렉션의 오염을 주면 과대근사가 지나치다.
+        rng = next((c for c in self._named(node) if c.type == "range_clause"), None)
+        if rng is not None:
+            left = child_by_field(rng, "left")
+            kids = self._named(left) if left is not None else []
+            it = child_by_field(rng, "right")
+            var = kids[-1] if len(kids) >= 2 else None
+            if it is not None and var is not None:
+                stmts = [ir.Assign(loc=loc_of(node, self.file),
+                                   target=ir.Ident(loc=loc_of(var, self.file), name=text_of(var)),
+                                   value=self.expr(it), operator="declare")] + stmts
+            return ir.Loop(loc=loc_of(node, self.file), test=None, body=stmts)
+
         it = child_by_field(node, "value") or child_by_field(node, "right")
         var = child_by_field(node, "name") or child_by_field(node, "left")
         if it is not None and var is not None:
