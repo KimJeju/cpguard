@@ -179,5 +179,7 @@ sanitizers:
   - std::filesystem::canonical
   - canonical
   - basename
+  - filename
+  - std::filesystem::path
   - std::regex_match
   - regex_match

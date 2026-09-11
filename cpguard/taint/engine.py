@@ -315,6 +315,67 @@ def _env_lookup(path: str, env: dict[str, Trace], slots: bool = False) -> Trace 
     return None
 
 
+def _compared_paths(test: ir.Node, op: str) -> set[str] | None:
+    """`x == "a"` 형태로 상수와 맞춰 본 경로들. 비교가 하나도 없으면 None."""
+    out: set[str] = set()
+    found = False
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if isinstance(n, ir.Binary) and n.op == op and len(n.children) == 2:
+            a, b = n.children
+            for x, y in ((a, b), (b, a)):
+                if _is_const(y) and _var_rooted(x) and (q := path_of(x)):
+                    out.add(q)
+                    found = True
+        for attr in ("callee", "obj", "value", "target", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out if found else None
+
+
+def _const_selected(node: ir.Ternary, env: dict[str, Trace], ctx: Ctx) -> bool:
+    """`검사(x) ? x : 상수` — 결과가 반드시 미리 정해진 값인가.
+
+        safe = (data == "asc" || data == "desc") ? data : std::string("asc");
+        system(safe.c_str());
+
+    참 분기를 타면 data 는 비교한 상수 중 하나이고, 거짓 분기는 상수다. 그러므로
+    safe 는 어느 쪽이든 상수다 — 과대근사가 아니라 **확정**이다. C++ 코퍼스 오탐
+    130건 중 117건이 이 형태였다.
+
+    조건에 나오는 검사가 전부 **남기는 값 하나만** 가리킬 때만 인정한다.
+    `(a == "x" || b == "y") ? a : 상수` 는 b 쪽으로 참이 될 수 있어 a 가 상수라는
+    보장이 없다.
+    """
+    if len(node.children) != 3:
+        return False
+    test, then, orelse = node.children
+    for keep, other, positive in ((then, orelse, True), (orelse, then, False)):
+        p = path_of(keep)
+        # 반대편은 '리터럴'이 아니라 '오염이 없는 값'이면 된다. C++ 은 기본값을
+        # std::string("asc") 처럼 생성자로 쓰기 때문에 리터럴만 보면 하나도 안 걸린다.
+        if not p or not _var_rooted(keep) or _taint(other, env, ctx) is not None:
+            continue
+        checked = _compared_paths(test, "==" if positive else "!=")
+        if checked is not None:
+            # 동등비교는 **전부 같은 경로**여야 한다. `(a == "x" || b == "y") ? a : 상수`
+            # 는 b 쪽으로 참이 될 수 있어 a 가 상수라는 보장이 없다.
+            if checked == {p}:
+                return True
+            continue
+        if positive:
+            # regex_match(data, re) ? data : "default" — 검사 호출 형태. 이쪽은 설정
+            # 인자(정규식 객체)도 같이 걸리므로 포함 여부만 본다.
+            if p in (_guarded_paths(test, ctx) | _lookup_guarded(test)):
+                return True
+    return False
+
+
 def _returns_of(fn: ir.Function):
     """함수 본문의 return 문들(중첩 함수의 것은 빼고)."""
     stack = list(fn.body)
@@ -448,6 +509,9 @@ def _taint(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> Trace | None:
 
     if isinstance(node, ir.Assign):
         return _taint(node.value, env, ctx)
+
+    if isinstance(node, ir.Ternary) and _const_selected(node, env, ctx):
+        return None      # 어느 쪽을 타든 미리 정해진 값이다
 
     if isinstance(node, ir.FOLDED):
         # (int)$x · (float)$x — 숫자로 바꾼 값은 payload 를 담을 수 없다. 규칙과 무관한
