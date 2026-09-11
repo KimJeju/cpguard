@@ -829,6 +829,104 @@ def _lookup_guarded(test: ir.Node) -> set[str]:
     return out
 
 
+#: nil 비교는 검증이 아니다 — 값이 있느냐를 물었을 뿐 무슨 값인지는 안 봤다.
+_NULLS = frozenset({"nil", "null", "NULL", "None", "undefined"})
+
+
+def _is_const(node: ir.Node) -> bool:
+    """변수를 하나도 거치지 않는 식인가(리터럴 / 리터럴 조각으로 된 문자열).
+
+    문자열 리터럴이 언어에 따라 Literal 이 아니라 조각을 가진 Opaque 로 오기 때문에
+    `_const_key` 로는 Go 의 `"metadata"` 를 집지 못한다. 값을 꺼내는 게 아니라
+    '상수인가'만 물으면 되므로 변수의 부재로 판단한다.
+    """
+    found = False
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, (ir.Ident, ir.Member, ir.Call)):
+            return False
+        if isinstance(n, ir.Literal):
+            if (n.raw or "").strip() in _NULLS:
+                return False
+            found = True
+        elif isinstance(n, ir.Opaque) and n.kind.endswith("string_literal"):
+            found = True
+        stack.extend(c for c in (getattr(n, "children", None) or [])
+                     if isinstance(c, ir.Node))
+    return found
+
+
+def _rejected_paths(test: ir.Node) -> set[str]:
+    """거부-후-return 분기의 조건이 **검사한** 경로들.
+
+    `_validated_paths` 는 규칙의 validators 토큰(Contains·MatchString·Atoi …)에
+    걸린 것만 인정한다. 실제 거부 코드는 그 목록에 없는 형태가 더 많다.
+
+        if host == "metadata" || host == "metadata.google.internal" { 거부 }
+        if !allowed[parsedURL.Hostname()] { 거부 }
+        if ip.IsPrivate() || ip.IsLoopback() { 거부 }
+
+    셋 다 "값을 보고 아니면 돌려보낸다"는 같은 일을 한다. 무엇을 검사로 인정할지가
+    이 함수의 전부다 — 넓히면 오탐이 줄고 재현율이 깎인다. `len(data) > 100` 은
+    검사가 아니다(길이를 봤을 뿐 값은 그대로다). 그 경계가 테스트에 박혀 있다.
+
+    호출부는 `_always_exits(then)` 인 분기에서만 부르므로 '거부한다'는 이미 참이다.
+    """
+    out: set[str] = _lookup_guarded(test)
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if isinstance(n, ir.Binary) and n.op in ("==", "!=") and len(n.children) == 2:
+            # host == "metadata" — 값을 정해진 이름과 맞춰 본다.
+            a, b = n.children
+            for x, y in ((a, b), (b, a)):
+                if _is_const(y) and _var_rooted(x) and (p := path_of(x)):
+                    out.add(p)
+        elif (isinstance(n, ir.Call) and not n.args
+                and isinstance(n.callee, ir.Member) and _var_rooted(n.callee.obj)):
+            # ip.IsPrivate() / ip.IsLoopback() — 값 자체에 성질을 물었다.
+            # 인자가 있으면 제외한다: len(data) > 100 처럼 값을 인자로 넘겨 **다른 것**을
+            # 계산한 형태는 값을 본 게 아니다. 그 경계가 재현율을 지킨다.
+            if p := path_of(n.callee.obj):
+                out.add(p)
+        for attr in ("callee", "obj", "value", "target", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out
+
+
+def _derived_origins(env: dict[str, Trace], guarded: set[str]) -> set[str]:
+    """guarded 경로가 파생돼 나온 **조상** 경로들.
+
+        data      ← 소스
+        parsedURL ← url.Parse(data)
+        host      ← parsedURL.Hostname()
+
+    `host` 를 검증했으면 `parsedURL` 과 `data` 도 같은 값의 다른 모습이다.
+    별도의 자료구조는 필요 없다 — env 의 Trace 가 이미 유래를 들고 있다.
+    `host` 의 트레이스는 `data` 의 트레이스로 시작한다. 형제(`other := data + "x"`)는
+    갈라진 지점이 달라 그렇지 않다. 조상만 지우고 형제는 남기는 것이 계약이다.
+    """
+    out: set[str] = set()
+    for g in guarded:
+        # 검증된 경로가 env 에 그대로 없을 수 있다 — `allowed[parsedURL.Hostname()]`
+        # 의 키는 `parsedURL.Hostname` 이지만 오염을 들고 있는 것은 `parsedURL` 이다.
+        tr = None
+        while g and (tr := env.get(g)) is None:
+            g = g.rpartition(".")[0]
+        if not tr:
+            continue
+        for k, t in env.items():
+            if k != g and len(t) < len(tr) and tr[:len(t)] == t:
+                out.add(k)
+    return out
+
+
 def _always_exits(stmts: list[ir.Node]) -> bool:
     """이 블록이 끝까지 가지 않고 반드시 빠져나가는가.
 
@@ -985,7 +1083,8 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
             if _always_exits(s.then):
                 # 참 분기가 돌아가 버리면 그 안의 상태는 이어지지 않는다. 그리고 그
                 # 분기가 "형태가 잘못됐으면 거부"였다면, 이어지는 코드에서는 검증된 값이다.
-                env = _drop_guarded(else_env, _validated_paths(s.test, ctx))
+                clean = _validated_paths(s.test, ctx) | _rejected_paths(s.test)
+                env = _drop_guarded(else_env, clean | _derived_origins(else_env, clean))
             else:
                 env = _merge(then_env, else_env)
 

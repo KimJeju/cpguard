@@ -254,7 +254,6 @@ sinks:
   - http.PostForm
   - http.NewRequest
   - http.NewRequestWithContext
-  - url.Parse
   - NewRequest
   - NewRequestWithContext
   arg: 0

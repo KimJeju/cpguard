@@ -227,20 +227,20 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 |---|---|---:|---:|---:|---:|
 | OWASP Benchmark v1.2 | Java | 1,572 | 93.4% | 88.4% | **0.801** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
-| BenchProctor (express / koa) | JavaScript | 2,200 | ~59% | ~78% | **0.42** |
-| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.41** |
-| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~76% | **0.37** |
+| BenchProctor (express / koa) | JavaScript | 2,200 | ~58% | ~78% | **0.42** |
+| BenchProctor (rails / sinatra) | Ruby | 2,400 | ~54% | ~81% | **0.41** |
+| BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~55% | ~80% | **0.40** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
+| BenchProctor (gin / net_http) | Go | 2,000 | ~44% | ~79% | **0.32** |
 | C# Vulnerability Test Suite | C# | 33,024 | 30.0% | 87.8% | **0.242** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 61.3% | **0.192** |
-| BenchProctor (gin / net_http) | Go | 2,000 | ~44% | ~61% | **0.16** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~60% | ~54% | **0.10** |
 
 그대로 읽으면 이렇습니다. **Java·Python 은 실무에 쓸 수준, JS/TS·Ruby·PHP 는 쓸 만한
-수준, C#·C·Go·C++ 는 아직 부족합니다.** Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
+수준, Go·C#·C·C++ 는 아직 부족합니다.** Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
 관용구 테스트로 대신합니다(아래).
 
-정밀도만 보면 순서가 다릅니다 — NestJS 83.2% · Koa 81.1% · C# 87.8% 는 자바(88.4%)에
+정밀도만 보면 순서가 다릅니다 — NestJS 83.1% · Koa 81.0% · C# 87.8% 는 자바(88.4%)에
 가깝습니다. 점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**입니다
 (C# 재현율 30.0%).
 
@@ -254,7 +254,9 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 문제, for-each 반복 변수가 컬렉션의 오염을 잃던 문제, 경로 민감도 부재, 컨테이너 변경
 미전파, 비교 연산 결과가 오염을 옮기던 문제, 생성자→필드→메서드 흐름이 **네 언어 전부에서**
 미탐이던 문제, 리턴이 아니라 인자로 결과를 내주는 입력 API(`fgets(buf, …)`·`Decode(&v)`)
-미모델링, **클로저를 빈 환경으로 실행해** 붙잡은 변수가 전부 깨끗해 보이던 문제.
+미모델링, **클로저를 빈 환경으로 실행해** 붙잡은 변수가 전부 깨끗해 보이던 문제, 그리고
+가장 최근에는 검증이 오염값 자체가 아니라 그 **투영**에 걸릴 때(`if !allowed[url.Parse(x).Hostname()] { 거부 }`)
+원본이 오염으로 남던 문제 — Go 오탐의 59% 가 이 하나였습니다.
 각 수정은 테스트케이스에 맞춘 것이 아니라 일반적인 분석 기법입니다. 단계별 전후 기록은
 [`bench/README.md`](bench/README.md) 에 있습니다.
 
