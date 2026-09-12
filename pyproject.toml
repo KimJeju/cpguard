@@ -30,10 +30,10 @@ dependencies = [
 
 [project.scripts]
 cpguard = "cpguard.cli:main"
+cpguard-mcp = "cpguard.mcp.server:main"
 
 [project.gui-scripts]
 cpguard-app = "cpguard.desktop:main"
-cpguard-mcp = "cpguard.mcp.server:main"
 
 [project.optional-dependencies]
 dev = ["pytest", "pypdf"]
