@@ -46,12 +46,41 @@ def build_server():
     """
     from mcp.server.mcpserver import MCPServer
 
+    from . import tools
+
     server = MCPServer(SERVER_NAME)
+    store = tools.FindingStore()      # 세션 상태 — 이 서버 프로세스 한 대화 분량
 
     @server.tool(name="cpguard.health",
                  description="CPGuard 서버 상태와 규칙·언어 수를 반환한다(분석 안 함).")
     def _health() -> dict:
         return health()
+
+    @server.tool(name="scan_file",
+                 description="소스 파일 하나를 빠르게 진단하고 요약(흐름 단계 없음)을 "
+                             "반환한다. 찾은 건은 finding.evidence·explain 이 쓰도록 id 로 저장된다.")
+    def _scan_file(path: str) -> dict:
+        return tools.scan_file(store, path)
+
+    @server.tool(name="finding.list",
+                 description="저장된 취약점을 심각도·규칙·파일 필터와 페이지로 나열한다"
+                             "(기본 20건, 요약만). severity 는 목록, rule·file 은 부분일치.")
+    def _finding_list(severity: list[str] | None = None, rule: str | None = None,
+                      file: str | None = None, limit: int = 20, offset: int = 0) -> dict:
+        return tools.finding_list(store, severity, rule, file, limit, offset)
+
+    @server.tool(name="finding.evidence",
+                 description="취약점 하나의 source→sink 데이터 흐름 경로를 반환한다"
+                             "(왜 취약으로 판단했는지의 근거).")
+    def _finding_evidence(finding_id: str) -> dict:
+        return tools.finding_evidence(store, finding_id)
+
+    @server.tool(name="explain",
+                 description="규칙의 설명·CWE·조치 권고·안전 예시를 반환한다(LLM 호출 없음). "
+                             "finding_id 또는 rule_id 로 조회. lang='en' 으로 영문.")
+    def _explain(rule_id: str | None = None, finding_id: str | None = None,
+                 lang: str = "ko") -> dict:
+        return tools.explain(store, rule_id, finding_id, lang)
 
     return server
 
