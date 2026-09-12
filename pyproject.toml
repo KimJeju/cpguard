@@ -33,9 +33,11 @@ cpguard = "cpguard.cli:main"
 
 [project.gui-scripts]
 cpguard-app = "cpguard.desktop:main"
+cpguard-mcp = "cpguard.mcp.server:main"
 
 [project.optional-dependencies]
 dev = ["pytest", "pypdf"]
+mcp = ["mcp>=2.0"]
 triage = ["anthropic>=0.40"]
 desktop = ["pywebview>=5.0"]
 openai = ["openai>=1.40"]
