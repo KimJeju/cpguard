@@ -200,3 +200,55 @@ def test_verdict_false_positive_when_static_safe(tmp_path):
 def test_stage3_tools_registered():
     names = {t.name for t in server.build_server()._tool_manager.list_tools()}
     assert {"probe.get", "validation.submit"} <= names
+
+
+# ── MVP 이후: 비동기 전체 감사 (scan_start · scan_status) ──
+
+import time as _time  # noqa: E402
+
+from cpguard.mcp import jobs as _jobs  # noqa: E402
+
+
+def _wait(runner, job_id, timeout=30.0):
+    end = _time.time() + timeout
+    while _time.time() < end:
+        st = runner.status(job_id)
+        if st.get("status") in ("completed", "failed"):
+            return st
+        _time.sleep(0.05)
+    return runner.status(job_id)
+
+
+def test_scan_start_runs_and_populates_store(tmp_path):
+    (tmp_path / "a.go").write_text(_GO_VULN, encoding="utf-8")
+    (tmp_path / "safe.go").write_text(
+        "package h\nfunc F() { _ = 1 }\n", encoding="utf-8")
+    store = tools.FindingStore()
+    runner = _jobs.JobRunner(store)
+
+    started = runner.start(str(tmp_path))
+    assert started["job_id"].startswith("scan_")
+
+    st = _wait(runner, started["job_id"])
+    assert st["status"] == "completed", st
+    assert st["found"] >= 1 and st["counts"]        # 숫자만
+    assert "findings" not in st                     # 목록을 붓지 않는다(토큰 예산)
+
+    # 완료 후 finding.list 가 그 결과를 이어받는다
+    assert tools.finding_list(store)["total"] == st["found"]
+
+
+def test_scan_status_unknown_job():
+    runner = _jobs.JobRunner(tools.FindingStore())
+    assert runner.status("scan_nope")["error"] == "unknown_job"
+
+
+def test_scan_start_missing_root():
+    runner = _jobs.JobRunner(tools.FindingStore())
+    assert runner.start("no/such/dir")["error"] == "not_found"
+
+
+@_needs_mcp
+def test_async_tools_registered():
+    names = {t.name for t in server.build_server()._tool_manager.list_tools()}
+    assert {"scan_start", "scan_status"} <= names

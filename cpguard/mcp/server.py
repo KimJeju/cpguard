@@ -46,10 +46,11 @@ def build_server():
     """
     from mcp.server.mcpserver import MCPServer
 
-    from . import tools
+    from . import jobs, tools
 
     server = MCPServer(SERVER_NAME)
     store = tools.FindingStore()      # 세션 상태 — 이 서버 프로세스 한 대화 분량
+    runner = jobs.JobRunner(store)    # 비동기 스캔 작업 — 같은 store 를 채운다
 
     @server.tool(name="cpguard.health",
                  description="CPGuard 서버 상태와 규칙·언어 수를 반환한다(분석 안 함).")
@@ -81,6 +82,20 @@ def build_server():
     def _explain(rule_id: str | None = None, finding_id: str | None = None,
                  lang: str = "ko") -> dict:
         return tools.explain(store, rule_id, finding_id, lang)
+
+    @server.tool(name="scan_start",
+                 description="리포/디렉터리 전체를 비동기로 감사한다. 즉시 job_id 를 "
+                             "반환하고 백그라운드로 스캔한다(분 단위). 진행·결과는 "
+                             "scan_status 로 확인. 찾은 건은 finding.list 로 이어받는다.")
+    def _scan_start(root: str, jobs: int = 1) -> dict:
+        return runner.start(root, jobs)
+
+    @server.tool(name="scan_status",
+                 description="scan_start 작업의 상태를 숫자만 반환한다(queued·running·"
+                             "completed·failed, 진행률·심각도별 건수). 완료되면 finding.list "
+                             "로 결과를 가져간다 — findings 를 통째로 붓지 않는다.")
+    def _scan_status(job_id: str) -> dict:
+        return runner.status(job_id)
 
     @server.tool(name="probe.get",
                  description="취약점 하나를 동적 실증용 탐침으로 반환한다 — 진입점(메서드·"
