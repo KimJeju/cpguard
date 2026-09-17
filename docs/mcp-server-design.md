@@ -218,3 +218,59 @@ validation.submit    관찰결과 받아 4분류 판정
   "실제 실행 경로 확인"이라고 보고하지 않는다 — "예측한 관찰이 나타났다"로 적는다.
 - 고객이 **CPGuard 단독 턴키 실증**(에이전트 없이 버튼 하나)을 원하면 이 설계(B)로는
   안 된다 — A로 다시 봐야 한다. 현재 전제는 "IDE 에이전트가 항상 건너편에 있다"이다.
+
+## 설치 · 등록 (Claude Code)
+
+MCP 는 선택 의존성이다. 먼저 대상 환경에 설치한다.
+
+```bash
+pip install "cpguard[mcp]"        # 또는: pip install -e ".[mcp]"
+```
+
+**핵심 함정:** Claude Code 가 띄우는 stdio 서버는 이 파이썬 환경을 물려받지 않는다.
+`cpguard-mcp` 이름만 주면 PATH 에서 못 찾는다. **전체 실행 경로**를 박거나, `conda`/
+`venv` 를 감싸는 형태로 등록한다.
+
+### 방법 1 — CLI
+
+```bash
+# 이 프로젝트에서만(-s local) / 전 프로젝트(-s user) / 팀 공유(-s project)
+claude mcp add cpguard -s user "<env>/Scripts/cpguard-mcp.exe"   # Windows
+claude mcp add cpguard -s user "<env>/bin/cpguard-mcp"           # macOS·Linux
+```
+
+### 방법 2 — `.mcp.json` (프로젝트 루트, 팀 공유)
+
+```json
+{
+  "mcpServers": {
+    "cpguard": { "command": "<env>/bin/cpguard-mcp", "args": [] }
+  }
+}
+```
+
+Windows 는 경로 백슬래시를 `\` 로 이스케이프한다. 팀원마다 env 경로가 다르면 방법 3.
+
+### 방법 3 — 환경 래퍼 (경로 안 박음, 이식성)
+
+```json
+{
+  "mcpServers": {
+    "cpguard": {
+      "command": "conda",
+      "args": ["run", "--no-capture-output", "-n", "cpguard", "cpguard-mcp"]
+    }
+  }
+}
+```
+
+`conda` 가 PATH 에 있어야 하고 시작이 조금 느리다. env 이름만 맞으면 되니 이식성은 낫다.
+venv 라면 `python -m cpguard.mcp.server` 를 그 venv 의 파이썬으로 부른다.
+
+### 확인
+
+Claude Code 에서 `/mcp` → `cpguard` 가 connected, 도구 6개(scan_file · finding.list ·
+finding.evidence · explain · probe.get · validation.submit)가 보이면 성공.
+
+안 뜨면 흔한 둘: (1) 그 환경에 `cpguard[mcp]` 미설치 — 서버가 import 에서 죽는다
+(`python -c "import mcp"` 로 확인) (2) 경로 오타·대소문자.
