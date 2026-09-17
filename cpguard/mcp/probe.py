@@ -81,6 +81,67 @@ _ACCESSOR = {
 }
 
 
+#: 라우트 선언. (프레임워크 verb 그룹) — 메서드·경로·핸들러 참조가 한 줄에 있는 형태.
+#: gin: r.POST("/p", handler)  ·  express: app.post("/p", handler)  ·  .Handle("GET","/p",h)
+_ROUTE = re.compile(
+    r"""\.(?P<verb>get|post|put|delete|patch|any|all|head|options|handle|handlefunc)\s*\(\s*"""
+    r"""(?:['"](?P<m>GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)['"]\s*,\s*)?"""   # .Handle("GET", ...)
+    r"""['"](?P<path>[^'"]+)['"]""",
+    re.IGNORECASE)
+
+#: 함수 정의 시작. 위로 올라가며 sink 를 감싼 핸들러 이름을 찾는다.
+_FUNCDEF = re.compile(
+    r"""(?:func\s+(?:\([^)]*\)\s*)?(?P<go>\w+)\s*\(|"""          # Go: func (r T) Name( / func Name(
+    r"""function\s+(?P<js>\w+)\s*\(|"""                          # JS: function name(
+    r"""(?:const|let|var)\s+(?P<jsc>\w+)\s*=\s*(?:async\s*)?\(|"""  # JS: const name = (
+    r"""def\s+(?P<py>\w+)\s*\()""")
+
+
+def _enclosing_fn(lines: list[str], sink_line: int) -> str | None:
+    """sink 줄을 감싼 가장 가까운 함수 이름(위로 탐색). 없으면 None."""
+    for i in range(min(sink_line, len(lines)) - 1, -1, -1):
+        if m := _FUNCDEF.search(lines[i]):
+            return m.group("go") or m.group("js") or m.group("jsc") or m.group("py")
+    return None
+
+
+def _route_hint(f: Finding) -> tuple[str | None, str] | None:
+    """finding 의 파일에서 핸들러에 걸린 라우트를 최선값으로 뽑는다. (메서드, 경로) 또는 None.
+
+    라우트 등록이 핸들러와 **같은 파일**에 있고, 그 등록 줄에 핸들러 이름이 나올 때만
+    인정한다. 다른 파일에 있거나 이름이 안 맞으면 None — 에이전트가 확인하게 둔다.
+    익명 핸들러(`app.post("/p", (req,res)=>{...})`)는 라우트 리터럴이 sink 를 감싼
+    범위 안에 있으면 그 경로를 쓴다.
+    """
+    try:
+        text = open(f.file, encoding="utf-8", errors="replace").read()
+    except OSError:
+        return None
+    lines = text.splitlines()
+    sink_line = f.sink.loc.start_line
+
+    fn = _enclosing_fn(lines, sink_line)
+    verb_method = {"get": "GET", "post": "POST", "put": "PUT", "delete": "DELETE",
+                   "patch": "PATCH", "head": "HEAD", "options": "OPTIONS"}
+
+    best_inline = None
+    for i, line in enumerate(lines, 1):
+        m = _ROUTE.search(line)
+        if not m:
+            continue
+        method = (m.group("m") or verb_method.get(m.group("verb").lower()) or "").upper() or None
+        path = m.group("path")
+        # 이름 매칭: 등록 줄에 핸들러 이름이 있으면 확정에 가깝다
+        if fn and re.search(r"\b" + re.escape(fn) + r"\b", line):
+            return method, path
+        # 익명 핸들러: 라우트 선언이 sink 를 감싸는 위치(위쪽 가까이)면 후보로
+        if i <= sink_line and (best_inline is None or i > best_inline[0]):
+            best_inline = (i, method, path)
+    if best_inline and fn is None:      # 이름으로 못 잡았고 감싸는 라우트가 있으면 그걸로
+        return best_inline[1], best_inline[2]
+    return None
+
+
 def _entry(f: Finding) -> dict:
     """source 에서 HTTP 진입점을 최선값으로 추출한다. 못 뽑으면 confidence=unknown.
 
@@ -99,13 +160,20 @@ def _entry(f: Finding) -> dict:
             param = m.group(1)
             break
 
-    known = method is not None or param is not None
+    # 라우트를 같은 파일에서 뽑았으면 경로·메서드가 확정에 가깝다.
+    route = _route_hint(f)
+    path = None
+    confidence = "hint" if (method is not None or param is not None) else "unknown"
+    if route is not None:
+        rmethod, path = route
+        method = rmethod or method     # 라우트 verb 가 접근자 추정보다 낫다
+        confidence = "resolved"        # 경로까지 나왔다 — 그래도 에이전트가 최종 확인
     return {
         "method": method,
         "location": location,          # query | form | header | path | cookie | body
         "param": param,
-        "path": None,                  # 라우트 경로 — 에이전트가 확인
-        "confidence": "hint" if known else "unknown",
+        "path": path,                  # 라우트 경로(같은 파일서 뽑힘). null 이면 에이전트가 확인
+        "confidence": confidence,      # resolved | hint | unknown
     }
 
 

@@ -311,3 +311,30 @@ def test_verify_no_baseline(tmp_path):
 def test_verify_tool_registered():
     names = {t.name for t in server.build_server()._tool_manager.list_tools()}
     assert "verify" in names
+
+
+# ── 라우트 힌트 강화 ──
+
+def test_probe_resolves_route_from_same_file(tmp_path):
+    src = """package main
+import ("os/exec"; "github.com/gin-gonic/gin")
+func vuln(c *gin.Context) { d := c.Query("id"); exec.Command("sh","-c","echo "+d) }
+func main() { r := gin.Default(); r.POST("/run", vuln); r.Run() }
+"""
+    f = tmp_path / "m.go"; f.write_text(src, encoding="utf-8")
+    store = tools.FindingStore()
+    fid = tools.scan_file(store, str(f))["findings"][0]["id"]
+    e = tools.probe_get(store, fid)["entry"]
+    assert e["path"] == "/run"
+    assert e["method"] == "POST"            # 라우트 verb 가 우선
+    assert e["confidence"] == "resolved"
+
+
+def test_probe_route_unknown_when_absent(tmp_path):
+    # 라우트 등록이 없으면 경로 null, confidence 는 resolved 가 아니다
+    f = tmp_path / "h.go"; f.write_text(_GO_VULN, encoding="utf-8")
+    store = tools.FindingStore()
+    fid = tools.scan_file(store, str(f))["findings"][0]["id"]
+    e = tools.probe_get(store, fid)["entry"]
+    assert e["path"] is None
+    assert e["confidence"] != "resolved"
