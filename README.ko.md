@@ -127,7 +127,7 @@
 
 ### 설치본 — Windows (권장 · 파이썬 불필요)
 
-[Releases](https://github.com/KimJeju/cpguard/releases) 에서 `CPGuard-Setup-0.1.3.exe` 를 받아 실행합니다.
+[Releases](https://github.com/KimJeju/cpguard/releases) 에서 최신 `CPGuard-Setup-*.exe` 를 받아 실행합니다.
 사용자 영역 설치라 관리자 권한이 필요 없고, WebView2 런타임이 없으면 자동 설치합니다.
 
 직접 빌드하려면:
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cpguard
-        uses: KimJeju/cpguard@v0.1.3
+        uses: KimJeju/cpguard@v0.2.0
         with:
           path: '.'
           fail-on: 'high'      # high 이상 탐지 시 빌드 실패 (none=게이트 안 함)
@@ -201,6 +201,43 @@ CLI 로도 게이트 가능: `cpguard scan . --sarif out.sarif --fail-on high`
 (해당 등급 이상 탐지 시 종료코드 1). 이 저장소의 [`.github/workflows/cpguard.yml`](.github/workflows/cpguard.yml) 이 실동작 예시.
 
 ---
+
+## 🤖 MCP 서버 — AI 에이전트가 붙여 쓴다 (SAST → 동적 실증)
+
+AI 코딩 에이전트(Claude Code·Cursor)가 MCP 로 CPGuard 를 붙여 스캔·근거·설명을 받고,
+찾은 취약점을 **동적으로 실증**한다 — 정적 스캐너가 답 못 하던 "이거 진짜 되는 거야?"에
+답한다.
+
+CPGuard 는 HTTP 를 직접 쏘지 않는다. sink 를 아니까 **탐침 + 오라클**을 낸다 — 무엇을
+넣고, 무엇을 관찰하면 sink 가 터진 것인지. 발사는 에이전트가 자기 도구로 하고, 관찰
+결과를 되돌리면 CPGuard 가 오라클과 대조해 판정한다. 오라클 일치이지 IAST 가 아니다 —
+계측이 없으므로 "실제 실행 경로를 봤다"가 아니라 "예측한 신호가 나타났다"까지다.
+`NOT_REPRODUCED` 를 `FALSE_POSITIVE` 와 섞지 않는다.
+
+```
+──────────────────────────────────────────────────────────────────
+CPGuard MCP — SAST 취약점을 런타임에서 실증하기
+──────────────────────────────────────────────────────────────────
+① scan_file        → critical 1건  ·  py.command-injection
+② finding.evidence → source os.environ.get → … → sink os.system('echo ' + user)
+③ probe.get        → payload ";sleep 5 #" (posix)  ·  oracle time_delay
+④ (에이전트가 발사)→ 실제 주입 실행  ·  응답 5144ms
+⑤ validation.submit→ CONFIRMED — 지연 5144ms ≥ 5000ms
+──────────────────────────────────────────────────────────────────
+```
+
+도구 9개: `scan_file` · `scan_start`/`scan_status`(리포 전체 비동기 감사) ·
+`finding.list` · `finding.evidence` · `explain` · `probe.get` · `validation.submit` ·
+`verify`(고친 게 흐름을 실제로 끊었나?). 코어는 소켓을 열지 않는다 — 네트워크는
+에이전트의 web 도구만 건드린다.
+
+```bash
+pip install "cpguard[mcp]"
+claude mcp add cpguard -s user "<env>/bin/cpguard-mcp"   # docs/mcp-server-design.md 참고
+```
+
+설계·경계·전체 도구 계약: [`docs/mcp-server-design.md`](docs/mcp-server-design.md).
+실행 가능한 데모: [`examples/mcp_demo.py`](examples/mcp_demo.py).
 
 ## 🧱 아키텍처
 

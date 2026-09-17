@@ -127,7 +127,7 @@ then hands the result to a three-pane review screen where a human confirms the v
 
 ### Installer — Windows (recommended, no Python needed)
 
-Download `CPGuard-Setup-0.1.3.exe` from [Releases](https://github.com/KimJeju/cpguard/releases) and run it.
+Download the latest `CPGuard-Setup-*.exe` from [Releases](https://github.com/KimJeju/cpguard/releases) and run it.
 It installs per-user (no admin rights) and installs the WebView2 runtime if missing.
 
 To build the installer yourself:
@@ -187,7 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: cpguard
-        uses: KimJeju/cpguard@v0.1.3
+        uses: KimJeju/cpguard@v0.2.0
         with:
           path: '.'
           fail-on: 'high'      # fail the build on high or above (none = no gate)
@@ -200,6 +200,44 @@ The CLI gates too: `cpguard scan . --sarif out.sarif --fail-on high` (exit code 
 This repository's [`.github/workflows/cpguard.yml`](.github/workflows/cpguard.yml) is a working example.
 
 ---
+
+## 🤖 MCP server — AI agents drive it (SAST → dynamic validation)
+
+An AI coding agent (Claude Code, Cursor) can drive CPGuard over MCP: scan, pull the
+source-to-sink evidence, explain a rule, and **dynamically validate** a finding —
+answering the question a static scanner never can, "is this actually exploitable?"
+
+CPGuard does not fire HTTP. Because it knows the sink, it emits a probe plus an
+**oracle** — what to send and, more importantly, what to observe that proves the sink
+fired. The agent fires it with its own tools and hands back what it saw; CPGuard
+matches that against the oracle and returns a verdict. It is oracle-match, not IAST —
+no instrumentation, so it reports "the predicted signal appeared", not "I observed the
+real execution path". `NOT_REPRODUCED` is kept distinct from `FALSE_POSITIVE`.
+
+```
+──────────────────────────────────────────────────────────────────
+CPGuard MCP — proving a SAST finding at runtime
+──────────────────────────────────────────────────────────────────
+① scan_file        → 1 critical  ·  py.command-injection
+② finding.evidence → source os.environ.get → … → sink os.system('echo ' + user)
+③ probe.get        → payload ";sleep 5 #" (posix)  ·  oracle time_delay
+④ (agent fires it) → real injection runs  ·  response 5144ms
+⑤ validation.submit→ CONFIRMED — delay 5144ms ≥ 5000ms
+──────────────────────────────────────────────────────────────────
+```
+
+Nine tools: `scan_file` · `scan_start` / `scan_status` (async whole-repo audit) ·
+`finding.list` · `finding.evidence` · `explain` · `probe.get` · `validation.submit` ·
+`verify` (did your fix actually close the flow?). The core opens no socket; only the
+agent's own web tools touch the network.
+
+```bash
+pip install "cpguard[mcp]"
+claude mcp add cpguard -s user "<env>/bin/cpguard-mcp"   # see docs/mcp-server-design.md
+```
+
+Design, boundaries, and the full tool contract: [`docs/mcp-server-design.md`](docs/mcp-server-design.md).
+Runnable demo: [`examples/mcp_demo.py`](examples/mcp_demo.py).
 
 ## 🧱 Architecture
 
