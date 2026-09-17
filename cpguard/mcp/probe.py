@@ -183,15 +183,21 @@ def build_probe(f: Finding, finding_id: str) -> dict:
     spec = _ORACLE.get(vuln)
     payload = spec["payload"] if spec else None
     oracle = spec["oracle"] if spec else _MANUAL_ORACLE
+    # 페이로드가 셸에 의존하는 유형은 POSIX 기준이다 — 타깃 셸이 다르면 에이전트가 바꾼다.
+    # (런타임 도그푸딩서 확인: `; sleep 5 #` 는 Windows cmd 에서 안 터진다 → `& ping -n 6 …`.)
+    shell_dep = vuln in ("command-injection", "sqli")
     return {
         "id": finding_id,
         "vuln_type": vuln or f.rule_id,
         "entry": _entry(f),
         "payload": payload,
+        "payload_shell": "posix" if shell_dep else None,
         "oracle": oracle,
         "flow": [s.code for s in f.steps],
         "note": ("실제 요청은 에이전트가 자기 web 도구로 발사한다. 라우트 경로가 unknown 이면 "
-                 "구동 앱에서 확인할 것. 관찰결과는 validation.submit 으로 되돌려 판정한다."),
+                 "구동 앱에서 확인할 것. 관찰결과는 validation.submit 으로 되돌려 판정한다."
+                 + (" payload 는 POSIX 셸 기준 — Windows cmd 등 타깃 셸이 다르면 지연 명령을 "
+                    "바꿔라(예: `& ping -n 6 127.0.0.1`)." if shell_dep else "")),
     }
 
 

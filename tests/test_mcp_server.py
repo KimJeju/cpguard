@@ -338,3 +338,10 @@ def test_probe_route_unknown_when_absent(tmp_path):
     e = tools.probe_get(store, fid)["entry"]
     assert e["path"] is None
     assert e["confidence"] != "resolved"
+
+
+def test_probe_marks_posix_shell_payload(tmp_path):
+    """런타임 도그푸딩서 확인 — 셸 의존 payload 는 POSIX 표시(타깃 셸 다르면 에이전트가 바꿈)."""
+    _store, _fid, p = _one_probe(tmp_path, _PROBE_CASES["cmdi"][0])
+    assert p["payload_shell"] == "posix"
+    assert "POSIX" in p["note"]
