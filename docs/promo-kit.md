@@ -23,6 +23,7 @@ repo: https://github.com/KimJeju/cpguard
 - **대형 코드베이스** — 26,049 파일 / 2.3GB 프로젝트를 ~5분에 4,857건 탐지(실측).
 - **정확도(측정치)** — 라벨링 정답지 **8개 언어 5개 코퍼스 138,785건(채점 76,866건)**. 자바 점수 **0.826**(F1 0.921) · C++ **0.79** · 파이썬 **0.717** · Go **0.66** · C **0.52** · JS **0.47** · TS **0.45** · Ruby **0.43** · PHP **0.369** · C# **0.245**. 언어 편차가 크다는 사실을, 그리고 **C·C++ 의 오탐 0 이 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 것**도 그대로 공개한다. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
 - **CI 연동** — GitHub Action + SARIF → Code Scanning. `fail-on` 게이트.
+- **MCP 서버 (신규)** — AI 코딩 에이전트(Claude Code·Cursor)가 CPGuard 를 붙여 스캔·근거·설명을 받고, **SAST 취약점을 동적으로 실증**한다. CPGuard 가 `source→sink` 를 아니까 "무엇을 어디에 넣으면 터지고, 무엇을 관찰하면 실증인지(오라클)"를 탐침으로 내주고, 실제 발사는 에이전트가 자기 web 도구로 한다 — 코어는 소켓을 열지 않는다(오라클 일치이지 IAST 아님). `pip install "cpguard[mcp]"`.
 - **언어** — JS/TS · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C#.
 - 오픈소스(졸업작품에서 출발).
 
@@ -33,6 +34,7 @@ repo: https://github.com/KimJeju/cpguard
 **Title:**
 `Show HN: CPGuard – open-source SAST that traces source-to-sink with a code property graph`
 
+대안(MCP·실증 각도, 오늘 후크): `Show HN: CPGuard – SAST over MCP; an AI agent can dynamically validate the findings`
 대안(더 짧게): `Show HN: CPGuard – code property graph SAST with LLM triage, runs offline`
 
 **Body:**
@@ -58,10 +60,22 @@ boundary), and I report categories that *are* data-flow problems but that I have
 rule for separately from those, so coverage is not quietly inflated. The harness is
 in bench/ if you want to re-run any of it.
 
+New this week: an MCP server, so an AI coding agent (Claude Code, Cursor) can drive it
+— scan, pull the source-to-sink evidence, explain a rule, and dynamically validate a
+finding. The validation part is the one I tried hardest to keep honest. CPGuard does
+not fire HTTP; because it knows the sink, it emits a probe plus an oracle — what to send
+and, more importantly, what to observe that proves the sink fired (a time delay for a
+command sink, an out-of-band callback for SSRF, a reflected marker for XSS). The agent
+fires it with its own tools and hands back what it saw; CPGuard matches that against the
+oracle and returns CONFIRMED / LIKELY / NOT_REPRODUCED / FALSE_POSITIVE. It is
+oracle-match, not IAST — I don't instrument the running app, so I don't claim to have
+observed the real execution path, only that the predicted signal appeared. NOT_REPRODUCED
+is kept distinct from FALSE_POSITIVE on purpose.
+
 Findings land in a three-pane audit workbench: issue list, a code viewer that draws
 the source-to-sink flow inline, and an inspector where you mark true/false positive
 and leave a note. It runs fully offline, single installer, no Python or admin rights;
-only the optional LLM triage talks to a network.
+only the optional LLM triage and the MCP server talk to a network.
 
 Languages: JS/TS, PHP, Python, Java, Kotlin, Go, Ruby, C/C++, Swift, C#. Output is
 SARIF (GitHub Code Scanning), plus PDF/xlsx reports for the audit paperwork Korean
@@ -124,23 +138,33 @@ are the top three sources of false positives in the benchmark run.
 
 ## GeekNews (news.hada.io) / disquiet — 한국어
 
-**제목:** CPGuard – CPG 기반 taint 분석 + LLM 트리아지 오픈소스 SAST
+**제목:** CPGuard – SAST 취약점을 AI 에이전트가 동적으로 실증하는 오픈소스 (CPG taint + MCP)
 
 **본문:**
 ```
 정규식/패턴 위주 SAST 의 오탐 한계를 넘어보려고 만든 오픈소스 정적 보안 분석 도구입니다.
+이번 주에 MCP 서버를 붙여, AI 코딩 에이전트가 CPGuard 를 도구로 불러 "찾은 취약점을
+동적으로 실증"까지 하도록 만들었습니다.
 
 - tree-sitter 파싱 → 언어중립 IR → CPG(AST·CFG·def-use·call) → 프로시저간 taint(함수 요약)
   로 사용자 입력(source)이 위험 지점(sink)까지 흐르는지 파일 넘나들며 추적합니다.
+- MCP 서버(신규): Claude Code·Cursor 같은 에이전트가 스캔·근거(Source→Sink 경로)·조치
+  설명을 받고, SAST 취약점을 동적으로 실증합니다. 핵심은 CPGuard 가 sink 를 아니까
+  "무엇을 관찰하면 실증인지(오라클)"를 정확히 지정한다는 점입니다 — 명령 실행은 시간지연,
+  SSRF 는 out-of-band 콜백, XSS 는 반사 마커. 실제 요청 발사는 에이전트가 자기 도구로
+  하고(코어는 소켓을 안 엽니다), CPGuard 는 관찰결과를 오라클과 대조해
+  CONFIRMED/LIKELY/NOT_REPRODUCED/FALSE_POSITIVE 로 판정합니다.
+  정직하게 적자면 이건 오라클 일치이지 IAST(런타임 계측)가 아닙니다 — "실제 실행 경로를
+  봤다"가 아니라 "예측한 신호가 나타났다"까지입니다. 재현 실패(NOT_REPRODUCED)를
+  오탐(FALSE_POSITIVE)과 섞지 않습니다.
 - LLM(Claude/Gemini/GPT) 트리아지로 각 이슈의 도달 가능성을 재검증해 오탐을 줄입니다.
 - Ghidra/Fortify 결의 3분할 감사 작업대: 코드 뷰어에 Source→Sink 흐름을 강조하고,
-  인스펙터에서 사람이 판정·메모합니다.
-- 완전 오프라인(파이썬·인터넷·관리자 권한 불필요, 단일 설치본). 에어갭 환경 대응.
+  인스펙터에서 사람이 판정·메모합니다. 완전 오프라인(단일 설치본, 에어갭 대응).
 - SARIF·GitHub Action 으로 CI 연동. 언어: JS/TS·PHP·Python·Java·Kotlin·Go·Ruby·C/C++·Swift·C#.
-- 라벨링 정답지 8개 언어 76,866건(채점 기준)으로 측정. 자바 0.826 · C++ 0.79 · 파이썬 0.717 · Go 0.66 · C 0.52 · JS 0.47 · TS 0.45 · Ruby 0.43 · PHP 0.369 · C# 0.245 — 편차도, C·C++ 수치의 한계도 그대로 공개합니다. 측정 스크립트와 제외 기준도 공개.
-- 실제 26,049 파일 / 2.3GB 프로젝트로 검증(약 5분에 4,857건).
+- 라벨링 정답지 8개 언어 76,866건(채점 기준)으로 측정. 자바 0.826 · C++ 0.79 · 파이썬 0.717 · Go 0.66 · C 0.52 · JS 0.47 · TS 0.45 · Ruby 0.43 · PHP 0.369 · C# 0.245 — 언어 편차도, C·C++ 수치가 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 한계도 그대로 공개합니다. 측정 스크립트·제외 기준 공개.
 
-졸업작품에서 시작해 오픈소스로 이어가고 있습니다. 엔진·오탐률 피드백 특히 환영합니다.
+졸업작품에서 시작해 오픈소스로 이어가고 있습니다. 엔진·오탐률, 그리고 실증 루프 설계
+(오라클 방식)에 대한 피드백 특히 환영합니다.
 
 https://github.com/KimJeju/cpguard
 ```
