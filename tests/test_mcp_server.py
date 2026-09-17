@@ -252,3 +252,62 @@ def test_scan_start_missing_root():
 def test_async_tools_registered():
     names = {t.name for t in server.build_server()._tool_manager.list_tools()}
     assert {"scan_start", "scan_status"} <= names
+
+
+# ── MVP 이후: verify (고친 뒤 전후 대조) ──
+
+_GO_FIXED = """package handler
+
+import (
+	"net/http"
+	"os/exec"
+
+	"github.com/gin-gonic/gin"
+)
+
+func Handle(c *gin.Context) {
+	data := c.Query("id")
+	_ = data
+	exec.Command("echo", "safe")   // 오염값을 안 넘김 — 고쳐짐
+	_ = http.StatusOK
+}
+"""
+
+
+def test_verify_reports_closed_after_fix(tmp_path):
+    f = tmp_path / "h.go"
+    f.write_text(_GO_VULN, encoding="utf-8")
+    store = tools.FindingStore()
+    scan = tools.scan_file(store, str(f))          # baseline 잡힘 (취약 1건)
+    assert scan["total"] >= 1
+
+    f.write_text(_GO_FIXED, encoding="utf-8")       # 에이전트가 고침
+    v = tools.verify(store, str(f))
+    assert v["closed"] >= 1
+    assert v["remaining"] == []
+    assert v["verdict"] == "all_closed"
+
+
+def test_verify_still_vulnerable_when_unfixed(tmp_path):
+    f = tmp_path / "h.go"
+    f.write_text(_GO_VULN, encoding="utf-8")
+    store = tools.FindingStore()
+    tools.scan_file(store, str(f))
+    v = tools.verify(store, str(f))                 # 안 고치고 재검증
+    assert v["closed"] == 0
+    assert len(v["remaining"]) >= 1
+    assert v["verdict"] == "still_vulnerable"
+
+
+def test_verify_no_baseline(tmp_path):
+    f = tmp_path / "h.go"
+    f.write_text(_GO_VULN, encoding="utf-8")
+    store = tools.FindingStore()
+    v = tools.verify(store, str(f))                 # 스캔 이력 없이 바로 verify
+    assert v["baseline"] == "none"                  # '전부 새로 생김'이라 하지 않는다
+
+
+@_needs_mcp
+def test_verify_tool_registered():
+    names = {t.name for t in server.build_server()._tool_manager.list_tools()}
+    assert "verify" in names

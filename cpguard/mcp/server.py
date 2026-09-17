@@ -97,6 +97,14 @@ def build_server():
     def _scan_status(job_id: str) -> dict:
         return runner.status(job_id)
 
+    @server.tool(name="verify",
+                 description="파일을 고친 뒤 다시 스캔해 직전 상태와 대조한다 — 닫힘 / "
+                             "남음 / 새로 생김. 에이전트의 수정이 흐름을 실제로 끊었는지 "
+                             "확인한다(지문 기준이라 줄 이동에 안 흔들림). 직전 스캔이 없으면 "
+                             "baseline 만 잡는다.")
+    def _verify(path: str) -> dict:
+        return tools.verify(store, path)
+
     @server.tool(name="probe.get",
                  description="취약점 하나를 동적 실증용 탐침으로 반환한다 — 진입점(메서드·"
                              "파라미터)·페이로드·오라클(무엇을 관찰하면 실증인지)·흐름. 서버는 "

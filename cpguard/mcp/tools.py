@@ -10,10 +10,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cpguard.report.finding import Finding
+from cpguard.report.finding import Finding, fingerprint
 from cpguard.report.remediation import remediation_for
 
 from . import probe, render
+
+
+def _fp(f: Finding) -> str:
+    """줄에 안 흔들리는 지문 — verify 가 수정 전후를 잇는다(웹 스냅샷 비교와 같은 것)."""
+    return fingerprint(f.rule_id, f.file, f.sink.code or "")
 
 
 class FindingStore:
@@ -22,6 +27,8 @@ class FindingStore:
     def __init__(self) -> None:
         self._by_id: dict[str, Finding] = {}
         self._order: list[str] = []      # 삽입 순서(목록 안정성)
+        #: 파일(경로) → 그 파일에서 마지막으로 본 지문 집합. verify 의 baseline.
+        self._seen_fp: dict[str, set[str]] = {}
 
     def register(self, findings: list[Finding]) -> list[tuple[str, Finding]]:
         """findings 에 안정 id 를 붙여 저장하고 (id, finding) 쌍을 돌려준다."""
@@ -41,6 +48,14 @@ class FindingStore:
     def items(self) -> list[tuple[str, Finding]]:
         return [(fid, self._by_id[fid]) for fid in self._order]
 
+    def snapshot_file(self, path: str, findings: list[Finding]) -> None:
+        """이 파일에서 지금 본 지문 집합을 baseline 으로 기록한다(verify 대조용)."""
+        self._seen_fp[str(path)] = {_fp(f) for f in findings}
+
+    def baseline_fp(self, path: str) -> set[str] | None:
+        """이 파일의 직전 지문 집합. 스캔한 적 없으면 None."""
+        return self._seen_fp.get(str(path))
+
 
 def scan_file(store: FindingStore, path: str) -> dict:
     """파일 하나를 빠르게 검사하고 요약을 돌려준다. 흐름 단계는 붙이지 않는다.
@@ -58,6 +73,7 @@ def scan_file(store: FindingStore, path: str) -> dict:
 
     findings = core_scan_file(p)
     registered = store.register(findings)
+    store.snapshot_file(p, findings)          # verify 의 baseline
     counts: dict[str, int] = {}
     for _fid, f in registered:
         counts[f.severity] = counts.get(f.severity, 0) + 1
@@ -145,3 +161,51 @@ def validation_submit(store: FindingStore, finding_id: str, observed: dict) -> d
         return {"error": "unknown_finding", "finding_id": finding_id}
     result = probe.judge(f, observed or {})
     return {"id": finding_id, **result}
+
+
+def verify(store: FindingStore, path: str) -> dict:
+    """파일을 고친 뒤 다시 스캔해 직전 상태와 대조한다 — 닫힘 / 남음 / 새로 생김.
+
+    에이전트는 자기가 부른 정제가 흐름을 실제로 끊었는지 모른다. CPGuard 는 안다.
+    지문(줄에 안 흔들림) 기준으로 비교하므로 포맷팅·줄 이동에 흔들리지 않는다.
+
+    직전 스캔이 없으면(baseline 없음) 그냥 현재 상태를 새 baseline 으로 잡고 알린다 —
+    무엇에 견줘야 할지 모르는데 '전부 새로 생김'이라 말하면 거짓이다.
+    """
+    from cpguard.scanner import scan_file as core_scan_file
+
+    p = Path(path)
+    if not p.exists():
+        return {"error": "not_found", "path": str(p)}
+    if not p.is_file():
+        return {"error": "not_a_file", "path": str(p)}
+
+    prior = store.baseline_fp(p)
+    findings = core_scan_file(p)
+    now = {_fp(f): f for f in findings}
+    store.register(findings)
+    store.snapshot_file(p, findings)          # 다음 verify 를 위해 baseline 갱신
+
+    if prior is None:
+        return {"path": str(p), "baseline": "none",
+                "note": "직전 스캔이 없어 대조 불가 — 지금 상태를 baseline 으로 잡았다. "
+                        "고친 뒤 다시 verify 하면 닫힘/남음을 알려준다.",
+                "current": len(findings)}
+
+    closed = prior - now.keys()               # 있다가 사라짐 = 고쳐짐
+    remaining = prior & now.keys()            # 그대로 있음
+    new = now.keys() - prior                  # 없다가 생김(수정이 새 결함을 만듦)
+
+    def _row(fp: str) -> dict:
+        f = now[fp]
+        return {"rule": f.rule_id, "line": f.sink.loc.start_line, "sink": f.sink.code}
+
+    return {
+        "path": str(p),
+        "closed": len(closed),
+        "remaining": [_row(fp) for fp in remaining],
+        "new": [_row(fp) for fp in new],
+        "verdict": ("all_closed" if not remaining and not new
+                    else "still_vulnerable" if remaining
+                    else "changed"),
+    }
