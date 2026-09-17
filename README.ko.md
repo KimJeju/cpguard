@@ -297,6 +297,7 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 - [x] 상수 전파 · 컨테이너 오염 전파 · 리터럴 키 단위 맵 추적
 - [x] 재진단 판정 승계 · 벌크 판정 · 흐름 내용 필터 · 판정 이력
 - [x] 프로젝트 제외 설정 · 보고서 양식 · 분석 대상 현황·제외 정보·분석 기준 부록
+- [x] MCP 서버 — AI 코딩 에이전트가 CPGuard 를 붙여 씀: 스캔·근거·설명, 그리고 SAST→동적 **실증(probe/validate)** 루프 (`pip install "cpguard[mcp]"`, `cpguard-mcp`)
 - [ ] 프레임워크 인지 진입점(Spring·JPA) · sanitizer 인식 강화
 
 ## 📄 라이선스

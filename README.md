@@ -264,6 +264,7 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] Constant propagation · container taint · key-sensitive map tracking
 - [x] Verdict inheritance across rescans, bulk verdicts, flow-content filter, verdict history
 - [x] Per-project exclusions, report templates, scope/exclusion/applied-rule appendices
+- [x] MCP server — AI coding agents drive CPGuard: scan, evidence, explain, and SAST→dynamic **probe/validate** loop (`pip install "cpguard[mcp]"`, `cpguard-mcp`)
 - [ ] Framework-aware entry points (Spring, JPA) · stronger sanitizer recognition
 
 ## 📄 License
