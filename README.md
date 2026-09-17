@@ -305,6 +305,11 @@ Strategies for extreme scale (20–30 GB of source, 50k+ findings) — sink pre-
 - [x] MCP server — AI coding agents drive CPGuard: scan, evidence, explain, and SAST→dynamic **probe/validate** loop (`pip install "cpguard[mcp]"`, `cpguard-mcp`)
 - [ ] Framework-aware entry points (Spring, JPA) · stronger sanitizer recognition
 
+## 💛 Support
+
+CPGuard is developed in the open by one person. If it is useful to you, you can support
+its continued development on [**Fairy @cp-guard**](https://fairy.hada.io/@cp-guard).
+
 ## 📄 License
 
 [Apache License 2.0](LICENSE). Free to use, modify and redistribute, commercially included, provided the notice and license are preserved. Includes an express patent grant.

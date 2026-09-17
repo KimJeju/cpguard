@@ -337,6 +337,11 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 - [x] MCP 서버 — AI 코딩 에이전트가 CPGuard 를 붙여 씀: 스캔·근거·설명, 그리고 SAST→동적 **실증(probe/validate)** 루프 (`pip install "cpguard[mcp]"`, `cpguard-mcp`)
 - [ ] 프레임워크 인지 진입점(Spring·JPA) · sanitizer 인식 강화
 
+## 💛 후원
+
+CPGuard 는 1인이 오픈소스로 개발하고 있습니다. 도움이 되셨다면
+[**Fairy @cp-guard**](https://fairy.hada.io/@cp-guard) 에서 개발을 응원해 주세요.
+
 ## 📄 라이선스
 
 [Apache License 2.0](LICENSE). 상업적 이용을 포함해 자유롭게 사용·수정·재배포할 수 있으며,
