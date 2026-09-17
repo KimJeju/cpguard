@@ -246,7 +246,7 @@ def _run_scan_job(job_id: str, workdir: Path, zip_name: str,
 
         if secrets_only:
             _job_log(job_id, "시크릿·개인정보·설정 패턴 점검 (데이터 흐름 축 생략)")
-        jobs = int(os.environ.get("CPGUARD_JOBS", "1") or "1")
+        jobs = int(os.environ.get("CPGUARD_JOBS", "") or min(os.cpu_count() or 1, 8))
 
         # 프로젝트에 저장된 제외 설정을 적용한다 — 매 진단 반복하던 손작업을 없앤다.
         from .models import ProjectSetting
