@@ -82,6 +82,22 @@ def build_server():
                  lang: str = "ko") -> dict:
         return tools.explain(store, rule_id, finding_id, lang)
 
+    @server.tool(name="probe.get",
+                 description="취약점 하나를 동적 실증용 탐침으로 반환한다 — 진입점(메서드·"
+                             "파라미터)·페이로드·오라클(무엇을 관찰하면 실증인지)·흐름. 서버는 "
+                             "요청을 발사하지 않는다. 에이전트가 자기 web 도구로 쏘고 결과를 "
+                             "validation.submit 으로 되돌린다.")
+    def _probe_get(finding_id: str) -> dict:
+        return tools.probe_get(store, finding_id)
+
+    @server.tool(name="validation.submit",
+                 description="에이전트가 탐침을 발사하고 관찰한 결과(observed)를 오라클과 "
+                             "대조해 판정한다: CONFIRMED · LIKELY · NOT_REPRODUCED · "
+                             "FALSE_POSITIVE(+검증불가 사유). observed 키는 elapsed_ms·oast_hit·"
+                             "body_marker·file_leak·redirect_external·error_signature·blocked 등.")
+    def _validation_submit(finding_id: str, observed: dict) -> dict:
+        return tools.validation_submit(store, finding_id, observed)
+
     return server
 
 

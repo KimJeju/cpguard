@@ -106,3 +106,97 @@ def test_all_mvp_tools_registered():
     names = {t.name for t in server.build_server()._tool_manager.list_tools()}
     assert {"scan_file", "finding.list", "finding.evidence", "explain",
             "cpguard.health"} <= names
+
+
+# ── 3단계: 실증 루프 (probe.get · validation.submit) ──
+
+from cpguard.mcp import probe  # noqa: E402
+
+# sink 유형별 최소 재현 — probe 가 맞는 오라클을 내는지(idiom 방식). (본문, 기대 오라클)
+_PROBE_CASES = {
+    "cmdi": ("""package h
+import ("os/exec"; "github.com/gin-gonic/gin")
+func H(c *gin.Context){ d := c.Query("id"); exec.Command("sh","-c","echo "+d) }
+""", "time_delay"),
+    "ssrf": ("""package h
+import ("net/http"; "github.com/gin-gonic/gin")
+func H(c *gin.Context){ u := c.PostForm("url"); http.Get(u) }
+""", "oast_callback"),
+}
+
+
+def _one_probe(tmp_path, src):
+    f = tmp_path / "h.go"
+    f.write_text(src, encoding="utf-8")
+    store = tools.FindingStore()
+    res = tools.scan_file(store, str(f))
+    fid = res["findings"][0]["id"]
+    return store, fid, tools.probe_get(store, fid)
+
+
+def test_probe_oracle_matches_sink_type(tmp_path):
+    for _name, (src, want_oracle) in _PROBE_CASES.items():
+        _store, _fid, p = _one_probe(tmp_path, src)
+        assert p["oracle"]["type"] == want_oracle, (_name, p["oracle"])
+        assert p["payload"]                                   # 페이로드가 있다
+        assert p["flow"][0] and p["flow"][-1]                 # source·sink 코드
+
+
+def test_probe_extracts_entry(tmp_path):
+    _store, _fid, p = _one_probe(tmp_path, _PROBE_CASES["cmdi"][0])
+    e = p["entry"]
+    assert e["method"] == "GET" and e["location"] == "query" and e["param"] == "id"
+    assert e["confidence"] == "hint"
+    assert e["path"] is None                                  # 라우트는 에이전트 몫
+
+
+def test_probe_unknown_finding(tmp_path):
+    store = tools.FindingStore()
+    assert tools.probe_get(store, "nope")["error"] == "unknown_finding"
+
+
+# ── validation.submit 판정 행렬 ──
+
+def _finding(tmp_path, src):
+    f = tmp_path / "h.go"; f.write_text(src, encoding="utf-8")
+    store = tools.FindingStore()
+    fid = tools.scan_file(store, str(f))["findings"][0]["id"]
+    return store, fid
+
+
+def test_verdict_confirmed_on_oracle_hit(tmp_path):
+    store, fid = _finding(tmp_path, _PROBE_CASES["cmdi"][0])
+    v = tools.validation_submit(store, fid, {"elapsed_ms": 5200})
+    assert v["verdict"] == "CONFIRMED"
+
+
+def test_verdict_not_reproduced_is_not_false_positive(tmp_path):
+    """핵심 경계 — 발사했으나 안 터진 것과 정적으로 안전한 것은 다르다."""
+    store, fid = _finding(tmp_path, _PROBE_CASES["cmdi"][0])
+    v = tools.validation_submit(store, fid, {"elapsed_ms": 40})
+    assert v["verdict"] == "NOT_REPRODUCED"
+    assert v["verdict"] != "FALSE_POSITIVE"
+
+
+def test_verdict_blocked_reason_preserved(tmp_path):
+    store, fid = _finding(tmp_path, _PROBE_CASES["cmdi"][0])
+    v = tools.validation_submit(store, fid, {"blocked": "REQUIRES_AUTH"})
+    assert v["verdict"] == "NOT_VALIDATED" and v["blocked_reason"] == "REQUIRES_AUTH"
+
+
+def test_verdict_likely_on_partial(tmp_path):
+    store, fid = _finding(tmp_path, _PROBE_CASES["cmdi"][0])
+    v = tools.validation_submit(store, fid, {"elapsed_ms": 30, "error_signature": "sh: syntax"})
+    assert v["verdict"] == "LIKELY"
+
+
+def test_verdict_false_positive_when_static_safe(tmp_path):
+    store, fid = _finding(tmp_path, _PROBE_CASES["cmdi"][0])
+    v = tools.validation_submit(store, fid, {"static_safe": True})
+    assert v["verdict"] == "FALSE_POSITIVE"
+
+
+@_needs_mcp
+def test_stage3_tools_registered():
+    names = {t.name for t in server.build_server()._tool_manager.list_tools()}
+    assert {"probe.get", "validation.submit"} <= names

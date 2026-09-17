@@ -13,7 +13,7 @@ from pathlib import Path
 from cpguard.report.finding import Finding
 from cpguard.report.remediation import remediation_for
 
-from . import render
+from . import probe, render
 
 
 class FindingStore:
@@ -124,3 +124,24 @@ def explain(store: FindingStore, rule_id: str | None = None,
         return {"rule": rule_id, "cwe": cwe, "remediation": None,
                 "note": "이 규칙 유형에 연결된 조치 권고가 없다(일반 지침 적용)."}
     return {"rule": rule_id, "cwe": cwe or rem.get("cwe"), **rem}
+
+
+def probe_get(store: FindingStore, finding_id: str) -> dict:
+    """finding 하나를 실증 탐침 + 오라클로. 발사는 에이전트, 판정은 validation.submit."""
+    f = store.get(finding_id)
+    if f is None:
+        return {"error": "unknown_finding", "finding_id": finding_id}
+    return probe.build_probe(f, finding_id)
+
+
+def validation_submit(store: FindingStore, finding_id: str, observed: dict) -> dict:
+    """에이전트가 발사 후 관찰한 것(observed)을 오라클과 대조해 판정한다.
+
+    observed 키: elapsed_ms · oast_hit · body_marker · file_leak · redirect_external ·
+    error_signature · status · blocked(검증불가 사유) · static_safe · agent_confirmed.
+    """
+    f = store.get(finding_id)
+    if f is None:
+        return {"error": "unknown_finding", "finding_id": finding_id}
+    result = probe.judge(f, observed or {})
+    return {"id": finding_id, **result}
