@@ -377,7 +377,12 @@ def scan_path(root: str | Path, rules: list[Rule] | None = None,
             file_text = {str(p): src.decode("utf-8", "ignore") for p, m, src, _ in parsed}
             all_lits = _all_sink_literals(rules)
             present = {lit for t in file_text.values() for lit in all_lits if lit in t}
-            active = [r for r in rules if _rule_sink_literals(r) & present]
+            # 언어도 본다. 아래 파일별 applicable 이 언어로 거르므로 존재하지 않는 언어의
+            # 규칙 요약은 계산해도 한 번도 안 쓰인다 — Java 전용 프로젝트에서 exec·query
+            # 같은 이름이 cpp·php·js 규칙을 깨워 요약 시간의 86% 를 버리고 있었다.
+            langs = {loader.rule_language(lang) for _, _, _, lang in parsed}
+            active = [r for r in rules
+                      if set(r.languages) & langs and _rule_sink_literals(r) & present]
 
             registry = collect_functions([(m, src, str(p)) for p, m, src, _ in parsed])
             summaries_by_rule = {r.id: engine.compute_summaries(registry, r) for r in active}
