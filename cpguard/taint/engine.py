@@ -392,7 +392,7 @@ def _defaulted_path(s: ir.If, env: dict[str, Trace], ctx: Ctx) -> str | None:
     #                                 regfree(&re); }
     # 안쪽만 보면 바깥 합류에서 오염이 되살아난다(바깥 if 에 else 가 없으므로).
     assigns: dict[str, list[ir.Assign]] = {}
-    checked: set[str] = (_compared_paths(s.test, "!=") or set()) | _check_call_paths(s.test, ctx)
+    tests: list[ir.Node] = [s.test]
     stack = list(s.then)
     while stack:
         n = stack.pop()
@@ -401,9 +401,26 @@ def _defaulted_path(s: ir.If, env: dict[str, Trace], ctx: Ctx) -> str | None:
         if isinstance(n, ir.Assign) and (q := path_of(n.target)):
             assigns.setdefault(q, []).append(n)
         if isinstance(n, ir.If):
-            checked |= (_compared_paths(n.test, "!=") or set()) | _check_call_paths(n.test, ctx)
+            tests.append(n.test)
         for attr in ("body", "then", "orelse", "children"):
             stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    # 조건 워커(_compared_paths·_check_call_paths)는 비싸다 — else 없는 모든 if 에서
+    # 요약 실행마다 돈다(java200 요약 시간의 19%). 아래 판정은 "본문이 대입한 변수가
+    # 지금 오염 상태" 일 때만 의미가 있으므로, 그 변수가 하나도 없으면 조건은 볼 것도
+    # 없이 None 이다. 걸러낸 뒤에만 조건을 걷는다 — 결과는 같고 대부분 여기서 끝난다.
+    if not any(v in env for v in assigns):
+        return None
+    # 조건이 검사한 경로는 if 노드와 규칙(정제 함수 목록)에만 의존하고 env 와 무관하다.
+    # 요약 계산이 같은 함수를 파라미터마다·반복마다 다시 돌리므로 같은 if 를 백 번 넘게
+    # 걷고 있었다(java200: 552개 노드에 71,062회). 노드에 규칙별로 메모한다 — 노드와
+    # 수명이 같아 id 재사용 위험이 없고, 아래는 읽기만 하므로 공유해도 된다.
+    memo = s.__dict__.setdefault("_defaulted_checked", {})
+    checked: set[str] | None = memo.get(ctx.rule.id)
+    if checked is None:
+        checked = set()
+        for t in tests:
+            checked |= (_compared_paths(t, "!=") or set()) | _check_call_paths(t, ctx)
+        memo[ctx.rule.id] = checked
     if not checked:
         return None
     for v, writes in assigns.items():
