@@ -29,6 +29,25 @@ CASES = [
      ' cmd.Parameters.AddWithValue("@n", t); cmd.ExecuteReader();'),
 ]
 
+# 진입점 명령행 인자(Main(string[] args)) — args[i] 가 오염 소스인지. 코퍼스 CWE-89 의
+# 1/4 이 이 소스다.
+ARGS_CASES = [
+    ("args-index-concat-commandtext", "취약",
+     'string q="SELECT \'"+args[1]+"\'"; var cmd=new MySqlCommand();'
+     ' cmd.CommandText=q; cmd.ExecuteReader();'),
+    ("args-index-direct-ctor", "취약",
+     'var cmd=new MySqlCommand(args[1]);'),
+]
+
+
+@pytest.mark.parametrize("name,want,body", ARGS_CASES, ids=[c[0] for c in ARGS_CASES])
+def test_csharp_sqli_args_source(tmp_path, name, want, body):
+    head = "using MySql.Data.MySqlClient;\nclass C { static void Main(string[] args){\n"
+    f = tmp_path / "t.cs"
+    f.write_text(head + body + _TAIL, encoding="utf-8")
+    hit = any(x.rule_id == "csharp.sqli" for x in scan_file(f, RULES))
+    assert hit if want == "취약" else not hit, name
+
 
 @pytest.mark.parametrize("name,want,body", CASES, ids=[c[0] for c in CASES])
 def test_csharp_sqli_assign_sink(tmp_path, name, want, body):
