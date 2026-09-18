@@ -49,11 +49,15 @@ class SinkPattern:
     kind='return' : 이 데코레이터가 붙은 함수의 리턴값 자체가 sink. 웹 프레임워크가
                     핸들러의 리턴을 그대로 응답 본문으로 내보내는 형태(@app.route 등)는
                     호출 형태의 sink 가 없어서 이 종류가 없으면 통째로 미탐이 된다.
+    kind='assign' : property 목록의 멤버에 오염값을 대입하면 sink. C# 의
+                    `cmd.CommandText = 오염` 처럼 위험 지점이 호출이 아니라 프로퍼티
+                    대입인 경우(SARD C# 스위트는 전부 이 형태다).
     """
     callee: list[str] = field(default_factory=list)
     arg: int | None = None
     kind: str = "call"
     decorator: list[str] = field(default_factory=list)
+    property: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -100,7 +104,8 @@ def rule_from_dict(d: dict) -> Rule:
         ))
     sinks = [SinkPattern(callee=_as_list(s.get("callee")), arg=s.get("arg"),
                          kind=s.get("pattern", "call"),
-                         decorator=_as_list(s.get("decorator")))
+                         decorator=_as_list(s.get("decorator")),
+                         property=_as_list(s.get("property")))
              for s in d.get("sinks", [])]
     sanitizers: list[str] = []
     sanitizer_args: dict[str, list[str]] = {}

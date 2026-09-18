@@ -243,6 +243,9 @@ sinks:
   - FromSql
   - ExecuteStoreQuery
   - ExecuteStoreCommand
+- pattern: assign
+  property:
+  - CommandText
 sanitizers:
 - callee:
   - HtmlEncode

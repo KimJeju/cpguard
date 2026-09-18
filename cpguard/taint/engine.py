@@ -765,6 +765,22 @@ def _check_sinks(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> None:
                 break
 
 
+def _check_assign_sink(s: ir.Assign, env: dict[str, Trace], ctx: Ctx) -> None:
+    """`obj.Prop = 오염` 형태의 sink. C# `cmd.CommandText = query` 처럼 위험 지점이
+    호출이 아니라 프로퍼티 대입인 규칙(kind='assign')을 여기서 검사한다. LHS 의 프로퍼티
+    이름이 sink 목록에 있고 RHS 가 오염됐으면 finding. 상수 CommandText(파라미터라이즈드
+    질의)는 RHS 가 오염되지 않으므로 걸리지 않는다 — 정밀도가 유지된다."""
+    tgt = s.target
+    if not isinstance(tgt, ir.Member) or tgt.computed:
+        return
+    for sink in ctx.rule.sinks:
+        if sink.kind == "assign" and tgt.prop in sink.property:
+            tr = _taint(s.value, env, ctx)
+            if tr:
+                _emit(ctx, tr + [Step("sink", s.loc, _snippet(s.loc, ctx.src))])
+            return
+
+
 # 수신자를 변경하는 메서드. list.add(x) 처럼 인자의 오염이 컨테이너로 옮겨간다.
 # 필드 민감도가 없어 컨테이너 전체가 오염되는 과대근사다(안전한 키를 다시 꺼내 써도
 # 오염으로 본다). 보안 도구에서는 놓치는 쪽보다 이쪽이 낫다.
@@ -1226,6 +1242,7 @@ def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Tra
 
         elif isinstance(s, ir.Assign):
             _check_sinks(s.value, env, ctx)
+            _check_assign_sink(s, env, ctx)
             _run_nested(s.value, ctx, env)
             env = _apply_mutations(s.value, env, ctx)
             tr = _taint(s.value, env, ctx)
