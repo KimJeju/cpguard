@@ -25,6 +25,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 
 from .. import ir
@@ -1288,9 +1290,43 @@ def _merge(a: dict[str, Trace], b: dict[str, Trace]) -> dict[str, Trace]:
     return out
 
 
+_LABEL_RE = re.compile(rb"^\s*([A-Za-z_]\w*)\s*:")
+
+
+def _goto_target(s: ir.Node, ctx: Ctx) -> str | None:
+    """`goto L;` 의 L. cfam 은 goto 를 Opaque(kind=goto_statement) 로 준다."""
+    if isinstance(s, ir.Opaque) and s.kind == "goto_statement":
+        m = re.search(rb"goto\s+([A-Za-z_]\w*)", ctx.src[s.loc.start_byte:s.loc.end_byte])
+        return m.group(1).decode() if m else None
+    return None
+
+
+def _label_of(s: ir.Node, ctx: Ctx) -> str | None:
+    """`L: 문` 의 L. C# 의 `Skip: {}` 는 정규화 뒤 맨 Ident(Skip) 로 남고, 다른 문법은
+    Opaque(kind=labeled_statement) 로 온다 — 둘 다 원문이 `이름:` 으로 시작하는지 본다."""
+    if isinstance(s, ir.Ident):
+        return s.name if _LABEL_RE.match(ctx.src[s.loc.start_byte:s.loc.end_byte + 2]) else None
+    if isinstance(s, ir.Opaque):
+        m = _LABEL_RE.match(ctx.src[s.loc.start_byte:s.loc.end_byte])
+        if m and (s.kind == "labeled_statement" or s.kind.endswith("label")
+                  or ctx.src[s.loc.start_byte:s.loc.end_byte].lstrip().startswith(m.group(1))):
+            return m.group(1).decode()
+    return None
+
+
 def _run(stmts: list[ir.Node], env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace]:
     """문 리스트를 분석하고 끝난 시점의 오염 상태를 돌려준다."""
+    # 전방 goto: `goto L;` 시점의 상태를 `L:` 에서 합류시킨다 — 그 사이 구간(검증·정제)을
+    # 건너뛸 수 있다는 뜻이다. 모르고 선형으로 읽으면 건너뛴 검증이 오염을 씻어 버린다
+    # (SARD C# 의 goto 변형이 그랬다). 같은 블록 안의 라벨만 본다(뒤로 가는 goto 는 없음).
+    pending: dict[str, list[dict[str, Trace]]] = {}
     for s in stmts:
+        if (label := _goto_target(s, ctx)) is not None:
+            pending.setdefault(label, []).append(dict(env))
+        elif (label := _label_of(s, ctx)) is not None:
+            for e in pending.pop(label, []):
+                env = _merge(env, e)
+
         if isinstance(s, ir.Function):
             _run_function(s, ctx)
 
