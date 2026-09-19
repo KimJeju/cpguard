@@ -21,7 +21,7 @@ repo: https://github.com/KimJeju/cpguard
 - **감사 작업대** — 코드 뷰어 위 Source→Sink 흐름 강조 + 인스펙터 + 사람 판정/메모.
 - **완전 오프라인** — 파이썬·인터넷·관리자 권한 없이 단일 설치본. 에어갭 환경 OK.
 - **대형 코드베이스** — 26,049 파일 / 2.3GB 프로젝트를 ~5분에 4,857건 탐지(실측).
-- **정확도(측정치)** — 라벨링 정답지 **8개 언어 5개 코퍼스 138,785건(채점 76,866건)**. 자바 점수 **0.826**(F1 0.921) · C++ **0.79** · 파이썬 **0.717** · C# **0.687** · Go **0.66** · C **0.52** · JS **0.47** · TS **0.45** · Ruby **0.43** · PHP **0.369**. 언어 편차가 크다는 사실을, 그리고 **C·C++ 의 오탐 0 이 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 것**도 그대로 공개한다. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
+- **정확도(측정치)** — 라벨링 정답지 **8개 언어 5개 코퍼스 138,785건(채점 76,866건)**. 자바 점수 **0.826**(F1 0.921) · C++ **0.79** · 파이썬 **0.717** · C# **0.717** · Go **0.66** · C **0.52** · JS **0.47** · TS **0.45** · Ruby **0.43** · PHP **0.369**. 언어 편차가 크다는 사실을, 그리고 **C·C++ 의 오탐 0 이 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 것**도 그대로 공개한다. 측정 코드·정답지·제외 기준 전부 공개(`bench/`).
 - **CI 연동** — GitHub Action + SARIF → Code Scanning. `fail-on` 게이트.
 - **MCP 서버 (신규)** — AI 코딩 에이전트(Claude Code·Cursor)가 CPGuard 를 붙여 스캔·근거·설명을 받고, **SAST 취약점을 동적으로 실증**한다. CPGuard 가 `source→sink` 를 아니까 "무엇을 어디에 넣으면 터지고, 무엇을 관찰하면 실증인지(오라클)"를 탐침으로 내주고, 실제 발사는 에이전트가 자기 web 도구로 한다 — 코어는 소켓을 열지 않는다(오라클 일치이지 IAST 아님). `pip install "cpguard[mcp]"`.
 - **언어** — JS/TS · PHP · Python · Java · Kotlin · Go · Ruby · C/C++ · Swift · C#.
@@ -49,7 +49,7 @@ rather than matching a regex at one line. Optionally it sends each finding to an
 
 Numbers, so you can calibrate. Measured against labelled ground truth in eight
 languages (five corpora, 76,866 scored cases), score = recall minus false-positive rate:
-Java 0.826 (F1 0.921), C++ 0.79, Python 0.717, C# 0.687, Go 0.66, C 0.52, JavaScript 0.47,
+Java 0.826 (F1 0.921), C++ 0.79, Python 0.717, C# 0.717, Go 0.66, C 0.52, JavaScript 0.47,
 TypeScript 0.45, Ruby 0.43, PHP 0.369. The spread is the honest headline,
 and so is this caveat: the C/C++ corpora are small and their safe variants use exactly
 two guard idioms, so reading those two took false positives to zero in one step. That
@@ -161,7 +161,7 @@ are the top three sources of false positives in the benchmark run.
 - Ghidra/Fortify 결의 3분할 감사 작업대: 코드 뷰어에 Source→Sink 흐름을 강조하고,
   인스펙터에서 사람이 판정·메모합니다. 완전 오프라인(단일 설치본, 에어갭 대응).
 - SARIF·GitHub Action 으로 CI 연동. 언어: JS/TS·PHP·Python·Java·Kotlin·Go·Ruby·C/C++·Swift·C#.
-- 라벨링 정답지 8개 언어 76,866건(채점 기준)으로 측정. 자바 0.826 · C++ 0.79 · 파이썬 0.717 · C# 0.687 · Go 0.66 · C 0.52 · JS 0.47 · TS 0.45 · Ruby 0.43 · PHP 0.369 — 언어 편차도, C·C++ 수치가 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 한계도 그대로 공개합니다. 측정 스크립트·제외 기준 공개.
+- 라벨링 정답지 8개 언어 76,866건(채점 기준)으로 측정. 자바 0.826 · C++ 0.79 · 파이썬 0.717 · C# 0.717 · Go 0.66 · C 0.52 · JS 0.47 · TS 0.45 · Ruby 0.43 · PHP 0.369 — 언어 편차도, C·C++ 수치가 작은 코퍼스의 생성 규칙을 맞힌 결과에 가깝다는 한계도 그대로 공개합니다. 측정 스크립트·제외 기준 공개.
 
 졸업작품에서 시작해 오픈소스로 이어가고 있습니다. 엔진·오탐률, 그리고 실증 루프 설계
 (오라클 방식)에 대한 피드백 특히 환영합니다.

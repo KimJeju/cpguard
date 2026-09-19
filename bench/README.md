@@ -14,7 +14,7 @@ CPGuard 의 데이터 흐름(taint) 탐지 정확도를 **라벨링된 정답지
 | [BenchProctor](#benchproctor-6언어) httplib | C++ | 400 | 80.0% | 100% | 0.0% | **0.800** |
 | [BenchProctor](#benchproctor-6언어) standalone | C++ | 400 | 77.0% | 100% | 0.0% | **0.770** |
 | [OWASP Benchmark for Python](#owasp-benchmark-java--python) | Python | 346 | 82.1% | 83.3% | 10.4% | **0.717** |
-| [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 84.3% | 88.4% | 15.6% | **0.687** |
+| [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 84.3% | 90.4% | 12.6% | **0.717** |
 | [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 81.4% | 83.9% | 15.6% | **0.658** |
 | [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 79.0% | 85.1% | 13.8% | **0.652** |
 | [BenchProctor](#benchproctor-6언어) standalone | C | 500 | 52.0% | 100% | 0.0% | **0.520** |
@@ -40,7 +40,7 @@ C·JS·TS·Ruby(0.40~0.52) 는 쓸 만한 수준, PHP(0.37) 는 아직 부족하
 52~80% 에 머무는 쪽이 더 정직한 신호다.
 
 점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**다(PHP 재현율 47.0%).
-정밀도만 보면 순서가 또 다르다 — nestjs 83.0% · koa 81.0% · C# 88.4% 는 자바(88.7%)에
+정밀도만 보면 순서가 또 다르다 — nestjs 83.0% · koa 81.0% 는 자바(88.7%)에
 가깝다.
 
 ---
@@ -404,7 +404,7 @@ python bench/owasp_benchmark.py php-suite --json bench/php_result.json
 > 내려받는 곳은 `https://samate.nist.gov/SARD/downloads/test-suites/2016-09-12-csharp-vulnerability-test-suite.zip`
 > 다. SARD 문서가 안내하는 `www.nist.gov` 호스트는 404 를 준다.
 
-## 결과 (N = 33,024) — 불확실 표시 9.1%
+## 결과 (N = 33,024) — 불확실 표시 10.9%
 
 | CWE | 유형 | 대상 | 재현율 | 정밀도 | 오탐률 | 점수 |
 |---|---|---:|---:|---:|---:|---:|
@@ -412,8 +412,8 @@ python bench/owasp_benchmark.py php-suite --json bench/php_result.json
 | 78 | 명령 주입 | 1,920 | 97.2% | 89.0% | 23.8% | 0.734 |
 | 90 | LDAP 주입 | 1,920 | 97.2% | 89.0% | 23.8% | 0.734 |
 | 22 | 경로 조작 | 2,304 | 97.4% | 81.7% | 34.0% | 0.634 |
-| 89 | SQL 주입 | 21,120 | 77.7% | 89.0% | 14.7% | 0.631 |
-| **전체** | | **33,024** | **84.3%** | **88.4%** | **15.6%** | **0.687** |
+| 89 | SQL 주입 | 21,120 | 77.7% | 92.4% | 9.8% | 0.680 |
+| **전체** | | **33,024** | **84.3%** | **90.4%** | **12.6%** | **0.717** |
 
 ## 읽는 법 — 이제 남은 일은 오탐이다
 
@@ -423,9 +423,13 @@ python bench/owasp_benchmark.py php-suite --json bench/php_result.json
 대입**을 규칙이 호출 싱크로만 알고 있어 12.7% 에 머물렀다(대입 싱크 `kind: assign` 추가).
 하드코딩 소스는 상수라 잡지 않는 것이 맞다.
 
-대신 오탐률이 5.8% → 15.6% 로 올랐고 경로 조작은 34.0% 다. `args` 소스가 열리면서 이
-스위트의 필터링 안전 변형이 걸리는 것으로 보인다 — 어느 정제 형태를 못 알아보는지는
-안전 버킷을 형태별로 프로브해야 알 수 있고, 아직 하지 않았다.
+대신 오탐률이 5.8% → 12.6% 로 올랐고 경로 조작은 34.0% 다. `args` 소스가 열리면서 이
+스위트의 필터링 안전 변형이 걸린다. 안전 버킷을 필터 형태별로 프로브한 결과 SQL 주입의
+"숫자만" 검증(`Match(x).Success` 를 if/else 로 나누는 형태 · 루프 안 · goto 로 건너뛰는
+변형)은 엔진이 인식하게 해 오탐 1,224 → 816 으로 내렸다. 남은 것은 두 종류다:
+`Regex.Replace` 로 문자를 지우는 형태(경로 조작·명령 주입 — 같은 코드가 SQL·LDAP 엔
+bad 로 라벨돼 있어 정제로 보면 정탐을 잃는다, 보류)와 StringBuilder 로 손수 이스케이프
+하는 형태(LDAP·XPath — 이름이 없는 진짜 인코더, 수신자를 씻는 정제 의미가 필요).
 
 ## 재현
 
