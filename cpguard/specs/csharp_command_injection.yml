@@ -223,6 +223,17 @@ sinks:
   - AddScript
 sanitizers:
 - callee:
+  - Replace
+  requires:
+  # 인자 스니펫은 공백으로 이어지므로 삭제형은 항상 `x ""` — 앞 공백까지 토큰에 넣어
+  # `Replace(@"""", "&quot;")`(따옴표 문자 치환) 의 `""` 가 걸리지 않게 한다.
+  - ' ""'
+  # Regex.Replace(x, "") — 문자 삭제형(`;` 와 경로 금지문자 제거). SARD 는 명령 주입엔
+  # 전부 good 으로 라벨하고 bad 변형이 없다(표본: FP -5 / TP 0). 경로 조작은 같은 형태가
+  # 필터 내용(문자집합 범위·정규식 앵커)에 따라 good/bad 로 갈려 이름으로 못 가르므로
+  # 넣지 않는다(정탐 손실). SQL·LDAP·XPath 엔 삭제가 부족해 bad. 그래서 이 규칙에만.
+  # 빈 문자열 치환(삭제)만 인정 — s.Replace("a","b") 는 정제가 아니다.
+- callee:
   - HtmlEncode
   - HttpUtility.HtmlEncode
   - HttpUtility.UrlEncode
