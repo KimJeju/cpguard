@@ -261,8 +261,8 @@ Measured against **labelled ground truth in eight languages** — five corpora t
 | Corpus | Language | Scored | Recall | Precision | Score |
 |---|---|---:|---:|---:|---:|
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
+| C# Vulnerability Test Suite | C# | 33,024 | 84.3% | 91.1% | **0.728** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
-| C# Vulnerability Test Suite | C# | 33,024 | 84.3% | 90.4% | **0.717** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
 | BenchProctor (gin / net_http) | Go | 2,000 | ~80% | ~85% | **0.66** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |

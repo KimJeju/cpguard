@@ -13,8 +13,8 @@ CPGuard 의 데이터 흐름(taint) 탐지 정확도를 **라벨링된 정답지
 | [OWASP Benchmark v1.2](#owasp-benchmark-java--python) | Java | 1,572 | 95.8% | 88.7% | 13.3% | **0.826** |
 | [BenchProctor](#benchproctor-6언어) httplib | C++ | 400 | 80.0% | 100% | 0.0% | **0.800** |
 | [BenchProctor](#benchproctor-6언어) standalone | C++ | 400 | 77.0% | 100% | 0.0% | **0.770** |
+| [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 84.3% | 91.1% | 11.5% | **0.728** |
 | [OWASP Benchmark for Python](#owasp-benchmark-java--python) | Python | 346 | 82.1% | 83.3% | 10.4% | **0.717** |
-| [C# Vulnerability Test Suite](#c-vulnerability-test-suite-sard) | C# | 33,024 | 84.3% | 90.4% | 12.6% | **0.717** |
 | [BenchProctor](#benchproctor-6언어) gin | Go | 1,000 | 81.4% | 83.9% | 15.6% | **0.658** |
 | [BenchProctor](#benchproctor-6언어) net_http | Go | 1,000 | 79.0% | 85.1% | 13.8% | **0.652** |
 | [BenchProctor](#benchproctor-6언어) standalone | C | 500 | 52.0% | 100% | 0.0% | **0.520** |
@@ -404,16 +404,16 @@ python bench/owasp_benchmark.py php-suite --json bench/php_result.json
 > 내려받는 곳은 `https://samate.nist.gov/SARD/downloads/test-suites/2016-09-12-csharp-vulnerability-test-suite.zip`
 > 다. SARD 문서가 안내하는 `www.nist.gov` 호스트는 404 를 준다.
 
-## 결과 (N = 33,024) — 불확실 표시 10.9%
+## 결과 (N = 33,024) — 불확실 표시 10.3%
 
 | CWE | 유형 | 대상 | 재현율 | 정밀도 | 오탐률 | 점수 |
 |---|---|---:|---:|---:|---:|---:|
-| 91 | XPath 주입 | 5,760 | 97.2% | 89.0% | 9.6% | 0.876 |
-| 78 | 명령 주입 | 1,920 | 97.2% | 89.0% | 23.8% | 0.734 |
+| 91 | XPath 주입 | 5,760 | 97.2% | 92.4% | 6.4% | 0.908 |
+| 78 | 명령 주입 | 1,920 | 97.2% | 92.4% | 15.9% | 0.813 |
 | 90 | LDAP 주입 | 1,920 | 97.2% | 89.0% | 23.8% | 0.734 |
-| 22 | 경로 조작 | 2,304 | 97.4% | 81.7% | 34.0% | 0.634 |
 | 89 | SQL 주입 | 21,120 | 77.7% | 92.4% | 9.8% | 0.680 |
-| **전체** | | **33,024** | **84.3%** | **90.4%** | **12.6%** | **0.717** |
+| 22 | 경로 조작 | 2,304 | 97.4% | 81.7% | 34.0% | 0.634 |
+| **전체** | | **33,024** | **84.3%** | **91.1%** | **11.5%** | **0.728** |
 
 ## 읽는 법 — 이제 남은 일은 오탐이다
 
@@ -423,13 +423,14 @@ python bench/owasp_benchmark.py php-suite --json bench/php_result.json
 대입**을 규칙이 호출 싱크로만 알고 있어 12.7% 에 머물렀다(대입 싱크 `kind: assign` 추가).
 하드코딩 소스는 상수라 잡지 않는 것이 맞다.
 
-대신 오탐률이 5.8% → 12.6% 로 올랐고 경로 조작은 34.0% 다. `args` 소스가 열리면서 이
-스위트의 필터링 안전 변형이 걸린다. 안전 버킷을 필터 형태별로 프로브한 결과 SQL 주입의
-"숫자만" 검증(`Match(x).Success` 를 if/else 로 나누는 형태 · 루프 안 · goto 로 건너뛰는
-변형)은 엔진이 인식하게 해 오탐 1,224 → 816 으로 내렸다. 남은 것은 두 종류다:
-`Regex.Replace` 로 문자를 지우는 형태(경로 조작·명령 주입 — 같은 코드가 SQL·LDAP 엔
-bad 로 라벨돼 있어 정제로 보면 정탐을 잃는다, 보류)와 StringBuilder 로 손수 이스케이프
-하는 형태(LDAP·XPath — 이름이 없는 진짜 인코더, 수신자를 씻는 정제 의미가 필요).
+대신 오탐률이 5.8% → 11.5% 로 올랐고 경로 조작은 34.0% 다. `args` 소스가 열리면서 이
+스위트의 필터링 안전 변형이 걸린다. 안전 버킷을 필터 형태별로 프로브해 셋을 알아보게
+했다: SQL 주입의 "숫자만" 검증(`Match(x).Success` 를 if/else 로 나누는 형태 · 루프 안 ·
+goto 로 건너뛰는 변형, 오탐 1,224 → 816), 명령 주입의 `Regex.Replace(x, "")` 문자 삭제
+(153 → 102 — 이 규칙에만: 같은 형태가 경로 조작에선 필터 내용에 따라 good/bad 로 갈리고
+SQL·LDAP·XPath 엔 bad 다), XPath 의 손수 XML 인코딩(`sb.Replace("'", "&apos;")` 체인,
+306 → 204 — 수신자를 제자리에서 씻는 정제). 남은 것은 경로 조작의 Replace(이름으로 못
+가름)와 LDAP 의 switch/Append 손수 이스케이프(이름이 없다)다.
 
 ## 재현
 
