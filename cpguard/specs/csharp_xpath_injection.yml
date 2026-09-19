@@ -198,6 +198,9 @@ sources:
   - Console.ReadLine
   - Console.In.ReadLine
   - HttpContext.Current.Request
+  # 콘솔 앱 진입점의 명령행 인자 Main(string[] args). args[i] 는 경로가 'args.i' 라
+  # startswith('args.') 로 잡힌다. 외부 입력이므로 소스로 본다.
+  - args
 - pattern: annotation
   name:
   - FromQuery
