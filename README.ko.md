@@ -264,6 +264,7 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 |---|---|---:|---:|---:|---:|
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
+| C# Vulnerability Test Suite | C# | 33,024 | 84.3% | 88.4% | **0.687** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
 | BenchProctor (gin / net_http) | Go | 2,000 | ~80% | ~85% | **0.66** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |
@@ -271,10 +272,9 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 | BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~62% | ~79% | **0.45** |
 | BenchProctor (rails / sinatra) | Ruby | 2,400 | ~56% | ~81% | **0.43** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
-| C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
 
-그대로 읽으면 이렇습니다. **Java·C++·Python·Go 는 실무에 쓸 수준, C·JS/TS·Ruby 는
-쓸 만한 수준, PHP·C# 은 아직 부족합니다.**
+그대로 읽으면 이렇습니다. **Java·C++·Python·C#·Go 는 실무에 쓸 수준, C·JS/TS·Ruby 는
+쓸 만한 수준, PHP 는 아직 부족합니다.**
 
 **DB·파일에서 읽은 값은 기본적으로 사용자 입력으로 봅니다** — 2차 주입과 저장형 XSS 가
 여기서 나옵니다. `--trust-stored-data` 로 끌 수 있습니다. 이 기본값은 취향이 아니라
@@ -288,7 +288,7 @@ openpyxl(xlsx) · SARIF 2.1.0 · LLM SDK(anthropic/openai/google-genai) · pytes
 가깝습니다. 재현율 52~80% 쪽이 더 정직한 신호입니다. Kotlin·Swift 는 공개된 라벨 코퍼스가 아예 없어
 관용구 테스트로 대신합니다(아래).
 
-점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**입니다(C# 재현율 30.5%).
+점수가 낮은 쪽은 대개 **오탐이 많아서가 아니라 재현율이 낮아서**입니다(PHP 재현율 47.0%).
 
 설정 점검 성격의 유형(`weakrand`·`crypto`·`hash`·`securecookie`·`trustbound`)은 데이터
 흐름 문제가 아니므로 공짜 점수로 넣지 않고 제외합니다. 반대로 **흐름 분석 대상이지만

@@ -1,0 +1,91 @@
+{
+  "benchmark": "C# Vulnerability Test Suite (SARD)",
+  "scan_mode": "file",
+  "files_scanned": 33035,
+  "parse_errors": 0,
+  "per_category": {
+    "cwe_22": {
+      "TP": 1368,
+      "FN": 36,
+      "FP": 306,
+      "TN": 594,
+      "total": 2304,
+      "recall": 0.9743589743589743,
+      "precision": 0.8172043010752689,
+      "f1": 0.888888888888889,
+      "false_positive_rate": 0.34,
+      "benchmark_score": 0.6343589743589744
+    },
+    "cwe_78": {
+      "TP": 1242,
+      "FN": 36,
+      "FP": 153,
+      "TN": 489,
+      "total": 1920,
+      "recall": 0.971830985915493,
+      "precision": 0.8903225806451613,
+      "f1": 0.9292929292929293,
+      "false_positive_rate": 0.2383177570093458,
+      "benchmark_score": 0.7335132289061472
+    },
+    "cwe_89": {
+      "TP": 9936,
+      "FN": 2844,
+      "FP": 1224,
+      "TN": 7116,
+      "total": 21120,
+      "recall": 0.7774647887323943,
+      "precision": 0.8903225806451613,
+      "f1": 0.8300751879699249,
+      "false_positive_rate": 0.14676258992805755,
+      "benchmark_score": 0.6307021988043368
+    },
+    "cwe_90": {
+      "TP": 1242,
+      "FN": 36,
+      "FP": 153,
+      "TN": 489,
+      "total": 1920,
+      "recall": 0.971830985915493,
+      "precision": 0.8903225806451613,
+      "f1": 0.9292929292929293,
+      "false_positive_rate": 0.2383177570093458,
+      "benchmark_score": 0.7335132289061472
+    },
+    "cwe_91": {
+      "TP": 2484,
+      "FN": 72,
+      "FP": 306,
+      "TN": 2898,
+      "total": 5760,
+      "recall": 0.971830985915493,
+      "precision": 0.8903225806451613,
+      "f1": 0.9292929292929293,
+      "false_positive_rate": 0.09550561797752809,
+      "benchmark_score": 0.8763253679379649
+    }
+  },
+  "excluded_categories": {
+    "cwe_209": 1,
+    "cwe_256": 1,
+    "cwe_327": 8,
+    "cwe_476": 1
+  },
+  "overall": {
+    "TP": 16272,
+    "FN": 3024,
+    "FP": 2142,
+    "TN": 11586,
+    "total": 33024,
+    "recall": 0.8432835820895522,
+    "precision": 0.8836754643206256,
+    "f1": 0.8630071599045346,
+    "false_positive_rate": 0.15603146853146854,
+    "benchmark_score": 0.6872521135580837
+  },
+  "uncertain": {
+    "findings": 48175,
+    "uncertain": 4374,
+    "ratio": 0.09079398028022834
+  }
+}

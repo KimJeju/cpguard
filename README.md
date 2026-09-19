@@ -262,6 +262,7 @@ Measured against **labelled ground truth in eight languages** — five corpora t
 |---|---|---:|---:|---:|---:|
 | OWASP Benchmark v1.2 | Java | 1,572 | 95.8% | 88.7% | **0.826** |
 | OWASP Benchmark for Python | Python | 346 | 82.1% | 83.3% | **0.717** |
+| C# Vulnerability Test Suite | C# | 33,024 | 84.3% | 88.4% | **0.687** |
 | BenchProctor (httplib / standalone) | C++ | 800 | ~79% | 100% | **0.79** |
 | BenchProctor (gin / net_http) | Go | 2,000 | ~80% | ~85% | **0.66** |
 | BenchProctor (standalone) | C | 500 | 52.0% | 100% | **0.520** |
@@ -269,9 +270,8 @@ Measured against **labelled ground truth in eight languages** — five corpora t
 | BenchProctor (express_ts / nestjs) | TypeScript | 2,200 | ~62% | ~79% | **0.45** |
 | BenchProctor (rails / sinatra) | Ruby | 2,400 | ~56% | ~81% | **0.43** |
 | PHP Vulnerability test suite | PHP | 31,824 | 47.0% | 66.4% | **0.369** |
-| C# Vulnerability Test Suite | C# | 33,024 | 30.5% | 87.8% | **0.245** |
 
-Read it plainly: **Java, C++, Python and Go are at working-tool quality; C, JS/TS and Ruby are usable; PHP and C# are not there yet.** Where the score is low it is usually recall, not noise (C# recall is 30.5%).
+Read it plainly: **Java, C++, Python, C# and Go are at working-tool quality; C, JS/TS and Ruby are usable; PHP is not there yet.** Where the score is low it is usually recall, not noise (PHP recall is 47.0%).
 
 **Values read out of a database or a file count as user input by default** — that is where second-order injection and stored XSS come from. Pass `--trust-stored-data` to turn it off. The default was chosen by measurement, not taste: across 15 suites, treating stored data as a source cost nothing anywhere and bought Go 50 extra true positives for 9 extra false ones.
 
