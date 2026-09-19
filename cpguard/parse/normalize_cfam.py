@@ -771,6 +771,13 @@ class _Worker:
                     "type_annotation", "comment")
             rest = [c for c in node.children
                     if c is not name and c.is_named and c.type not in s.idents and c.type not in skip]
+            if not rest and name is not None:
+                # `string v = x;` — 초기값이 identifier 면 위 필터(이름을 빼려던 것)가
+                # 초기값까지 버려 Assign 이 아예 안 만들어졌다(C#: 선언 복사가 통째로
+                # 미탐). 초기값은 항상 이름 **뒤**에, 타입은 앞에 오므로 위치로 가른다.
+                rest = [c for c in node.children
+                        if c is not name and c.is_named and c.start_byte >= name.end_byte
+                        and c.type not in skip]
             if rest:
                 val = rest[-1]
                 if val.type == "equals_value_clause":       # C#: = expr 래퍼
