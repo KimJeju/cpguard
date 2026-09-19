@@ -283,6 +283,11 @@ sanitizers:
   - SecurityElement.Escape
   - Html.Encode
 validators:
+# Regex.Match(x).Success — 검사 결과 플래그. 부정(`!m.Success`)이면 실패 쪽이다.
+# sqli 에만 둔다: SARD 는 '숫자만' 정규식 검사를 SQL 엔 충분, 명령·LDAP·XPath 엔
+# 불충분으로 라벨한다(같은 코드가 cwe_78/90 에선 bad). 무엇을 검증으로 인정할지는
+# 싱크마다 다르므로 규칙이 선언한다 — 5종에 다 넣었더니 정탐 3건을 잃었다.
+- token: Success
 - token: Contains
 - token: IsMatch
 - token: StartsWith

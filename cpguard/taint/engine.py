@@ -382,28 +382,34 @@ def _defaulted_path(s: ir.If, env: dict[str, Trace], ctx: Ctx) -> str | None:
     82건이 전부 이 형태였다(strcmp 43 · regexec 39).
 
     분기가 하나뿐이고 본문이 대입 하나여야 하며, 조건은 **실패 쪽**(`!=` · 검사 함수의
-    결과를 상수와 비교)이어야 한다. `if (x == "a") v = 상수;` 는 빠져나온 쪽에서 x 가
-    무엇인지 모르므로 인정하지 않는다.
+    결과를 상수와 비교 · 부정된 validator 토큰 `!m.Success`)이어야 한다. `if (x == "a")
+    v = 상수;` 는 빠져나온 쪽에서 x 가 무엇인지 모르므로 인정하지 않는다.
+
+    else 가 있어도 된다 — 단 else 가 v 에 넣는 값이 **검사된 값 자신(또는 그 원본)**일 때만.
+        Match m = r.Match(x);
+        if (!m.Success) { v = ""; } else { v = x; }     // v 는 "" 이거나 검증된 x
+    SARD C# 의 "only numbers" 필터가 이 형태다. else 가 검사와 무관한 값을 넣으면
+    합류값이 고정되지 않으므로 인정하지 않는다.
     """
-    if s.orelse:
-        return None
     # 블록 전체를 본다. C 관용구는 준비 호출로 한 겹 더 싸여 있다.
     #     if (regcomp(&re, …) == 0) { if (regexec(&re, data, …) != 0) safe = "config";
     #                                 regfree(&re); }
     # 안쪽만 보면 바깥 합류에서 오염이 되살아난다(바깥 if 에 else 가 없으므로).
     assigns: dict[str, list[ir.Assign]] = {}
+    else_assigns: dict[str, list[ir.Assign]] = {}
     tests: list[ir.Node] = [s.test]
-    stack = list(s.then)
-    while stack:
-        n = stack.pop()
-        if isinstance(n, ir.Function):
-            continue
-        if isinstance(n, ir.Assign) and (q := path_of(n.target)):
-            assigns.setdefault(q, []).append(n)
-        if isinstance(n, ir.If):
-            tests.append(n.test)
-        for attr in ("body", "then", "orelse", "children"):
-            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    for block, sink_map in ((s.then, assigns), (s.orelse, else_assigns)):
+        stack = list(block)
+        while stack:
+            n = stack.pop()
+            if isinstance(n, ir.Function):
+                continue
+            if isinstance(n, ir.Assign) and (q := path_of(n.target)):
+                sink_map.setdefault(q, []).append(n)
+            if isinstance(n, ir.If) and sink_map is assigns:
+                tests.append(n.test)
+            for attr in ("body", "then", "orelse", "children"):
+                stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
     # 조건 워커(_compared_paths·_check_call_paths)는 비싸다 — else 없는 모든 if 에서
     # 요약 실행마다 돈다(java200 요약 시간의 19%). 아래 판정은 "본문이 대입한 변수가
     # 지금 오염 상태" 일 때만 의미가 있으므로, 그 변수가 하나도 없으면 조건은 볼 것도
@@ -419,17 +425,48 @@ def _defaulted_path(s: ir.If, env: dict[str, Trace], ctx: Ctx) -> str | None:
     if checked is None:
         checked = set()
         for t in tests:
-            checked |= (_compared_paths(t, "!=") or set()) | _check_call_paths(t, ctx)
+            checked |= ((_compared_paths(t, "!=") or set()) | _check_call_paths(t, ctx)
+                        | _negated_validator_paths(t, ctx))
         memo[ctx.rule.id] = checked
     if not checked:
         return None
     for v, writes in assigns.items():
         if v not in env or any(_taint(w.value, env, ctx) is not None for w in writes):
             continue
+        if else_assigns:
+            # else 는 검사된 값(또는 그 원본)만 v 에 넣어야 한다. `m` 을 검사했으면
+            # `m = r.Match(x)` 의 x 가 그 원본이다 — 트레이스가 유래를 들고 있다.
+            ok = checked | _derived_origins(env, checked)
+            ew = else_assigns.get(v)
+            if not ew or any(path_of(w.value) not in ok for w in ew):
+                continue
+            return v
         # v 자신이거나, v 가 파생돼 나온 원본을 검사했어야 한다.
         if checked & (_derived_origins(env, {v}) | {v}):
             return v
     return None
+
+
+def _negated_validator_paths(test: ir.Node, ctx: Ctx) -> set[str]:
+    """`!m.Success` — 규칙의 validators 토큰이 부정된 멤버 접근으로 나타난 조건.
+    검사 실패 쪽이므로 기본값 대입 분기의 조건이 될 수 있다. 검사 대상은 수신자 `m`."""
+    out: set[str] = set()
+    if not ctx.rule.validators:
+        return out
+    stack = [test]
+    while stack:
+        n = stack.pop()
+        if n is None:
+            continue
+        if (isinstance(n, ir.Member) and not n.computed and n.prop in ctx.rule.validators
+                and _negated(n, ctx) and (q := path_of(n.obj))):
+            out.add(q)
+        for attr in ("callee", "obj", "value", "target", "index"):
+            if isinstance(c := getattr(n, attr, None), ir.Node):
+                stack.append(c)
+        for attr in ("args", "children"):
+            stack.extend(c for c in (getattr(n, attr, None) or []) if isinstance(c, ir.Node))
+    return out
 
 
 def _const_selected(node: ir.Ternary, env: dict[str, Trace], ctx: Ctx) -> bool:
