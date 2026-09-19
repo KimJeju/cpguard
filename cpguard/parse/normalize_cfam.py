@@ -752,7 +752,8 @@ class _Worker:
             cond = it
 
         return ir.Loop(loc=loc_of(node, self.file),
-                       test=self.expr(cond) if cond is not None else None, body=stmts)
+                       test=self.expr(cond) if cond is not None else None, body=stmts,
+                       at_least_once=(node.type == "do_statement"))
 
     # ---------- 선언/할당 ----------
 

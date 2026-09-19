@@ -131,6 +131,9 @@ class Loop(Node):
     """반복문(while/for 통합). test는 없을 수 있음. (CFG 구축은 M2)"""
     test: Optional[Node] = None
     body: list[Node] = field(default_factory=list)
+    # do-while: 본문이 최소 한 번은 돈다. 오염 분석이 "0회 실행" 경로(루프 전 상태)를
+    # 합류시키지 않게 하는 데 쓴다.
+    at_least_once: bool = False
 
 
 @dataclass

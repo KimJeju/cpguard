@@ -1378,7 +1378,27 @@ def _run_loop(node: ir.Loop, env: dict[str, Trace], ctx: Ctx) -> dict[str, Trace
         if set(nxt) == set(cur):
             break
         cur = nxt
-    return _merge(cur, _run(node.body, dict(cur), ctx))
+    after = _run(node.body, dict(cur), ctx)
+    if node.at_least_once or _const_true(node.test):
+        # do-while · while(true) · for(;;) — 본문이 최소 한 번은 돌므로 "0회 실행"
+        # 경로(루프 전 상태)는 없다. 그 상태를 합류시키면 본문이 검증해 지운 오염이
+        # 루프 전 값으로 되살아난다(SARD C# 의 루프로 감싼 안전 변형이 전부 오탐).
+        return after
+    return _merge(cur, after)
+
+
+def _const_true(test: ir.Node | None) -> bool:
+    """조건이 항상 참인가 — 없거나(for(;;)), `true`, 같은 리터럴의 `==`(`1==1`)."""
+    if test is None:
+        return True
+    if isinstance(test, ir.Literal):
+        return (test.raw or "").strip().lower() in ("true", "1")
+    if isinstance(test, ir.Binary) and len(test.children) == 2:
+        a, b = test.children
+        if isinstance(a, ir.Literal) and isinstance(b, ir.Literal):
+            same = (a.raw or "").strip() == (b.raw or "").strip()
+            return (test.op == "==" and same) or (test.op == "!=" and not same)
+    return False
 
 
 def _annotated_env(fn: ir.Function, ctx: Ctx) -> dict[str, Trace]:

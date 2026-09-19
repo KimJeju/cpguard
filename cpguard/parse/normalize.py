@@ -345,7 +345,8 @@ def _loop(node: TSNode, file: str) -> ir.Loop:
         body.insert(0, ir.Assign(loc=loc_of(tgt, file), target=_expr(tgt, file),
                                  value=_expr(src, file)))
     test = _expr(test_node, file) if test_node is not None else None
-    return ir.Loop(loc=loc_of(node, file), test=test, body=body)
+    return ir.Loop(loc=loc_of(node, file), test=test, body=body,
+                   at_least_once=(node.type == "do_statement"))
 
 
 def _switch(node: TSNode, file: str) -> list[ir.Node]:
