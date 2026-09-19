@@ -235,6 +235,14 @@ sinks:
   - XPathNavigator.Matches
 sanitizers:
 - callee:
+  - Replace
+  requires:
+  - "&apos;"
+  - "&quot;"
+  # StringBuilder/string 의 손수 XML 인코딩(`.Replace("'", "&apos;")` 체인). XPath 주입은
+  # 따옴표 탈출이 핵심이라 그 엔티티 토큰이 있을 때만 정제로 본다. 수신자를 제자리에서
+  # 바꾸는 문 단위 호출도 엔진이 수신자를 씻는다(_apply_mutations).
+- callee:
   - HtmlEncode
   - HttpUtility.HtmlEncode
   - HttpUtility.UrlEncode

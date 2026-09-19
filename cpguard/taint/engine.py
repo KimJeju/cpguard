@@ -931,6 +931,12 @@ def _apply_mutations(node: ir.Node, env: dict[str, Trace], ctx: Ctx) -> dict[str
         if not cp or "." not in cp:
             continue
         recv, _, meth = cp.rpartition(".")
+        if recv in env and _is_sanitizer(cp, ctx.rule, call, ctx):
+            # sb.Replace("'", "&apos;") — 반환값을 안 쓰고 수신자를 제자리에서 씻는 정제.
+            # 값 흐름 안의 정제 판정(_taint)은 이 문을 못 본다. 규칙이 인정한 호출이면
+            # 수신자의 오염을 뺀다(파생 슬롯 포함).
+            env = {k: v for k, v in env.items() if k != recv and not k.startswith(recv + ".")}
+            continue
 
         if meth in _MAP_PUT and len(call.args) >= 2:
             key = _literal_key(call.args[0], ctx)
